@@ -87,6 +87,32 @@ export const API = {
             respondido_por
         }),
 
+    /** Agregar personal administrativo (admin only) */
+    agregarPersonal: (data) =>
+        request('agebatp-agregar-personal', {
+            id: data.id,
+            nombre: data.name,
+            rol: data.role,
+            telefono: data.phone || '',
+            email: data.email || ''
+        }),
+
+    /** Agregar expediente */
+    agregarExpediente: (data) =>
+        request('agebatp-agregar-expediente', {
+            id: data.id || `EXP-${Date.now()}`,
+            asunto: data.asunto,
+            especialista: data.especialista,
+            oficina: data.oficina,
+            categoria: data.categoria,
+            fechaVencimiento: data.fechaVencimiento || '',
+            origen: data.origen || ''
+        }),
+
+    /** Listar reuniones/solicitudes (para panel publico) */
+    listarReuniones: () =>
+        request('agebatp-listar-reuniones', null, 'GET'),
+
     /** Crear estructura de carpetas en Google Drive y OneDrive */
     crearCarpetasDrive: (year) =>
         request('agebatp-crear-carpetas-drive', { year: year || new Date().getFullYear().toString() })

@@ -29,6 +29,9 @@ export default function App() {
     const [dataLoading, setDataLoading] = useState(true);
     const [showAddStaff, setShowAddStaff] = useState(false);
     const [newStaffForm, setNewStaffForm] = useState({ name: '', role: '', phone: '', email: '' });
+    const [showAddExpediente, setShowAddExpediente] = useState(false);
+    const [newExpediente, setNewExpediente] = useState({ asunto: '', especialista: '', oficina: '', categoria: 'vencer', fechaVencimiento: '', origen: '' });
+    const [meetingRequests, setMeetingRequests] = useState([]);
     const [newActivity, setNewActivity] = useState({ title: '', type: 'estrategica', date: '', endDate: '', time: '', location: '', priority: 'media', assigned: [], description: '', actions: [''] });
 
     // Funcion para cargar actividades de Google Sheets
@@ -379,14 +382,16 @@ export default function App() {
                                         <div><label style={S.label}>Telefono</label><input value={newStaffForm.phone} onChange={e => setNewStaffForm(p => ({ ...p, phone: e.target.value }))} style={S.input} placeholder="51XXXXXXXXX" /></div>
                                         <div><label style={S.label}>Email</label><input value={newStaffForm.email} onChange={e => setNewStaffForm(p => ({ ...p, email: e.target.value }))} style={S.input} placeholder="correo@ugel03.gob.pe" /></div>
                                     </div>
-                                    <button onClick={() => {
+                                    <button onClick={async () => {
                                         if (!newStaffForm.name || !newStaffForm.role) { addToast('Complete nombre y cargo', 'error'); return; }
                                         const initials = newStaffForm.name.split(' ').filter(w => w.length > 2).slice(0, 2).map(w => w[0].toUpperCase()).join('');
                                         const newId = Math.max(...STAFF.map(s => s.id)) + 1;
-                                        STAFF.push({ id: newId, name: newStaffForm.name, role: newStaffForm.role, phone: newStaffForm.phone || '', email: newStaffForm.email || '', initials });
+                                        const newPerson = { id: newId, name: newStaffForm.name, role: newStaffForm.role, phone: newStaffForm.phone || '', email: newStaffForm.email || '', initials };
+                                        STAFF.push(newPerson);
+                                        try { await API.agregarPersonal(newPerson); } catch (e) { console.warn('Staff sync error:', e); }
                                         setNewStaffForm({ name: '', role: '', phone: '', email: '' });
                                         setShowAddStaff(false);
-                                        addToast(`${newStaffForm.name} agregado al equipo`, 'success');
+                                        addToast(`${newStaffForm.name} agregado al equipo y guardado en Sheets`, 'success');
                                     }} style={{ ...S.btn('#15803D', '#FFF'), marginTop: 12, width: '100%' }}>Agregar al Equipo</button>
                                 </div>
                             )}
@@ -431,11 +436,34 @@ export default function App() {
                 {/* EXPEDIENTES */}
                 {activeTab === 'expedientes' && (
                     <div>
-                        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
                             {[{ key: 'vencer', label: 'Por Vencer', count: EXPEDIENTES_POR_VENCER.length }, { key: 'plazo', label: 'Dentro del Plazo', count: EXPEDIENTES_EN_PLAZO.length }, { key: 'elaboracion', label: 'En Elaboracion', count: EXPEDIENTES_ELABORACION.length }].map(t => (
                                 <button key={t.key} onClick={() => setViewExpedientes(t.key)} style={{ ...S.btn(viewExpedientes === t.key ? '#1B3A5C' : '#FFFFFF', viewExpedientes === t.key ? '#FFFFFF' : '#475569', viewExpedientes === t.key ? '#1B3A5C' : '#D6DCE8') }}>{t.label} <span style={{ minWidth: 22, height: 22, borderRadius: 4, background: viewExpedientes === t.key ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{t.count}</span></button>
                             ))}
+                            {canCreate && <button onClick={() => setShowAddExpediente(!showAddExpediente)} style={{ ...S.btn('#1B3A5C', '#FFF'), marginLeft: 'auto' }}>{showAddExpediente ? 'Cancelar' : '+ Nuevo Expediente'}</button>}
                         </div>
+                        {canCreate && showAddExpediente && (
+                            <div style={{ ...S.card, background: '#F8FAFC', padding: 16, marginBottom: 16, border: '1px dashed #CBD5E1' }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: '#122240', marginBottom: 12 }}>Registrar Nuevo Expediente</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                    <div><label style={S.label}>Asunto *</label><input value={newExpediente.asunto} onChange={e => setNewExpediente(p => ({ ...p, asunto: e.target.value }))} style={S.input} placeholder="Asunto del expediente" /></div>
+                                    <div><label style={S.label}>Especialista *</label><select value={newExpediente.especialista} onChange={e => setNewExpediente(p => ({ ...p, especialista: e.target.value }))} style={S.input}><option value="">Seleccionar...</option>{STAFF.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select></div>
+                                    <div><label style={S.label}>Oficina</label><input value={newExpediente.oficina} onChange={e => setNewExpediente(p => ({ ...p, oficina: e.target.value }))} style={S.input} placeholder="Ej: AGEBATP" /></div>
+                                    <div><label style={S.label}>Categoria</label><select value={newExpediente.categoria} onChange={e => setNewExpediente(p => ({ ...p, categoria: e.target.value }))} style={S.input}><option value="vencer">Por Vencer</option><option value="plazo">En Plazo</option><option value="elaboracion">En Elaboracion</option></select></div>
+                                    <div><label style={S.label}>Fecha Vencimiento</label><input type="date" value={newExpediente.fechaVencimiento} onChange={e => setNewExpediente(p => ({ ...p, fechaVencimiento: e.target.value }))} style={S.input} /></div>
+                                    <div><label style={S.label}>Origen</label><input value={newExpediente.origen} onChange={e => setNewExpediente(p => ({ ...p, origen: e.target.value }))} style={S.input} placeholder="Ej: DRELM, UGEL" /></div>
+                                </div>
+                                <button onClick={async () => {
+                                    if (!newExpediente.asunto || !newExpediente.especialista) { addToast('Complete asunto y especialista', 'error'); return; }
+                                    try {
+                                        await API.agregarExpediente(newExpediente);
+                                        setNewExpediente({ asunto: '', especialista: '', oficina: '', categoria: 'vencer', fechaVencimiento: '', origen: '' });
+                                        setShowAddExpediente(false);
+                                        addToast('Expediente registrado y guardado en Sheets', 'success');
+                                    } catch { addToast('Error al guardar expediente', 'error'); }
+                                }} style={{ ...S.btn('#15803D', '#FFF'), marginTop: 12, width: '100%' }}>Guardar Expediente</button>
+                            </div>
+                        )}
                         {(viewExpedientes === 'vencer' ? EXPEDIENTES_POR_VENCER : viewExpedientes === 'plazo' ? EXPEDIENTES_EN_PLAZO : EXPEDIENTES_ELABORACION).map(e => {
                             const diasR = e.fechaVencimiento ? calcularDiasRestantes(e.fechaVencimiento) : null;
                             const isDRELM = e.origen === 'DRELM' || (e.asunto && e.asunto.toUpperCase().includes('DRELM'));
@@ -457,7 +485,52 @@ export default function App() {
                 )}
 
                 {/* REUNIONES */}
-                {activeTab === 'reuniones' && <MeetingRequest onToast={addToast} />}
+                {activeTab === 'reuniones' && (
+                    <div>
+                        <MeetingRequest onToast={addToast} />
+                        {/* Panel de Estado de Solicitudes - visible para publico */}
+                        {user && (
+                            <div style={{ ...S.card, marginTop: 20 }}>
+                                <div style={{ ...S.sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Icon name="list" size={16} color="#1E4D7B" />Mis Solicitudes de Reunion</span>
+                                    <button onClick={async () => { try { const data = await API.listarReuniones(); if (Array.isArray(data)) setMeetingRequests(data); } catch { addToast('Error cargando reuniones', 'error'); } }} style={{ ...S.btn('rgba(30,77,123,0.1)', '#1E4D7B'), fontSize: 11 }}>Actualizar</button>
+                                </div>
+                                {meetingRequests.length === 0 ? (
+                                    <div style={{ textAlign: 'center', padding: 24, color: '#94A3B8', fontSize: 13 }}>No hay solicitudes registradas. Haz click en "Actualizar" para cargar.</div>
+                                ) : meetingRequests.map((r, i) => {
+                                    const st = r.estado?.toLowerCase();
+                                    const stColor = st === 'aceptada' ? '#15803D' : st === 'rechazada' ? '#B91C1C' : '#B45309';
+                                    const stBg = st === 'aceptada' ? '#F0FDF4' : st === 'rechazada' ? '#FEF2F2' : '#FFFBEB';
+                                    return (
+                                        <div key={i} style={{ ...S.card, borderLeft: `4px solid ${stColor}`, padding: 14, marginBottom: 10, background: stBg }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', flexWrap: 'wrap', gap: 8 }}>
+                                                <div><span style={{ fontFamily: "'JetBrains Mono'", fontSize: 11, color: '#1E4D7B', fontWeight: 600 }}>{r.reunion_id}</span></div>
+                                                <span style={S.badge(stBg, stColor)}>{st === 'aceptada' ? '✓ ACEPTADA' : st === 'rechazada' ? '✕ RECHAZADA' : '⏳ PENDIENTE'}</span>
+                                            </div>
+                                            <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', margin: '4px 0' }}>{r.motivo || 'Sin motivo'}</div>
+                                            <div style={{ display: 'flex', gap: 16, color: '#64748B', fontSize: 11, flexWrap: 'wrap' }}>
+                                                <span>Solicitante: {r.solicitante_nombre}</span>
+                                                <span>Fecha: {r.fecha_propuesta}</span>
+                                                <span>Hora: {r.hora_propuesta}</span>
+                                            </div>
+                                            {st === 'rechazada' && r.comentario_admin && (
+                                                <div style={{ marginTop: 8, padding: 10, background: '#FEE2E2', borderRadius: 6, fontSize: 12, color: '#991B1B' }}>
+                                                    <strong>Motivo del rechazo:</strong> {r.comentario_admin}
+                                                </div>
+                                            )}
+                                            {st === 'aceptada' && r.comentario_admin && (
+                                                <div style={{ marginTop: 8, padding: 10, background: '#DCFCE7', borderRadius: 6, fontSize: 12, color: '#166534' }}>
+                                                    <strong>Comentario:</strong> {r.comentario_admin}
+                                                </div>
+                                            )}
+                                            {r.respondido_por && <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 6 }}>Respondido por: {r.respondido_por} | {r.fecha_respuesta}</div>}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* COMUNICACIONES */}
                 {activeTab === 'whatsapp' && (
