@@ -5,17 +5,24 @@
 
 const API_BASE = 'https://ravsbot-n8n.xv74e4.easypanel.host/webhook';
 
-async function request(endpoint, data) {
+async function request(endpoint, data, method = 'POST') {
     try {
-        const res = await fetch(`${API_BASE}/${endpoint}`, {
-            method: 'POST',
+        const opts = {
+            method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (!res.ok) {
-            throw new Error(`Error ${res.status}: ${res.statusText}`);
+        };
+        if (method === 'POST' && data) {
+            opts.body = JSON.stringify(data);
         }
-        return await res.json();
+        const res = await fetch(`${API_BASE}/${endpoint}`, opts);
+        const text = await res.text();
+        try {
+            return JSON.parse(text);
+        } catch {
+            // N8N sometimes returns non-JSON (HTML error pages)
+            console.warn(`Non-JSON response from ${endpoint}:`, text.substring(0, 200));
+            return { success: false, message: text.substring(0, 200) };
+        }
     } catch (error) {
         console.error(`Error en ${endpoint}:`, error);
         throw error;
@@ -47,6 +54,14 @@ export const API = {
             actions: data.actions || [],
             created_by: data.created_by || 'Sistema'
         }),
+
+    /** Listar actividades desde Google Sheets */
+    listarActividades: () =>
+        request('agebatp-listar-actividades', null, 'GET'),
+
+    /** Listar expedientes desde Google Sheets */
+    listarExpedientes: () =>
+        request('agebatp-listar-expedientes', null, 'GET'),
 
     /** Solicitar reunion (usuario publico) */
     solicitarReunion: (data) =>

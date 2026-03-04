@@ -1,6 +1,6 @@
 import { QRCodeSVG } from 'qrcode.react';
 
-const PLANIFICADOR_URL = 'https://planificador.xv74e4.easypanel.host';
+const PLANIFICADOR_URL = 'https://ravsbot-planificador.xv74e4.easypanel.host';
 
 export default function QRCode({ text, size = 200 }) {
     return (

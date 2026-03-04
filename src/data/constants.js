@@ -16,17 +16,36 @@ export const INITIAL_ACTIVITIES = [
     { id: 3, title: "Asistencia Tecnica Directivos EBA", type: "asistencia_tecnica", date: "2026-03-25", endDate: "2026-03-25", time: "14:30 - 17:30", location: "San Francisco de Sales", priority: "media", status: "pendiente", progress: 0, assigned: [3, 5], description: "Asistencia tecnica dirigida a directivos de Educacion Basica Alternativa.", actions: ["Elaborar material de asistencia tecnica", "Coordinar logistica con directivos EBA", "Elaborar informe posterior a la A.T."] },
 ];
 
+/* ═══ Expedientes con fechas reales — dias se calculan dinamicamente ═══ */
+
+/** Calcula dias restantes desde hoy hasta la fecha de vencimiento */
+export function calcularDiasRestantes(fechaVencimientoISO) {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const venc = new Date(fechaVencimientoISO);
+    venc.setHours(0, 0, 0, 0);
+    return Math.ceil((venc - hoy) / (1000 * 60 * 60 * 24));
+}
+
+/** Parsea fecha DD/MM/YYYY a ISO YYYY-MM-DD */
+export function parseFechaDMY(fechaDMY) {
+    if (!fechaDMY) return null;
+    const parts = fechaDMY.split('/');
+    if (parts.length !== 3) return fechaDMY;
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+}
+
 export const EXPEDIENTES_POR_VENCER = [
-    { id: "EAP2026-INT-0088100", especialista: "Liz Miluska Gutierrez Silva", oficina: "ARH", fechaIngreso: "22/01/2026", fechaVencimiento: "05/03/2026", plazo: 30, diasVigentes: 2, asunto: "Comunica personal de apoyo" },
-    { id: "MPD2026-EXT-0101527", especialista: "Juan Alberto Quispe Solano", oficina: "MPT", fechaIngreso: "26/01/2026", fechaVencimiento: "09/03/2026", plazo: 30, diasVigentes: 4, asunto: "Informo continuidad de modulos del ciclo" },
+    { id: "EAP2026-INT-0088100", especialista: "Liz Miluska Gutierrez Silva", oficina: "ARH", fechaIngreso: "2026-01-22", fechaVencimiento: "2026-03-05", plazo: 30, asunto: "Comunica personal de apoyo" },
+    { id: "MPD2026-EXT-0101527", especialista: "Juan Alberto Quispe Solano", oficina: "MPT", fechaIngreso: "2026-01-26", fechaVencimiento: "2026-03-09", plazo: 30, asunto: "Informo continuidad de modulos del ciclo" },
 ];
 
 export const EXPEDIENTES_EN_PLAZO = [
-    { id: "MPD2026-EXT-0113171", especialista: "FBRC UGEL03", oficina: "AGEBATP", fechaVencimiento: "11/03/2026", diasVigentes: 6, asunto: "Solicito autorizacion para ofertar programas" },
-    { id: "ESP-EBR-EBE2026-INT-0091471", especialista: "Juan Alberto Quispe Solano", oficina: "DIR", fechaVencimiento: "12/03/2026", diasVigentes: 7, asunto: "Aprobacion conformacion de la estructura" },
-    { id: "AGEBATP2026-INT-0011486", especialista: "Liz Miluska Gutierrez Silva", oficina: "NE", fechaVencimiento: "13/03/2026", diasVigentes: 8, asunto: "Se eleva a consideracion de la DRELM" },
-    { id: "MPD2026-EXT-0135097", especialista: "Juan Alberto Quispe Solano", oficina: "MPT", fechaVencimiento: "17/03/2026", diasVigentes: 10, asunto: "Remito DNI, RD y correo del director" },
-    { id: "MPD2026-EXT-0141871", especialista: "Francisco Villalobos Gonzales", oficina: "MPT", fechaVencimiento: "18/03/2026", diasVigentes: 11, asunto: "Solicita aprobacion de modulos basico 2025" },
+    { id: "MPD2026-EXT-0113171", especialista: "FBRC UGEL03", oficina: "AGEBATP", fechaVencimiento: "2026-03-11", asunto: "Solicito autorizacion para ofertar programas" },
+    { id: "ESP-EBR-EBE2026-INT-0091471", especialista: "Juan Alberto Quispe Solano", oficina: "DIR", fechaVencimiento: "2026-03-12", asunto: "Aprobacion conformacion de la estructura" },
+    { id: "AGEBATP2026-INT-0011486", especialista: "Liz Miluska Gutierrez Silva", oficina: "NE", fechaVencimiento: "2026-03-13", asunto: "Se eleva a consideracion de la DRELM" },
+    { id: "MPD2026-EXT-0135097", especialista: "Juan Alberto Quispe Solano", oficina: "MPT", fechaVencimiento: "2026-03-17", asunto: "Remito DNI, RD y correo del director" },
+    { id: "MPD2026-EXT-0141871", especialista: "Francisco Villalobos Gonzales", oficina: "MPT", fechaVencimiento: "2026-03-18", asunto: "Solicita aprobacion de modulos basico 2025" },
 ];
 
 export const EXPEDIENTES_ELABORACION = [

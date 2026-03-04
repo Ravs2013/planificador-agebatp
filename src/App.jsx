@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAuth } from './context/AuthContext';
 import { API } from './api/endpoints';
 import Icon from './components/Icon';
@@ -6,7 +6,7 @@ import QRCode from './components/QRCode';
 import LoginForm from './components/LoginForm';
 import RegisterForm from './components/RegisterForm';
 import MeetingRequest from './components/MeetingRequest';
-import { STAFF, INITIAL_ACTIVITIES, EXPEDIENTES_POR_VENCER, EXPEDIENTES_EN_PLAZO, EXPEDIENTES_ELABORACION, priorityConfig, statusConfig, typeConfig, monthNames, dayNames, getDaysInMonth, getFirstDayOfMonth, fmtDate, todayStr } from './data/constants';
+import { STAFF, INITIAL_ACTIVITIES, EXPEDIENTES_POR_VENCER, EXPEDIENTES_EN_PLAZO, EXPEDIENTES_ELABORACION, calcularDiasRestantes, priorityConfig, statusConfig, typeConfig, monthNames, dayNames, getDaysInMonth, getFirstDayOfMonth, fmtDate, todayStr } from './data/constants';
 
 export default function App() {
     const { user, logout, isRole } = useAuth();
@@ -26,7 +26,39 @@ export default function App() {
     const [viewExpedientes, setViewExpedientes] = useState('vencer');
     const [toasts, setToasts] = useState([]);
     const [addLoading, setAddLoading] = useState(false);
+    const [dataLoading, setDataLoading] = useState(true);
     const [newActivity, setNewActivity] = useState({ title: '', type: 'estrategica', date: '', endDate: '', time: '', location: '', priority: 'media', assigned: [], description: '', actions: [''] });
+
+    // Cargar datos de Google Sheets al montar
+    useEffect(() => {
+        async function loadData() {
+            try {
+                const result = await API.listarActividades();
+                if (result && Array.isArray(result) && result.length > 0) {
+                    const mapped = result.map((row, i) => ({
+                        id: row.id || row.actividad_id || `ACT-${i}`,
+                        title: row.titulo || row.title || '',
+                        type: row.tipo || row.type || 'estrategica',
+                        date: row.fecha_inicio || row.date || '',
+                        endDate: row.fecha_fin || row.endDate || row.fecha_inicio || '',
+                        time: row.horario || row.time || '',
+                        location: row.lugar || row.location || '',
+                        priority: row.prioridad || row.priority || 'media',
+                        status: row.estado || row.status || 'pendiente',
+                        progress: parseInt(row.progreso || row.progress || '0'),
+                        assigned: typeof row.personal_asignado === 'string' ? JSON.parse(row.personal_asignado || '[]') : (row.assigned || []),
+                        description: row.descripcion || row.description || '',
+                        actions: typeof row.acciones === 'string' ? JSON.parse(row.acciones || '[]') : (row.actions || [])
+                    }));
+                    setActivities(mapped);
+                }
+            } catch (err) {
+                console.warn('No se pudo cargar actividades de Sheets, usando datos locales:', err.message);
+            }
+            setDataLoading(false);
+        }
+        loadData();
+    }, []);
 
     const [whatsappLog] = useState([
         { from: 'Liz Gutierrez', time: '08:32', msg: 'Confirmado asistencia al BIAE. Me encuentro en la I.E. Abraham Valdelomar N. 1150.', date: '2026-03-16', isYesterday: true },
@@ -196,10 +228,10 @@ export default function App() {
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(12,25,41,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(4px)' }} onClick={() => setShowQR(false)}>
                     <div style={{ ...S.card, padding: 36, textAlign: 'center', animation: 'fadeIn 0.2s ease' }} onClick={e => e.stopPropagation()}>
                         <h3 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 18, color: '#122240', marginBottom: 20 }}>Acceso Movil al Planificador</h3>
-                        <div style={{ background: '#F8FAFC', padding: 20, borderRadius: 8, display: 'inline-block', border: '1px solid #D6DCE8' }}><QRCode text="https://planificador.xv74e4.easypanel.host" size={200} /></div>
+                        <div style={{ background: '#F8FAFC', padding: 20, borderRadius: 8, display: 'inline-block', border: '1px solid #D6DCE8' }}><QRCode text="https://ravsbot-planificador.xv74e4.easypanel.host" size={200} /></div>
                         <div style={{ marginTop: 16 }}>
                             <div style={{ fontSize: 12, color: '#64748B', marginBottom: 8 }}>Escanee el codigo o acceda directamente:</div>
-                            <a href="https://planificador.xv74e4.easypanel.host" target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, fontWeight: 600, color: '#1E4D7B', textDecoration: 'none', padding: '6px 14px', borderRadius: 6, border: '1px solid #DBEAFE', background: '#EFF6FF', display: 'inline-block' }}>planificador.xv74e4.easypanel.host</a>
+                            <a href="https://ravsbot-planificador.xv74e4.easypanel.host" target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, fontWeight: 600, color: '#1E4D7B', textDecoration: 'none', padding: '6px 14px', borderRadius: 6, border: '1px solid #DBEAFE', background: '#EFF6FF', display: 'inline-block' }}>ravsbot-planificador.xv74e4.easypanel.host</a>
                         </div>
                         <button onClick={() => setShowQR(false)} style={{ marginTop: 20, ...S.btn('#F8FAFC', '#475569', '#D6DCE8') }}>Cerrar</button>
                     </div>
@@ -358,16 +390,19 @@ export default function App() {
                                 <button key={t.key} onClick={() => setViewExpedientes(t.key)} style={{ ...S.btn(viewExpedientes === t.key ? '#1B3A5C' : '#FFFFFF', viewExpedientes === t.key ? '#FFFFFF' : '#475569', viewExpedientes === t.key ? '#1B3A5C' : '#D6DCE8') }}>{t.label} <span style={{ minWidth: 22, height: 22, borderRadius: 4, background: viewExpedientes === t.key ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{t.count}</span></button>
                             ))}
                         </div>
-                        {(viewExpedientes === 'vencer' ? EXPEDIENTES_POR_VENCER : viewExpedientes === 'plazo' ? EXPEDIENTES_EN_PLAZO : EXPEDIENTES_ELABORACION).map(e => (
-                            <div key={e.id} style={{ ...S.card, borderLeft: `4px solid ${viewExpedientes === 'vencer' ? '#B91C1C' : viewExpedientes === 'plazo' ? '#B45309' : '#1E4D7B'}`, padding: 14, marginBottom: 10 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', flexWrap: 'wrap', gap: 8 }}>
-                                    <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 11, color: '#1E4D7B', fontWeight: 600 }}>{e.id}</div>
-                                    {e.diasVigentes != null && <span style={S.badge(viewExpedientes === 'vencer' ? '#FEF2F2' : '#FFFBEB', viewExpedientes === 'vencer' ? '#B91C1C' : '#B45309', viewExpedientes === 'vencer' ? '#FECACA' : '#FDE68A')}>{viewExpedientes === 'vencer' ? `Vence en ${e.diasVigentes} dias` : `${e.diasVigentes} dias restantes`}</span>}
+                        {(viewExpedientes === 'vencer' ? EXPEDIENTES_POR_VENCER : viewExpedientes === 'plazo' ? EXPEDIENTES_EN_PLAZO : EXPEDIENTES_ELABORACION).map(e => {
+                            const diasR = e.fechaVencimiento ? calcularDiasRestantes(e.fechaVencimiento) : null;
+                            return (
+                                <div key={e.id} style={{ ...S.card, borderLeft: `4px solid ${viewExpedientes === 'vencer' ? '#B91C1C' : viewExpedientes === 'plazo' ? '#B45309' : '#1E4D7B'}`, padding: 14, marginBottom: 10 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', flexWrap: 'wrap', gap: 8 }}>
+                                        <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 11, color: '#1E4D7B', fontWeight: 600 }}>{e.id}</div>
+                                        {diasR != null && <span style={S.badge(diasR <= 3 ? '#FEF2F2' : '#FFFBEB', diasR <= 3 ? '#B91C1C' : '#B45309', diasR <= 3 ? '#FECACA' : '#FDE68A')}>{diasR <= 0 ? 'VENCIDO' : diasR <= 3 ? `Vence en ${diasR} dias` : `${diasR} dias restantes`}</span>}
+                                    </div>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', margin: '4px 0' }}>{e.asunto}</div>
+                                    <div style={{ display: 'flex', gap: 16, color: '#64748B', fontSize: 11, flexWrap: 'wrap' }}><span>Especialista: {e.especialista}</span><span>Oficina: {e.oficina}</span>{e.fechaVencimiento && <span>Vencimiento: {e.fechaVencimiento}</span>}</div>
                                 </div>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', margin: '4px 0' }}>{e.asunto}</div>
-                                <div style={{ display: 'flex', gap: 16, color: '#64748B', fontSize: 11, flexWrap: 'wrap' }}><span>Especialista: {e.especialista}</span><span>Oficina: {e.oficina}</span>{e.fechaVencimiento && <span>Vencimiento: {e.fechaVencimiento}</span>}</div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
 
