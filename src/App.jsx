@@ -14,7 +14,7 @@ export default function App() {
     const [showRegister, setShowRegister] = useState(false);
     const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
     const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-    const [activities, setActivities] = useState(INITIAL_ACTIVITIES);
+    const [activities, setActivities] = useState([]);
     const [selectedDay, setSelectedDay] = useState(null);
     const [activeTab, setActiveTab] = useState('calendario');
     const [showAddModal, setShowAddModal] = useState(false);
@@ -124,16 +124,18 @@ export default function App() {
     };
 
     const exportToCSV = () => {
+        const sep = '\t';
         const h = ['N', 'Actividad', 'Tipo', 'Fecha Inicio', 'Fecha Fin', 'Horario', 'Lugar', 'Prioridad', 'Estado', 'Avance', 'Personal', 'Descripcion'];
-        const r = activities.map((a, i) => [i + 1, a.title, typeConfig[a.type]?.label, a.date, a.endDate || a.date, a.time, a.location, priorityConfig[a.priority]?.label, statusConfig[a.status]?.label, `${a.progress}%`, a.assigned.map(id => STAFF.find(s => s.id === id)?.name || '').join('; '), a.description]);
-        const csv = [h, ...r].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const r = activities.map((a, i) => [i + 1, a.title, typeConfig[a.type]?.label || a.type, a.date, a.endDate || a.date, a.time, a.location, priorityConfig[a.priority]?.label || a.priority, statusConfig[a.status]?.label || a.status, `${a.progress}%`, a.assigned.map(id => STAFF.find(s => s.id === id)?.name || '').join('; '), a.description]);
+        const csv = [h, ...r].map(row => row.map(c => `"${String(c || '').replace(/"/g, '""')}"`).join(sep)).join('\r\n');
         const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `Planificador_AGEBATP_${monthNames[currentMonth]}_${currentYear}.csv`; link.click();
     };
 
     const unreadNotifs = notifications.filter(n => !n.read).length;
-    const canCreate = !user || isRole('admin');
+    const canCreate = user && (isRole('admin') || isRole('personal'));
     const canExport = !user || isRole('admin') || isRole('personal');
+    const isPublic = user && isRole('publico');
 
     const allTabs = [
         { id: 'calendario', label: 'Calendario', icon: 'calendar' },
@@ -184,6 +186,7 @@ export default function App() {
                         <button onClick={() => setShowQR(true)} style={S.btn('rgba(255,255,255,0.06)', '#E2E8F0', 'rgba(255,255,255,0.15)')}><Icon name="qrcode" size={14} />Acceso QR</button>
                         {canExport && <button onClick={exportToCSV} style={S.btn('rgba(255,255,255,0.06)', '#E2E8F0', 'rgba(255,255,255,0.15)')}><Icon name="download" size={14} />Exportar</button>}
                         {canCreate && <button onClick={() => setShowAddModal(true)} style={S.btn('#1E4D7B', '#FFFFFF', '#2563A0')}><Icon name="plus" size={14} />Nueva Actividad</button>}
+                        {isPublic && <button onClick={() => setActiveTab('reuniones')} style={S.btn('#7C3AED', '#FFFFFF', '#6D28D9')}><Icon name="calendar" size={14} />Solicitar Reunion</button>}
                         <div style={{ position: 'relative' }}>
                             <button onClick={() => setShowNotifPanel(!showNotifPanel)} style={{ padding: '8px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.06)', color: '#E2E8F0', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                                 <Icon name="bell" size={14} />
