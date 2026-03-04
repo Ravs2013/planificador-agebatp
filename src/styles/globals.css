@@ -1,0 +1,156 @@
+/* ═══════════════════════════════════════════════════════════════
+   PLANIFICADOR MENSUAL AGEBATP — UGEL 03
+   Sistema de Gestion y Monitoreo de Actividades
+   Estilos Gubernamentales Institucionales
+   ═══════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #1E293B;
+  background: #F5F6FA;
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+input, select, textarea, button {
+  font-family: inherit;
+  outline: none;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: #1E4D7B !important;
+  box-shadow: 0 0 0 3px rgba(30, 77, 123, 0.1);
+}
+
+button {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+.toast-container {
+  position: fixed;
+  top: 80px;
+  right: 24px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  padding: 12px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  animation: slideDown 0.25s ease;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  max-width: 400px;
+}
+
+.toast-success {
+  background: #F0FDF4;
+  color: #15803D;
+  border: 1px solid #BBF7D0;
+  border-left: 4px solid #15803D;
+}
+
+.toast-error {
+  background: #FEF2F2;
+  color: #B91C1C;
+  border: 1px solid #FECACA;
+  border-left: 4px solid #B91C1C;
+}
+
+.toast-info {
+  background: #EFF6FF;
+  color: #1E4D7B;
+  border: 1px solid #DBEAFE;
+  border-left: 4px solid #1E4D7B;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  display: inline-block;
+}
+
+.spinner-dark {
+  border-color: rgba(30, 77, 123, 0.2);
+  border-top-color: #1E4D7B;
+}
+
+@media (max-width: 1024px) {
+  .grid-calendar {
+    grid-template-columns: 1fr !important;
+  }
+  .grid-comms {
+    grid-template-columns: 1fr !important;
+  }
+  .grid-personal {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .integrations-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
