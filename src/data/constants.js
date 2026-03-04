@@ -42,16 +42,16 @@ export const EXPEDIENTES_POR_VENCER = [
 
 export const EXPEDIENTES_EN_PLAZO = [
     { id: "MPD2026-EXT-0113171", especialista: "FBRC UGEL03", oficina: "AGEBATP", fechaVencimiento: "2026-03-11", asunto: "Solicito autorizacion para ofertar programas" },
-    { id: "ESP-EBR-EBE2026-INT-0091471", especialista: "Juan Alberto Quispe Solano", oficina: "DIR", fechaVencimiento: "2026-03-12", asunto: "Aprobacion conformacion de la estructura" },
-    { id: "AGEBATP2026-INT-0011486", especialista: "Liz Miluska Gutierrez Silva", oficina: "NE", fechaVencimiento: "2026-03-13", asunto: "Se eleva a consideracion de la DRELM" },
-    { id: "MPD2026-EXT-0135097", especialista: "Juan Alberto Quispe Solano", oficina: "MPT", fechaVencimiento: "2026-03-17", asunto: "Remito DNI, RD y correo del director" },
+    { id: "ESP-EBR-EBE2026-INT-0091471", especialista: "Juan Alberto Quispe Solano", oficina: "DIR", fechaVencimiento: "2026-03-12", asunto: "Aprobacion conformacion de la estructura", origen: "DRELM" },
+    { id: "AGEBATP2026-INT-0011486", especialista: "Liz Miluska Gutierrez Silva", oficina: "NE", fechaVencimiento: "2026-03-13", asunto: "Se eleva a consideracion de la DRELM", origen: "DRELM" },
+    { id: "MPD2026-EXT-0135097", especialista: "Juan Alberto Quispe Solano", oficina: "MPT", fechaVencimiento: "2026-03-17", asunto: "Remito DNI, RD y correo del director", origen: "DRELM" },
     { id: "MPD2026-EXT-0141871", especialista: "Francisco Villalobos Gonzales", oficina: "MPT", fechaVencimiento: "2026-03-18", asunto: "Solicita aprobacion de modulos basico 2025" },
 ];
 
 export const EXPEDIENTES_ELABORACION = [
     { id: "AGEBATP2026-INT-0199203", especialista: "Liz Miluska Gutierrez Silva", oficina: "AGEBATP", asunto: "Documento en elaboracion" },
     { id: "AGEBATP2026-INT-0242953", especialista: "Lucy Ana Vasquez Aliaga", oficina: "AGEBATP", asunto: "Solicito apoyo como facilitador en la asistencia" },
-    { id: "AGEBATP2026-INT-0253365", especialista: "Liz Miluska Gutierrez Silva", oficina: "AGEBATP", asunto: "Remite informe detallado sobre trabajo" },
+    { id: "AGEBATP2026-INT-0253365", especialista: "Liz Miluska Gutierrez Silva", oficina: "AGEBATP", asunto: "Remite informe detallado sobre trabajo", origen: "DRELM" },
 ];
 
 export const priorityConfig = {

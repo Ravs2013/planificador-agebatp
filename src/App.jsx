@@ -29,36 +29,40 @@ export default function App() {
     const [dataLoading, setDataLoading] = useState(true);
     const [newActivity, setNewActivity] = useState({ title: '', type: 'estrategica', date: '', endDate: '', time: '', location: '', priority: 'media', assigned: [], description: '', actions: [''] });
 
-    // Cargar datos de Google Sheets al montar
-    useEffect(() => {
-        async function loadData() {
-            try {
-                const result = await API.listarActividades();
-                if (result && Array.isArray(result) && result.length > 0) {
-                    const mapped = result.map((row, i) => ({
-                        id: row.id || row.actividad_id || `ACT-${i}`,
-                        title: row.titulo || row.title || '',
-                        type: row.tipo || row.type || 'estrategica',
-                        date: row.fecha_inicio || row.date || '',
-                        endDate: row.fecha_fin || row.endDate || row.fecha_inicio || '',
-                        time: row.horario || row.time || '',
-                        location: row.lugar || row.location || '',
-                        priority: row.prioridad || row.priority || 'media',
-                        status: row.estado || row.status || 'pendiente',
-                        progress: parseInt(row.progreso || row.progress || '0'),
-                        assigned: typeof row.personal_asignado === 'string' ? JSON.parse(row.personal_asignado || '[]') : (row.assigned || []),
-                        description: row.descripcion || row.description || '',
-                        actions: typeof row.acciones === 'string' ? JSON.parse(row.acciones || '[]') : (row.actions || [])
-                    }));
-                    setActivities(mapped);
-                }
-            } catch (err) {
-                console.warn('No se pudo cargar actividades de Sheets, usando datos locales:', err.message);
+    // Funcion para cargar actividades de Google Sheets
+    const loadActividades = useCallback(async () => {
+        try {
+            const result = await API.listarActividades();
+            if (result && Array.isArray(result) && result.length > 0) {
+                const mapped = result.map((row, i) => ({
+                    id: row.id || row.actividad_id || `ACT-${i}`,
+                    title: row.titulo || row.title || '',
+                    type: row.tipo || row.type || 'estrategica',
+                    date: row.fecha_inicio || row.date || '',
+                    endDate: row.fecha_fin || row.endDate || row.fecha_inicio || '',
+                    time: row.horario || row.time || '',
+                    location: row.lugar || row.location || '',
+                    priority: row.prioridad || row.priority || 'media',
+                    status: row.estado || row.status || 'pendiente',
+                    progress: parseInt(row.progreso || row.progress || '0'),
+                    assigned: typeof row.personal_asignado === 'string' ? JSON.parse(row.personal_asignado || '[]') : (row.assigned || []),
+                    description: row.descripcion || row.description || '',
+                    actions: typeof row.acciones === 'string' ? JSON.parse(row.acciones || '[]') : (row.actions || [])
+                }));
+                setActivities(mapped);
             }
-            setDataLoading(false);
+        } catch (err) {
+            console.warn('No se pudo cargar actividades de Sheets, usando datos locales:', err.message);
         }
-        loadData();
+        setDataLoading(false);
     }, []);
+
+    // Cargar al montar + auto-refresh cada 30s para datos en tiempo real
+    useEffect(() => {
+        loadActividades();
+        const interval = setInterval(loadActividades, 30000);
+        return () => clearInterval(interval);
+    }, [loadActividades]);
 
     const [whatsappLog] = useState([
         { from: 'Liz Gutierrez', time: '08:32', msg: 'Confirmado asistencia al BIAE. Me encuentro en la I.E. Abraham Valdelomar N. 1150.', date: '2026-03-16', isYesterday: true },
@@ -226,9 +230,9 @@ export default function App() {
             {/* QR MODAL */}
             {showQR && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(12,25,41,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(4px)' }} onClick={() => setShowQR(false)}>
-                    <div style={{ ...S.card, padding: 36, textAlign: 'center', animation: 'fadeIn 0.2s ease' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ ...S.card, padding: 36, textAlign: 'center', animation: 'fadeIn 0.2s ease', maxWidth: 340 }} onClick={e => e.stopPropagation()}>
                         <h3 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 18, color: '#122240', marginBottom: 20 }}>Acceso Movil al Planificador</h3>
-                        <div style={{ background: '#F8FAFC', padding: 20, borderRadius: 8, display: 'inline-block', border: '1px solid #D6DCE8' }}><QRCode text="https://ravsbot-planificador.xv74e4.easypanel.host" size={200} /></div>
+                        <div style={{ background: '#F8FAFC', padding: 20, borderRadius: 8, display: 'inline-block', border: '1px solid #D6DCE8' }}><QRCode size={220} /></div>
                         <div style={{ marginTop: 16 }}>
                             <div style={{ fontSize: 12, color: '#64748B', marginBottom: 8 }}>Escanee el codigo o acceda directamente:</div>
                             <a href="https://ravsbot-planificador.xv74e4.easypanel.host" target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, fontWeight: 600, color: '#1E4D7B', textDecoration: 'none', padding: '6px 14px', borderRadius: 6, border: '1px solid #DBEAFE', background: '#EFF6FF', display: 'inline-block' }}>ravsbot-planificador.xv74e4.easypanel.host</a>
@@ -392,13 +396,17 @@ export default function App() {
                         </div>
                         {(viewExpedientes === 'vencer' ? EXPEDIENTES_POR_VENCER : viewExpedientes === 'plazo' ? EXPEDIENTES_EN_PLAZO : EXPEDIENTES_ELABORACION).map(e => {
                             const diasR = e.fechaVencimiento ? calcularDiasRestantes(e.fechaVencimiento) : null;
+                            const isDRELM = e.origen === 'DRELM' || (e.asunto && e.asunto.toUpperCase().includes('DRELM'));
                             return (
-                                <div key={e.id} style={{ ...S.card, borderLeft: `4px solid ${viewExpedientes === 'vencer' ? '#B91C1C' : viewExpedientes === 'plazo' ? '#B45309' : '#1E4D7B'}`, padding: 14, marginBottom: 10 }}>
+                                <div key={e.id} style={{ ...S.card, borderLeft: `4px solid ${isDRELM ? '#7C3AED' : viewExpedientes === 'vencer' ? '#B91C1C' : viewExpedientes === 'plazo' ? '#B45309' : '#1E4D7B'}`, padding: 14, marginBottom: 10, background: isDRELM ? '#F5F3FF' : '#FFFFFF', boxShadow: isDRELM ? '0 0 0 1px #C4B5FD, 0 2px 8px rgba(124,58,237,0.08)' : undefined }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', flexWrap: 'wrap', gap: 8 }}>
-                                        <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 11, color: '#1E4D7B', fontWeight: 600 }}>{e.id}</div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span style={{ fontFamily: "'JetBrains Mono'", fontSize: 11, color: '#1E4D7B', fontWeight: 600 }}>{e.id}</span>
+                                            {isDRELM && <span style={{ fontSize: 9, fontWeight: 800, color: '#7C3AED', background: '#EDE9FE', border: '1px solid #C4B5FD', padding: '2px 8px', borderRadius: 4, letterSpacing: 0.8 }}>DRELM</span>}
+                                        </div>
                                         {diasR != null && <span style={S.badge(diasR <= 3 ? '#FEF2F2' : '#FFFBEB', diasR <= 3 ? '#B91C1C' : '#B45309', diasR <= 3 ? '#FECACA' : '#FDE68A')}>{diasR <= 0 ? 'VENCIDO' : diasR <= 3 ? `Vence en ${diasR} dias` : `${diasR} dias restantes`}</span>}
                                     </div>
-                                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', margin: '4px 0' }}>{e.asunto}</div>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: isDRELM ? '#5B21B6' : '#1E293B', margin: '4px 0' }}>{e.asunto}</div>
                                     <div style={{ display: 'flex', gap: 16, color: '#64748B', fontSize: 11, flexWrap: 'wrap' }}><span>Especialista: {e.especialista}</span><span>Oficina: {e.oficina}</span>{e.fechaVencimiento && <span>Vencimiento: {e.fechaVencimiento}</span>}</div>
                                 </div>
                             );
