@@ -27,6 +27,8 @@ export default function App() {
     const [toasts, setToasts] = useState([]);
     const [addLoading, setAddLoading] = useState(false);
     const [dataLoading, setDataLoading] = useState(true);
+    const [showAddStaff, setShowAddStaff] = useState(false);
+    const [newStaffForm, setNewStaffForm] = useState({ name: '', role: '', phone: '', email: '' });
     const [newActivity, setNewActivity] = useState({ title: '', type: 'estrategica', date: '', endDate: '', time: '', location: '', priority: 'media', assigned: [], description: '', actions: [''] });
 
     // Funcion para cargar actividades de Google Sheets
@@ -361,7 +363,30 @@ export default function App() {
                 {activeTab === 'personal' && (
                     <div className="grid-personal" style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 20, alignItems: 'start' }}>
                         <div style={S.card}>
-                            <div style={S.sectionTitle}><Icon name="users" size={16} color="#1E4D7B" />Equipo AGEBATP - Monitoreo Diario</div>
+                            <div style={{ ...S.sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Icon name="users" size={16} color="#1E4D7B" />Equipo AGEBATP - Monitoreo Diario</span>
+                                {isRole('admin') && <button onClick={() => setShowAddStaff(!showAddStaff)} style={{ ...S.btn('#1B3A5C', '#FFF'), fontSize: 12, padding: '6px 14px' }}>{showAddStaff ? 'Cancelar' : '+ Agregar Personal'}</button>}
+                            </div>
+                            {/* ADMIN: Formulario agregar personal */}
+                            {isRole('admin') && showAddStaff && (
+                                <div style={{ ...S.card, background: '#F8FAFC', padding: 16, marginBottom: 16, border: '1px dashed #CBD5E1' }}>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#122240', marginBottom: 12 }}>Nuevo Personal Administrativo</div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                        <div><label style={S.label}>Nombre Completo *</label><input value={newStaffForm.name} onChange={e => setNewStaffForm(p => ({ ...p, name: e.target.value }))} style={S.input} placeholder="Nombre completo" /></div>
+                                        <div><label style={S.label}>Cargo / Rol *</label><input value={newStaffForm.role} onChange={e => setNewStaffForm(p => ({ ...p, role: e.target.value }))} style={S.input} placeholder="Ej: Especialista ETP" /></div>
+                                        <div><label style={S.label}>Telefono</label><input value={newStaffForm.phone} onChange={e => setNewStaffForm(p => ({ ...p, phone: e.target.value }))} style={S.input} placeholder="51XXXXXXXXX" /></div>
+                                        <div><label style={S.label}>Email</label><input value={newStaffForm.email} onChange={e => setNewStaffForm(p => ({ ...p, email: e.target.value }))} style={S.input} placeholder="correo@ugel03.gob.pe" /></div>
+                                    </div>
+                                    <button onClick={() => {
+                                        if (!newStaffForm.name || !newStaffForm.role) { addToast('Complete nombre y cargo', 'error'); return; }
+                                        const initials = newStaffForm.name.split(' ').filter(w => w.length > 2).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+                                        const newId = Math.max(...STAFF.map(s => s.id)) + 1;
+                                        STAFF.push({ id: newId, name: newStaffForm.name, role: newStaffForm.role, phone: newStaffForm.phone || '', email: newStaffForm.email || '', initials });
+                                        setNewStaffForm({ name: '', role: '', phone: '', email: '' });
+                                        setShowAddStaff(false);
+                                        addToast(`${newStaffForm.name} agregado al equipo`, 'success');
+                                    }} style={{ ...S.btn('#15803D', '#FFF'), marginTop: 12, width: '100%' }}>Agregar al Equipo</button>
+                                </div>
+                            )}
                             {STAFF.map(s => {
                                 const sa = activities.filter(a => a.assigned.includes(s.id));
                                 const avg = sa.length ? Math.round(sa.reduce((sum, a) => sum + a.progress, 0) / sa.length) : 0;
@@ -370,11 +395,14 @@ export default function App() {
                                         <div style={{ width: 42, height: 42, borderRadius: 6, background: '#1B3A5C', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{s.initials}</div>
                                         <div style={{ flex: 1 }}>
                                             <div style={{ fontSize: 13, fontWeight: 700, color: '#122240' }}>{s.name}</div>
-                                            <div style={{ fontSize: 11, color: '#64748B' }}>{s.role}</div>
+                                            <div style={{ fontSize: 11, color: '#64748B' }}>{s.role} {s.email && <span style={{ marginLeft: 8, color: '#94A3B8' }}>{s.email}</span>}</div>
                                             <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>{sa.length} actividad{sa.length !== 1 ? 'es' : ''} | Avance: {avg}%</div>
                                             <div style={{ height: 6, background: '#F1F5F9', borderRadius: 3, marginTop: 6, overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 3, width: `${avg}%`, background: avg < 30 ? '#B91C1C' : avg < 70 ? '#B45309' : '#15803D' }} /></div>
                                         </div>
                                         <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 22, fontWeight: 700, color: avg < 30 ? '#B91C1C' : avg < 70 ? '#B45309' : '#15803D' }}>{avg}%</div>
+                                        {isRole('admin') && (
+                                            <button onClick={(e) => { e.stopPropagation(); if (confirm(`¿Eliminar a ${s.name} del equipo?`)) { const idx = STAFF.findIndex(x => x.id === s.id); if (idx > -1) { STAFF.splice(idx, 1); addToast(`${s.name} eliminado`, 'success'); setSearchTerm(t => t); } } }} style={{ background: 'none', border: 'none', color: '#B91C1C', cursor: 'pointer', fontSize: 16, padding: '4px 8px', borderRadius: 4 }} title="Eliminar personal">✕</button>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -382,6 +410,17 @@ export default function App() {
                         <div style={S.card}>
                             <div style={S.sectionTitle}><Icon name="barChart" size={16} color="#1E4D7B" />Resumen del Equipo</div>
                             <div style={{ textAlign: 'center', padding: 20 }}><div style={{ fontSize: 52, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: '#1B3A5C' }}>{STAFF.length}</div><div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 6 }}>Personal Activo</div></div>
+                            {isRole('admin') && (
+                                <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: 16, marginTop: 16 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: '#122240', marginBottom: 10 }}>Panel de Administracion</div>
+                                    <div style={{ fontSize: 11, color: '#64748B', lineHeight: 1.6 }}>
+                                        <p>• Usa el boton "+ Agregar Personal" para anadir miembros</p>
+                                        <p>• Click en ✕ para eliminar un miembro del equipo</p>
+                                        <p>• Los cambios se reflejan en la Google Sheet de Personal</p>
+                                        <p>• Recuerda sincronizar con la hoja "Personal" en Sheets</p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
