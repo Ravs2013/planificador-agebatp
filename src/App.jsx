@@ -287,9 +287,9 @@ export default function App() {
                         { n: stats.completadas, label: 'Completadas', color: '#15803D' },
                         { n: stats.enProceso, label: 'En Proceso', color: '#B45309' },
                         { n: stats.pendientes, label: 'Pendientes', color: '#B91C1C' },
-                        { n: EXPEDIENTES_POR_VENCER.length, label: 'Exp. por Vencer', color: '#B91C1C' },
-                        { n: EXPEDIENTES_EN_PLAZO.length, label: 'Exp. en Plazo', color: '#B45309' },
-                        { n: EXPEDIENTES_ELABORACION.length, label: 'En Elaboracion', color: '#1E4D7B' },
+                        { n: expedientes.filter(e => e.categoria === 'vencer').length, label: 'Exp. por Vencer', color: '#B91C1C' },
+                        { n: expedientes.filter(e => e.categoria === 'plazo').length, label: 'Exp. en Plazo', color: '#B45309' },
+                        { n: expedientes.filter(e => e.categoria === 'elaboracion').length, label: 'En Elaboracion', color: '#1E4D7B' },
                     ].map((s, i) => (
                         <div key={i} style={{ ...S.card, padding: '18px 20px', position: 'relative', overflow: 'hidden', animation: `fadeIn 0.3s ease ${i * 0.05}s both` }}>
                             <div style={{ position: 'absolute', top: 0, left: 0, width: 4, height: '100%', background: s.color }} />
@@ -492,7 +492,7 @@ export default function App() {
                                 }} style={{ ...S.btn('#15803D', '#FFF'), marginTop: 12, width: '100%' }}>Guardar Expediente</button>
                             </div>
                         )}
-                        {(viewExpedientes === 'vencer' ? EXPEDIENTES_POR_VENCER : viewExpedientes === 'plazo' ? EXPEDIENTES_EN_PLAZO : EXPEDIENTES_ELABORACION).map(e => {
+                        {expedientes.filter(e => e.categoria === viewExpedientes).map(e => {
                             const diasR = e.fechaVencimiento ? calcularDiasRestantes(e.fechaVencimiento) : null;
                             const isDRELM = e.origen === 'DRELM' || (e.asunto && e.asunto.toUpperCase().includes('DRELM'));
                             return (
