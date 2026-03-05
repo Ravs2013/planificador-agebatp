@@ -6,7 +6,7 @@ import QRCode from './components/QRCode';
 import LoginForm from './components/LoginForm';
 import RegisterForm from './components/RegisterForm';
 import MeetingRequest from './components/MeetingRequest';
-import { STAFF, INITIAL_ACTIVITIES, EXPEDIENTES_POR_VENCER, EXPEDIENTES_EN_PLAZO, EXPEDIENTES_ELABORACION, calcularDiasRestantes, priorityConfig, statusConfig, typeConfig, monthNames, dayNames, getDaysInMonth, getFirstDayOfMonth, fmtDate, todayStr } from './data/constants';
+import { STAFF, calcularDiasRestantes, formatDateDMY, priorityConfig, statusConfig, typeConfig, monthNames, dayNames, getDaysInMonth, getFirstDayOfMonth, fmtDate, todayStr } from './data/constants';
 
 export default function App() {
     const { user, logout, isRole } = useAuth();
@@ -30,9 +30,10 @@ export default function App() {
     const [showAddStaff, setShowAddStaff] = useState(false);
     const [newStaffForm, setNewStaffForm] = useState({ name: '', role: '', phone: '', email: '' });
     const [showAddExpediente, setShowAddExpediente] = useState(false);
-    const [newExpediente, setNewExpediente] = useState({ asunto: '', especialista: '', oficina: '', categoria: 'vencer', fechaVencimiento: '', origen: '' });
+    const [newExpediente, setNewExpediente] = useState({ id: '', asunto: '', especialista: '', oficina: '', categoria: 'vencer', fechaVencimiento: '', origen: '' });
     const [meetingRequests, setMeetingRequests] = useState([]);
-    const [newActivity, setNewActivity] = useState({ title: '', type: 'estrategica', date: '', endDate: '', time: '', location: '', priority: 'media', assigned: [], description: '', actions: [''] });
+    const [expedientes, setExpedientes] = useState([]);
+    const [newActivity, setNewActivity] = useState({ title: '', type: 'estrategica', date: '', endDate: '', timeStart: '', timeEnd: '', location: '', priority: 'media', assigned: [], description: '', actions: [''] });
 
     // Funcion para cargar actividades de Google Sheets
     const loadActividades = useCallback(async () => {
@@ -57,17 +58,38 @@ export default function App() {
                 setActivities(mapped);
             }
         } catch (err) {
-            console.warn('No se pudo cargar actividades de Sheets, usando datos locales:', err.message);
+            console.warn('No se pudo cargar actividades de Sheets:', err.message);
         }
         setDataLoading(false);
+    }, []);
+
+    // Funcion para cargar expedientes de Google Sheets
+    const loadExpedientes = useCallback(async () => {
+        try {
+            const result = await API.listarExpedientes();
+            if (result && Array.isArray(result) && result.length > 0) {
+                setExpedientes(result.map(row => ({
+                    id: row.expediente_id || row.id || '',
+                    asunto: row.asunto || '',
+                    especialista: row.especialista || '',
+                    oficina: row.oficina || '',
+                    categoria: row.categoria || 'plazo',
+                    fechaVencimiento: row.fecha_vencimiento || '',
+                    origen: row.origen || ''
+                })));
+            }
+        } catch (err) {
+            console.warn('No se pudo cargar expedientes:', err.message);
+        }
     }, []);
 
     // Cargar al montar + auto-refresh cada 30s para datos en tiempo real
     useEffect(() => {
         loadActividades();
-        const interval = setInterval(loadActividades, 30000);
+        loadExpedientes();
+        const interval = setInterval(() => { loadActividades(); loadExpedientes(); }, 30000);
         return () => clearInterval(interval);
-    }, [loadActividades]);
+    }, [loadActividades, loadExpedientes]);
 
     const [whatsappLog] = useState([
         { from: 'Liz Gutierrez', time: '08:32', msg: 'Confirmado asistencia al BIAE. Me encuentro en la I.E. Abraham Valdelomar N. 1150.', date: '2026-03-16', isYesterday: true },
@@ -101,20 +123,26 @@ export default function App() {
         let f = [...activities];
         if (searchTerm) f = f.filter(a => a.title.toLowerCase().includes(searchTerm.toLowerCase()));
         if (staffFilter !== 'todos') f = f.filter(a => a.assigned.includes(parseInt(staffFilter)));
-        return f.sort((a, b) => a.date.localeCompare(b.date));
+        return f.sort((a, b) => {
+            const dc = a.date.localeCompare(b.date);
+            if (dc !== 0) return dc;
+            const tA = (a.time || '').split('-')[0]?.trim() || '99:99';
+            const tB = (b.time || '').split('-')[0]?.trim() || '99:99';
+            return tA.localeCompare(tB);
+        });
     }, [activities, searchTerm, staffFilter]);
 
     const stats = useMemo(() => ({ total: activities.length, completadas: activities.filter(a => a.status === 'completado').length, enProceso: activities.filter(a => a.status === 'en_proceso').length, pendientes: activities.filter(a => a.status === 'pendiente').length }), [activities]);
 
     const handleAddActivity = async () => {
         if (!newActivity.title || !newActivity.date) { addToast('Complete titulo y fecha', 'error'); return; }
-        const actData = { ...newActivity, id: `ACT-${Date.now()}`, status: 'pendiente', progress: 0, endDate: newActivity.endDate || newActivity.date, actions: newActivity.actions.filter(a => a.trim()), created_by: user?.nombre || 'Admin' };
+        const actData = { ...newActivity, id: `ACT-${Date.now()}`, status: 'pendiente', progress: 0, endDate: newActivity.endDate || newActivity.date, time: newActivity.timeStart && newActivity.timeEnd ? `${newActivity.timeStart} - ${newActivity.timeEnd}` : newActivity.timeStart || '', actions: newActivity.actions.filter(a => a.trim()), created_by: user?.nombre || 'Admin' };
         setAddLoading(true);
         try {
             const result = await API.crearActividad(actData);
             if (result.success) {
                 setActivities(prev => [...prev, actData]);
-                setNewActivity({ title: '', type: 'estrategica', date: '', endDate: '', time: '', location: '', priority: 'media', assigned: [], description: '', actions: [''] });
+                setNewActivity({ title: '', type: 'estrategica', date: '', endDate: '', timeStart: '', timeEnd: '', location: '', priority: 'media', assigned: [], description: '', actions: [''] });
                 setShowAddModal(false);
                 addToast('Actividad creada. Se notifico al personal asignado.', 'success');
             } else { addToast('Error al crear la actividad', 'error'); }
@@ -409,7 +437,7 @@ export default function App() {
                                         </div>
                                         <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 22, fontWeight: 700, color: avg < 30 ? '#B91C1C' : avg < 70 ? '#B45309' : '#15803D' }}>{avg}%</div>
                                         {isRole('admin') && (
-                                            <button onClick={(e) => { e.stopPropagation(); if (confirm(`¿Eliminar a ${s.name} del equipo?`)) { const idx = STAFF.findIndex(x => x.id === s.id); if (idx > -1) { STAFF.splice(idx, 1); addToast(`${s.name} eliminado`, 'success'); setSearchTerm(t => t); } } }} style={{ background: 'none', border: 'none', color: '#B91C1C', cursor: 'pointer', fontSize: 16, padding: '4px 8px', borderRadius: 4 }} title="Eliminar personal">✕</button>
+                                            <button onClick={async (e) => { e.stopPropagation(); if (confirm(`¿Eliminar a ${s.name} del equipo?`)) { const idx = STAFF.findIndex(x => x.id === s.id); if (idx > -1) { const removed = STAFF.splice(idx, 1)[0]; try { await API.eliminarPersonal(removed.id); } catch (err) { console.warn('Error syncing delete:', err); } addToast(`${s.name} eliminado del equipo y de Sheets`, 'success'); setSearchTerm(t => t); } } }} style={{ background: 'none', border: 'none', color: '#B91C1C', cursor: 'pointer', fontSize: 16, padding: '4px 8px', borderRadius: 4 }} title="Eliminar personal">✕</button>
                                         )}
                                     </div>
                                 );
@@ -437,7 +465,7 @@ export default function App() {
                 {activeTab === 'expedientes' && (
                     <div>
                         <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-                            {[{ key: 'vencer', label: 'Por Vencer', count: EXPEDIENTES_POR_VENCER.length }, { key: 'plazo', label: 'Dentro del Plazo', count: EXPEDIENTES_EN_PLAZO.length }, { key: 'elaboracion', label: 'En Elaboracion', count: EXPEDIENTES_ELABORACION.length }].map(t => (
+                            {[{ key: 'vencer', label: 'Por Vencer', count: expedientes.filter(e => e.categoria === 'vencer').length }, { key: 'plazo', label: 'Dentro del Plazo', count: expedientes.filter(e => e.categoria === 'plazo').length }, { key: 'elaboracion', label: 'En Elaboracion', count: expedientes.filter(e => e.categoria === 'elaboracion').length }].map(t => (
                                 <button key={t.key} onClick={() => setViewExpedientes(t.key)} style={{ ...S.btn(viewExpedientes === t.key ? '#1B3A5C' : '#FFFFFF', viewExpedientes === t.key ? '#FFFFFF' : '#475569', viewExpedientes === t.key ? '#1B3A5C' : '#D6DCE8') }}>{t.label} <span style={{ minWidth: 22, height: 22, borderRadius: 4, background: viewExpedientes === t.key ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{t.count}</span></button>
                             ))}
                             {canCreate && <button onClick={() => setShowAddExpediente(!showAddExpediente)} style={{ ...S.btn('#1B3A5C', '#FFF'), marginLeft: 'auto' }}>{showAddExpediente ? 'Cancelar' : '+ Nuevo Expediente'}</button>}
@@ -477,10 +505,13 @@ export default function App() {
                                         {diasR != null && <span style={S.badge(diasR <= 3 ? '#FEF2F2' : '#FFFBEB', diasR <= 3 ? '#B91C1C' : '#B45309', diasR <= 3 ? '#FECACA' : '#FDE68A')}>{diasR <= 0 ? 'VENCIDO' : diasR <= 3 ? `Vence en ${diasR} dias` : `${diasR} dias restantes`}</span>}
                                     </div>
                                     <div style={{ fontSize: 13, fontWeight: 600, color: isDRELM ? '#5B21B6' : '#1E293B', margin: '4px 0' }}>{e.asunto}</div>
-                                    <div style={{ display: 'flex', gap: 16, color: '#64748B', fontSize: 11, flexWrap: 'wrap' }}><span>Especialista: {e.especialista}</span><span>Oficina: {e.oficina}</span>{e.fechaVencimiento && <span>Vencimiento: {e.fechaVencimiento}</span>}</div>
+                                    <div style={{ display: 'flex', gap: 16, color: '#64748B', fontSize: 11, flexWrap: 'wrap' }}><span>Especialista: {e.especialista}</span><span>Oficina: {e.oficina}</span>{e.fechaVencimiento && <span>Vencimiento: {formatDateDMY(e.fechaVencimiento)}</span>}</div>
                                 </div>
                             );
                         })}
+                        {expedientes.filter(ex => ex.categoria === viewExpedientes).length === 0 && (
+                            <div style={{ textAlign: 'center', padding: 30, color: '#94A3B8', fontSize: 13 }}>No hay expedientes en esta categoria. Usa "+ Nuevo Expediente" para agregar o espera la sincronizacion desde Sheets.</div>
+                        )}
                     </div>
                 )}
 
@@ -593,7 +624,10 @@ export default function App() {
                             <div><label style={S.label}>Fecha Termino</label><input type="date" value={newActivity.endDate} onChange={e => setNewActivity({ ...newActivity, endDate: e.target.value })} style={S.input} /></div>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
-                            <div><label style={S.label}>Horario</label><input placeholder="Ej: 08:30 - 13:00" value={newActivity.time} onChange={e => setNewActivity({ ...newActivity, time: e.target.value })} style={S.input} /></div>
+                            <div><label style={S.label}>Hora Inicio</label><input type="time" value={newActivity.timeStart} onChange={e => setNewActivity({ ...newActivity, timeStart: e.target.value })} style={S.input} /></div>
+                            <div><label style={S.label}>Hora Fin</label><input type="time" value={newActivity.timeEnd} onChange={e => setNewActivity({ ...newActivity, timeEnd: e.target.value })} style={S.input} /></div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14, marginBottom: 16 }}>
                             <div><label style={S.label}>Lugar</label><input placeholder="Ubicacion" value={newActivity.location} onChange={e => setNewActivity({ ...newActivity, location: e.target.value })} style={S.input} /></div>
                         </div>
                         <div style={{ marginBottom: 16 }}><label style={S.label}>Descripcion</label><textarea placeholder="Objetivos de la actividad" value={newActivity.description} onChange={e => setNewActivity({ ...newActivity, description: e.target.value })} style={{ ...S.input, resize: 'vertical', minHeight: 80 }} /></div>

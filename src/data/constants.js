@@ -11,13 +11,7 @@ export const STAFF = [
     { id: 8, name: "Ricardo Alejandro Viera Suarez", role: "Sistemas", phone: "51917349479", email: "perumaster201@gmail.com", initials: "RV" },
 ];
 
-export const INITIAL_ACTIVITIES = [
-    { id: 1, title: "Buen Inicio del Ano Escolar 2026", type: "estrategica", date: "2026-03-16", endDate: "2026-03-16", time: "08:00 - 17:00", location: "Instituciones Educativas - UGEL 03", priority: "alta", status: "pendiente", progress: 0, assigned: [1, 2, 3, 4, 5, 6], description: "Supervision y acompanamiento del inicio del ano escolar en las II.EE. del ambito de la UGEL 03.", actions: ["Verificar condiciones de infraestructura en II.EE.", "Reportar incidencias al area correspondiente", "Acompanar a directivos en jornada de acogida"] },
-    { id: 2, title: "Reunion Estrategias FORT - REI - EBA", type: "reunion", date: "2026-03-18", endDate: "2026-03-18", time: "08:30 - 13:00", location: "UGEL 06", priority: "alta", status: "pendiente", progress: 0, assigned: [1, 3, 5], description: "Reunion de coordinacion sobre estrategias de fortalecimiento, redes educativas institucionales y educacion basica alternativa.", actions: ["Preparar informes tecnicos previos", "Llevar material de trabajo institucional", "Registrar acuerdos y compromisos"] },
-    { id: 3, title: "Asistencia Tecnica Directivos EBA", type: "asistencia_tecnica", date: "2026-03-25", endDate: "2026-03-25", time: "14:30 - 17:30", location: "San Francisco de Sales", priority: "media", status: "pendiente", progress: 0, assigned: [3, 5], description: "Asistencia tecnica dirigida a directivos de Educacion Basica Alternativa.", actions: ["Elaborar material de asistencia tecnica", "Coordinar logistica con directivos EBA", "Elaborar informe posterior a la A.T."] },
-];
-
-/* ═══ Expedientes con fechas reales — dias se calculan dinamicamente ═══ */
+/* ═══ Expedientes — ahora se cargan desde Google Sheets (no hardcoded) ═══ */
 
 /** Calcula dias restantes desde hoy hasta la fecha de vencimiento */
 export function calcularDiasRestantes(fechaVencimientoISO) {
@@ -36,24 +30,13 @@ export function parseFechaDMY(fechaDMY) {
     return `${parts[2]}-${parts[1]}-${parts[0]}`;
 }
 
-export const EXPEDIENTES_POR_VENCER = [
-    { id: "EAP2026-INT-0088100", especialista: "Liz Miluska Gutierrez Silva", oficina: "ARH", fechaIngreso: "2026-01-22", fechaVencimiento: "2026-03-05", plazo: 30, asunto: "Comunica personal de apoyo" },
-    { id: "MPD2026-EXT-0101527", especialista: "Juan Alberto Quispe Solano", oficina: "MPT", fechaIngreso: "2026-01-26", fechaVencimiento: "2026-03-09", plazo: 30, asunto: "Informo continuidad de modulos del ciclo" },
-];
-
-export const EXPEDIENTES_EN_PLAZO = [
-    { id: "MPD2026-EXT-0113171", especialista: "FBRC UGEL03", oficina: "AGEBATP", fechaVencimiento: "2026-03-11", asunto: "Solicito autorizacion para ofertar programas" },
-    { id: "ESP-EBR-EBE2026-INT-0091471", especialista: "Juan Alberto Quispe Solano", oficina: "DIR", fechaVencimiento: "2026-03-12", asunto: "Aprobacion conformacion de la estructura", origen: "DRELM" },
-    { id: "AGEBATP2026-INT-0011486", especialista: "Liz Miluska Gutierrez Silva", oficina: "NE", fechaVencimiento: "2026-03-13", asunto: "Se eleva a consideracion de la DRELM", origen: "DRELM" },
-    { id: "MPD2026-EXT-0135097", especialista: "Juan Alberto Quispe Solano", oficina: "MPT", fechaVencimiento: "2026-03-17", asunto: "Remito DNI, RD y correo del director", origen: "DRELM" },
-    { id: "MPD2026-EXT-0141871", especialista: "Francisco Villalobos Gonzales", oficina: "MPT", fechaVencimiento: "2026-03-18", asunto: "Solicita aprobacion de modulos basico 2025" },
-];
-
-export const EXPEDIENTES_ELABORACION = [
-    { id: "AGEBATP2026-INT-0199203", especialista: "Liz Miluska Gutierrez Silva", oficina: "AGEBATP", asunto: "Documento en elaboracion" },
-    { id: "AGEBATP2026-INT-0242953", especialista: "Lucy Ana Vasquez Aliaga", oficina: "AGEBATP", asunto: "Solicito apoyo como facilitador en la asistencia" },
-    { id: "AGEBATP2026-INT-0253365", especialista: "Liz Miluska Gutierrez Silva", oficina: "AGEBATP", asunto: "Remite informe detallado sobre trabajo", origen: "DRELM" },
-];
+/** Formatea fecha ISO YYYY-MM-DD a DD/MM/YYYY */
+export function formatDateDMY(isoDate) {
+    if (!isoDate) return '';
+    const parts = isoDate.split('-');
+    if (parts.length !== 3) return isoDate;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
 
 export const priorityConfig = {
     alta: { color: "#B91C1C", bg: "#FEF2F2", border: "#FECACA", label: "ALTA" },

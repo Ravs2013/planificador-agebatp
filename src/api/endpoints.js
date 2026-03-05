@@ -97,6 +97,10 @@ export const API = {
             email: data.email || ''
         }),
 
+    /** Eliminar personal (admin only) */
+    eliminarPersonal: (id) =>
+        request('agebatp-eliminar-personal', { id }),
+
     /** Agregar expediente */
     agregarExpediente: (data) =>
         request('agebatp-agregar-expediente', {
