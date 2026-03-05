@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Icon from './Icon';
 import { useAuth } from '../context/AuthContext';
 import { API } from '../api/endpoints';
@@ -7,10 +7,46 @@ import { STAFF } from '../data/constants';
 export default function MeetingRequest({ onToast }) {
     const { user, isRole } = useAuth();
     const [activeView, setActiveView] = useState('solicitar');
-    const [form, setForm] = useState({ nombre: '', telefono: '', email: '', cargo: '', institucion: '', fecha: '', hora: '', motivo: '', personal_id: '', comentario: '' });
+    const [form, setForm] = useState({ nombre: '', telefono: '', email: '', cargo: '', institucion: '', fecha: '', hora: '', motivo: '', personal_id: '', comentario: '', tipo_reunion: 'presencial' });
     const [loading, setLoading] = useState(false);
     const [solicitudes, setSolicitudes] = useState([]);
     const [respondLoading, setRespondLoading] = useState(null);
+    const [loadingSolicitudes, setLoadingSolicitudes] = useState(false);
+
+    // Cargar solicitudes desde API para persistencia
+    const loadSolicitudes = useCallback(async () => {
+        setLoadingSolicitudes(true);
+        try {
+            const data = await API.listarReuniones();
+            if (Array.isArray(data)) {
+                setSolicitudes(data.map(r => ({
+                    reunion_id: r.reunion_id || '',
+                    nombre: r.solicitante_nombre || r.nombre || '',
+                    telefono: r.solicitante_telefono || r.telefono || '',
+                    email: r.solicitante_email || r.email || '',
+                    cargo: r.solicitante_cargo || r.cargo || '',
+                    institucion: r.solicitante_institucion || r.institucion || '',
+                    fecha: r.fecha_propuesta || r.fecha || '',
+                    hora: r.hora_propuesta || r.hora || '',
+                    motivo: r.motivo || '',
+                    personal_id: r.personal_destino_id || r.personal_id || '',
+                    comentario: r.comentario_solicitante || r.comentario || '',
+                    estado: r.estado || 'pendiente',
+                    comentario_admin: r.comentario_admin || '',
+                    respondido_por: r.respondido_por || '',
+                    fecha_respuesta: r.fecha_respuesta || '',
+                    tiene_conflicto: r.tiene_conflicto === 'true' || r.tiene_conflicto === true,
+                    tipo_reunion: r.tipo_reunion || 'presencial'
+                })));
+            }
+        } catch (err) {
+            console.warn('Error cargando solicitudes:', err);
+        }
+        setLoadingSolicitudes(false);
+    }, []);
+
+    // Cargar al montar
+    useEffect(() => { loadSolicitudes(); }, [loadSolicitudes]);
 
     const upd = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
     const fieldStyle = { width: '100%', padding: '10px 14px', borderRadius: 6, border: '1px solid #D6DCE8', fontSize: 13, fontFamily: "'DM Sans'" };
@@ -30,7 +66,7 @@ export default function MeetingRequest({ onToast }) {
                     onToast('Advertencia: el personal tiene actividades programadas en esa fecha.', 'info');
                 }
                 setSolicitudes(prev => [...prev, { ...form, reunion_id: result.reunion_id, estado: 'pendiente', tiene_conflicto: result.tiene_conflicto }]);
-                setForm({ nombre: '', telefono: '', email: '', cargo: '', institucion: '', fecha: '', hora: '', motivo: '', personal_id: '', comentario: '' });
+                setForm({ nombre: '', telefono: '', email: '', cargo: '', institucion: '', fecha: '', hora: '', motivo: '', personal_id: '', comentario: '', tipo_reunion: 'presencial' });
             } else {
                 onToast('Error al enviar la solicitud', 'error');
             }
@@ -91,6 +127,13 @@ export default function MeetingRequest({ onToast }) {
                                     {STAFF.map(s => <option key={s.id} value={s.id}>{s.name} - {s.role}</option>)}
                                 </select>
                             </div>
+                            <div style={{ marginBottom: 14 }}>
+                                <label style={labelStyle}>Tipo de Reunion *</label>
+                                <select value={form.tipo_reunion} onChange={e => upd('tipo_reunion', e.target.value)} style={fieldStyle}>
+                                    <option value="presencial">Reunion Presencial</option>
+                                    <option value="virtual">Reunion Virtual</option>
+                                </select>
+                            </div>
                             <div style={{ marginBottom: 14 }}><label style={labelStyle}>Motivo de la Reunion *</label><textarea value={form.motivo} onChange={e => upd('motivo', e.target.value)} placeholder="Describa el motivo de la reunion" style={{ ...fieldStyle, minHeight: 80, resize: 'vertical' }} /></div>
                             <div style={{ marginBottom: 18 }}><label style={labelStyle}>Comentario Adicional</label><input value={form.comentario} onChange={e => upd('comentario', e.target.value)} placeholder="Informacion adicional (opcional)" style={fieldStyle} /></div>
                             <button type="submit" disabled={loading} style={{ padding: '12px 24px', borderRadius: 6, border: 'none', background: '#1B3A5C', color: '#FFFFFF', fontSize: 13, fontWeight: 700, fontFamily: "'DM Sans'", display: 'flex', alignItems: 'center', gap: 8, opacity: loading ? 0.7 : 1 }}>
@@ -120,11 +163,12 @@ export default function MeetingRequest({ onToast }) {
 
             {activeView === 'aprobar' && canApprove && (
                 <div style={{ background: '#FFFFFF', border: '1px solid #D6DCE8', borderRadius: 8, padding: 20, boxShadow: '0 1px 3px rgba(15,23,42,0.06)' }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#122240', textTransform: 'uppercase', letterSpacing: 0.6, paddingBottom: 14, marginBottom: 16, borderBottom: '2px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Icon name="list" size={16} color="#1E4D7B" /> Solicitudes de Reunion
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#122240', textTransform: 'uppercase', letterSpacing: 0.6, paddingBottom: 14, marginBottom: 16, borderBottom: '2px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Icon name="list" size={16} color="#1E4D7B" /> Solicitudes de Reunion</span>
+                        <button onClick={loadSolicitudes} disabled={loadingSolicitudes} style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #D6DCE8', background: loadingSolicitudes ? '#F1F5F9' : '#FFFFFF', color: '#1E4D7B', fontSize: 11, fontWeight: 600, fontFamily: "'DM Sans'", cursor: 'pointer' }}>{loadingSolicitudes ? 'Cargando...' : 'Actualizar'}</button>
                     </div>
                     {solicitudes.filter(s => s.estado === 'pendiente').length === 0 && (
-                        <div style={{ textAlign: 'center', padding: 40, color: '#94A3B8', fontSize: 13 }}>No hay solicitudes pendientes en esta sesion.</div>
+                        <div style={{ textAlign: 'center', padding: 40, color: '#94A3B8', fontSize: 13 }}>No hay solicitudes pendientes. Haz click en "Actualizar" para cargar.</div>
                     )}
                     {solicitudes.filter(s => s.estado === 'pendiente').map((s, i) => (
                         <div key={i} style={{ border: '1px solid #D6DCE8', borderLeft: s.tiene_conflicto ? '4px solid #B91C1C' : '4px solid #1E4D7B', borderRadius: 6, padding: 16, marginBottom: 12 }}>
@@ -140,6 +184,7 @@ export default function MeetingRequest({ onToast }) {
                                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="calendar" size={11} /> {s.fecha}</span>
                                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="clock" size={11} /> {s.hora}</span>
                                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="phone" size={11} /> {s.telefono}</span>
+                                {s.tipo_reunion && <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: s.tipo_reunion === 'virtual' ? '#EFF6FF' : '#F0FDF4', color: s.tipo_reunion === 'virtual' ? '#1D4ED8' : '#15803D', border: `1px solid ${s.tipo_reunion === 'virtual' ? '#DBEAFE' : '#BBF7D0'}` }}>{s.tipo_reunion === 'virtual' ? 'VIRTUAL' : 'PRESENCIAL'}</span>}
                             </div>
                             <div style={{ fontSize: 12, color: '#475569', marginTop: 8 }}><strong>Motivo:</strong> {s.motivo}</div>
                             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>

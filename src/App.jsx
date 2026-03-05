@@ -124,6 +124,9 @@ export default function App() {
         if (searchTerm) f = f.filter(a => a.title.toLowerCase().includes(searchTerm.toLowerCase()));
         if (staffFilter !== 'todos') f = f.filter(a => a.assigned.includes(parseInt(staffFilter)));
         return f.sort((a, b) => {
+            const aComplete = a.progress >= 100 ? 1 : 0;
+            const bComplete = b.progress >= 100 ? 1 : 0;
+            if (aComplete !== bComplete) return aComplete - bComplete;
             const dc = a.date.localeCompare(b.date);
             if (dc !== 0) return dc;
             const tA = (a.time || '').split('-')[0]?.trim() || '99:99';
@@ -474,6 +477,7 @@ export default function App() {
                             <div style={{ ...S.card, background: '#F8FAFC', padding: 16, marginBottom: 16, border: '1px dashed #CBD5E1' }}>
                                 <div style={{ fontSize: 13, fontWeight: 700, color: '#122240', marginBottom: 12 }}>Registrar Nuevo Expediente</div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                    <div style={{ gridColumn: '1 / -1' }}><label style={S.label}>Numero de Expediente *</label><input value={newExpediente.id} onChange={e => setNewExpediente(p => ({ ...p, id: e.target.value }))} style={S.input} placeholder="Ej: MPD2026-EXT-0113171" /></div>
                                     <div><label style={S.label}>Asunto *</label><input value={newExpediente.asunto} onChange={e => setNewExpediente(p => ({ ...p, asunto: e.target.value }))} style={S.input} placeholder="Asunto del expediente" /></div>
                                     <div><label style={S.label}>Especialista *</label><select value={newExpediente.especialista} onChange={e => setNewExpediente(p => ({ ...p, especialista: e.target.value }))} style={S.input}><option value="">Seleccionar...</option>{STAFF.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select></div>
                                     <div><label style={S.label}>Oficina</label><input value={newExpediente.oficina} onChange={e => setNewExpediente(p => ({ ...p, oficina: e.target.value }))} style={S.input} placeholder="Ej: AGEBATP" /></div>
@@ -482,10 +486,10 @@ export default function App() {
                                     <div><label style={S.label}>Origen</label><input value={newExpediente.origen} onChange={e => setNewExpediente(p => ({ ...p, origen: e.target.value }))} style={S.input} placeholder="Ej: DRELM, UGEL" /></div>
                                 </div>
                                 <button onClick={async () => {
-                                    if (!newExpediente.asunto || !newExpediente.especialista) { addToast('Complete asunto y especialista', 'error'); return; }
+                                    if (!newExpediente.id || !newExpediente.asunto || !newExpediente.especialista) { addToast('Complete numero de expediente, asunto y especialista', 'error'); return; }
                                     try {
                                         await API.agregarExpediente(newExpediente);
-                                        setNewExpediente({ asunto: '', especialista: '', oficina: '', categoria: 'vencer', fechaVencimiento: '', origen: '' });
+                                        setNewExpediente({ id: '', asunto: '', especialista: '', oficina: '', categoria: 'vencer', fechaVencimiento: '', origen: '' });
                                         setShowAddExpediente(false);
                                         addToast('Expediente registrado y guardado en Sheets', 'success');
                                     } catch { addToast('Error al guardar expediente', 'error'); }
