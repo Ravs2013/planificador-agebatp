@@ -7,7 +7,7 @@ import { STAFF } from '../data/constants';
 export default function MeetingRequest({ onToast }) {
     const { user, isRole } = useAuth();
     const [activeView, setActiveView] = useState('solicitar');
-    const [form, setForm] = useState({ nombre: '', telefono: '', email: '', cargo: '', institucion: '', fecha: '', hora: '', motivo: '', descripcion: '', personal_id: '', secretaria_id: '', tipo_reunion: 'presencial' });
+    const [form, setForm] = useState({ nombre: '', telefono: '', email: '', cargo: '', institucion: '', fecha: '', hora: '', motivo: '', descripcion: '', personal_id: '', jefatura_id: '', tipo_reunion: 'presencial' });
     const [loading, setLoading] = useState(false);
     const [solicitudes, setSolicitudes] = useState([]);
     const [respondLoading, setRespondLoading] = useState(null);
@@ -31,7 +31,7 @@ export default function MeetingRequest({ onToast }) {
                     motivo: r.motivo || '',
                     descripcion: r.descripcion || r.comentario_solicitante || r.comentario || '',
                     personal_id: r.personal_destino_id || r.personal_id || '',
-                    secretaria_id: r.secretaria_id || '',
+                    jefatura_id: r.jefatura_id || r.secretaria_id || '',
                     comentario: r.comentario_solicitante || r.comentario || '',
                     estado: r.estado || 'pendiente',
                     comentario_admin: r.comentario_admin || '',
@@ -56,7 +56,7 @@ export default function MeetingRequest({ onToast }) {
 
     const handleSolicitar = async (e) => {
         e.preventDefault();
-        if (!form.nombre || !form.fecha || !form.hora || !form.motivo || !form.descripcion || !form.personal_id || !form.secretaria_id) {
+        if (!form.nombre || !form.fecha || !form.hora || !form.motivo || !form.descripcion || !form.personal_id || !form.jefatura_id) {
             onToast('Complete los campos obligatorios', 'error'); return;
         }
         setLoading(true);
@@ -73,7 +73,7 @@ export default function MeetingRequest({ onToast }) {
                     onToast('Advertencia: el personal tiene actividades programadas en esa fecha.', 'info');
                 }
                 setSolicitudes(prev => [...prev, { ...form, reunion_id: result.reunion_id, estado: 'pendiente', tiene_conflicto: result.tiene_conflicto }]);
-                setForm({ nombre: '', telefono: '', email: '', cargo: '', institucion: '', fecha: '', hora: '', motivo: '', descripcion: '', personal_id: '', secretaria_id: '', tipo_reunion: 'presencial' });
+                setForm({ nombre: '', telefono: '', email: '', cargo: '', institucion: '', fecha: '', hora: '', motivo: '', descripcion: '', personal_id: '', jefatura_id: '', tipo_reunion: 'presencial' });
             } else {
                 onToast('Error al enviar la solicitud', 'error');
             }
@@ -81,11 +81,12 @@ export default function MeetingRequest({ onToast }) {
         setLoading(false);
     };
 
-    const handleResponder = async (reunion_id, decision) => {
+    const handleResponder = async (reunion_id, decision, personal_id) => {
         const comentario = prompt(decision === 'aceptada' ? 'Comentario (opcional):' : 'Motivo del rechazo:') || '';
         setRespondLoading(reunion_id);
         try {
-            await API.responderReunion(reunion_id, decision, comentario, user?.nombre || 'Admin');
+            const pName = STAFF.find(x => x.id === parseInt(personal_id))?.name || '';
+            await API.responderReunion(reunion_id, decision, comentario, user?.nombre || 'Admin', pName);
             setSolicitudes(prev => prev.map(s => s.reunion_id === reunion_id ? { ...s, estado: decision, comentario_admin: comentario } : s));
             onToast(`Reunion ${decision}`, 'success');
         } catch { onToast('Error al responder', 'error'); }
@@ -132,14 +133,14 @@ export default function MeetingRequest({ onToast }) {
                                     <label style={labelStyle}>Personal con quien desea reunirse *</label>
                                     <select value={form.personal_id} onChange={e => upd('personal_id', e.target.value)} style={fieldStyle}>
                                         <option value="">Seleccione personal</option>
-                                        {STAFF.filter(s => s.role !== 'Secretaria').map(s => <option key={s.id} value={s.id}>{s.name} - {s.role}</option>)}
+                                        {STAFF.filter(s => s.role !== 'Jefatura').map(s => <option key={s.id} value={s.id}>{s.name} - {s.role}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label style={labelStyle}>Secretaria (Notificación) *</label>
-                                    <select value={form.secretaria_id} onChange={e => upd('secretaria_id', e.target.value)} style={fieldStyle}>
-                                        <option value="">Seleccione secretaria</option>
-                                        {STAFF.filter(s => s.role === 'Secretaria').map(s => <option key={s.id} value={s.id}>{s.name} - {s.role}</option>)}
+                                    <label style={labelStyle}>Jefatura (Notificación) *</label>
+                                    <select value={form.jefatura_id} onChange={e => upd('jefatura_id', e.target.value)} style={fieldStyle}>
+                                        <option value="">Seleccione jefatura</option>
+                                        {STAFF.filter(s => s.role === 'Jefatura').map(s => <option key={s.id} value={s.id}>{s.name} - {s.role}</option>)}
                                     </select>
                                 </div>
                             </div>
@@ -164,7 +165,7 @@ export default function MeetingRequest({ onToast }) {
                         </div>
                         <div style={{ fontSize: 12, color: '#475569', lineHeight: 2 }}>
                             <div>1. Complete el formulario con sus datos de contacto</div>
-                            <div>2. Seleccione al personal y a la secretaria</div>
+                            <div>2. Seleccione al personal y a la jefatura</div>
                             <div>3. Proponga una fecha y hora disponible</div>
                             <div>4. Describa el asunto y detalles de la reunion</div>
                             <div>5. El personal será notificado por correo Microsoft y WhatsApp</div>
@@ -206,11 +207,11 @@ export default function MeetingRequest({ onToast }) {
                             <div style={{ fontSize: 12, color: '#475569', marginTop: 8 }}><strong>Asunto:</strong> {s.motivo}</div>
                             {s.descripcion && <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}><strong>Descripción:</strong> {s.descripcion}</div>}
                             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                                <button onClick={() => handleResponder(s.reunion_id, 'aceptada')} disabled={respondLoading === s.reunion_id}
+                                <button onClick={() => handleResponder(s.reunion_id, 'aceptada', s.personal_id)} disabled={respondLoading === s.reunion_id}
                                     style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #15803D', background: '#F0FDF4', color: '#15803D', fontSize: 12, fontWeight: 700, fontFamily: "'DM Sans'", display: 'flex', alignItems: 'center', gap: 6 }}>
                                     <Icon name="check" size={13} color="#15803D" /> Aceptar
                                 </button>
-                                <button onClick={() => handleResponder(s.reunion_id, 'rechazada')} disabled={respondLoading === s.reunion_id}
+                                <button onClick={() => handleResponder(s.reunion_id, 'rechazada', s.personal_id)} disabled={respondLoading === s.reunion_id}
                                     style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #B91C1C', background: '#FEF2F2', color: '#B91C1C', fontSize: 12, fontWeight: 700, fontFamily: "'DM Sans'", display: 'flex', alignItems: 'center', gap: 6 }}>
                                     <Icon name="x" size={13} color="#B91C1C" /> Rechazar
                                 </button>

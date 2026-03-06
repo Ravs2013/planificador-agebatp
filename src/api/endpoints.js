@@ -78,16 +78,17 @@ export const API = {
             personal_asignado: data.personal_asignado,
             comentario: data.descripcion || data.comentario || '',
             descripcion: data.descripcion || '',
-            secretaria_id: data.secretaria_id || ''
+            jefatura_id: data.jefatura_id || data.secretaria_id || ''
         }),
 
     /** Responder solicitud de reunion (admin/personal) */
-    responderReunion: (reunion_id, decision, comentario, respondido_por) =>
+    responderReunion: (reunion_id, decision, comentario, respondido_por, personal_asignado) =>
         request('agebatp-responder-reunion', {
             reunion_id,
             decision,
             comentario,
-            respondido_por
+            respondido_por,
+            personal_asignado
         }),
 
     /** Agregar personal administrativo (admin only) */

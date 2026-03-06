@@ -7,7 +7,7 @@ export const STAFF = [
     { id: 4, name: "Francisco Villalobos Gonzales", role: "Especialista ETP", phone: "51954321098", email: "fvillalobos@ugel03.gob.pe", initials: "FV" },
     { id: 5, name: "Lucy Ana Vasquez Aliaga", role: "Especialista EBA", phone: "51943210987", email: "lvasquez@ugel03.gob.pe", initials: "LV" },
     { id: 6, name: "Beronica Olinda Cuellar Cornelio", role: "Especialista ETP", phone: "51932109876", email: "bcuellar@ugel03.gob.pe", initials: "BC" },
-    { id: 7, name: "Rosa Isabel Ninamango Baldeon", role: "Secretaria", phone: "51921098765", email: "rninamango@ugel03.gob.pe", initials: "RN" },
+    { id: 7, name: "Rosa Isabel Ninamango Baldeon", role: "Jefatura", phone: "51921098765", email: "rninamango@ugel03.gob.pe", initials: "RN" },
     { id: 8, name: "Ricardo Alejandro Viera Suarez", role: "Sistemas", phone: "51917349479", email: "perumaster201@gmail.com", initials: "RV" },
 ];
 
