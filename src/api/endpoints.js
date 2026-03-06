@@ -75,7 +75,10 @@ export const API = {
             hora: data.hora,
             motivo: data.motivo,
             personal_id: data.personal_id,
-            comentario: data.comentario || ''
+            personal_asignado: data.personal_asignado,
+            comentario: data.descripcion || data.comentario || '',
+            descripcion: data.descripcion || '',
+            secretaria_id: data.secretaria_id || ''
         }),
 
     /** Responder solicitud de reunion (admin/personal) */

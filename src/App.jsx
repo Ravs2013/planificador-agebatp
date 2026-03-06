@@ -7,6 +7,7 @@ import LoginForm from './components/LoginForm';
 import RegisterForm from './components/RegisterForm';
 import MeetingRequest from './components/MeetingRequest';
 import { STAFF, calcularDiasRestantes, formatDateDMY, priorityConfig, statusConfig, typeConfig, monthNames, dayNames, getDaysInMonth, getFirstDayOfMonth, fmtDate, todayStr } from './data/constants';
+import { calcularSLA } from './utils/slaCalculator';
 
 export default function App() {
     const { user, logout, isRole } = useAuth();
@@ -380,6 +381,15 @@ export default function App() {
                                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                         <span style={S.badge(typeConfig[a.type]?.bg, typeConfig[a.type]?.color)}>{typeConfig[a.type]?.label}</span>
                                         <span style={S.badge(priorityConfig[a.priority]?.bg, priorityConfig[a.priority]?.color, priorityConfig[a.priority]?.border)}>{priorityConfig[a.priority]?.label}</span>
+                                        {(() => {
+                                            if (a.progress >= 100) return <span style={S.badge('#F0FDF4', '#15803D', '#BBF7D0')}>COMPLETADO</span>;
+                                            const sla = calcularSLA(a.endDate || a.date);
+                                            const bg = sla === 'danger' ? '#FEF2F2' : sla === 'warning' ? '#FFFBEB' : '#F0FDF4';
+                                            const fg = sla === 'danger' ? '#B91C1C' : sla === 'warning' ? '#B45309' : '#15803D';
+                                            const border = sla === 'danger' ? '#FECACA' : sla === 'warning' ? '#FDE68A' : '#BBF7D0';
+                                            const text = sla === 'danger' ? 'RETRASO CRITICO' : sla === 'warning' ? 'ATRASADO' : 'EN PLAZO';
+                                            return <span style={S.badge(bg, fg, border)}>{text}</span>;
+                                        })()}
                                     </div>
                                 </div>
                                 {a.description && <div style={{ fontSize: 12, color: '#64748B', marginTop: 8 }}>{a.description}</div>}
@@ -506,7 +516,15 @@ export default function App() {
                                             <span style={{ fontFamily: "'JetBrains Mono'", fontSize: 11, color: '#1E4D7B', fontWeight: 600 }}>{e.id}</span>
                                             {isDRELM && <span style={{ fontSize: 9, fontWeight: 800, color: '#7C3AED', background: '#EDE9FE', border: '1px solid #C4B5FD', padding: '2px 8px', borderRadius: 4, letterSpacing: 0.8 }}>DRELM</span>}
                                         </div>
-                                        {diasR != null && <span style={S.badge(diasR <= 3 ? '#FEF2F2' : '#FFFBEB', diasR <= 3 ? '#B91C1C' : '#B45309', diasR <= 3 ? '#FECACA' : '#FDE68A')}>{diasR <= 0 ? 'VENCIDO' : diasR <= 3 ? `Vence en ${diasR} dias` : `${diasR} dias restantes`}</span>}
+                                        {(() => {
+                                            if (!e.fechaVencimiento) return null;
+                                            const sla = calcularSLA(e.fechaVencimiento);
+                                            const bg = sla === 'danger' ? '#FEF2F2' : sla === 'warning' ? '#FFFBEB' : '#F0FDF4';
+                                            const fg = sla === 'danger' ? '#B91C1C' : sla === 'warning' ? '#B45309' : '#15803D';
+                                            const border = sla === 'danger' ? '#FECACA' : sla === 'warning' ? '#FDE68A' : '#BBF7D0';
+                                            const text = sla === 'danger' ? 'RETRASO CRITICO' : sla === 'warning' ? 'VENCIDO' : (diasR !== null ? (diasR <= 3 && diasR > 0 ? `Vence en ${diasR} dias` : `${diasR} dias restantes`) : 'EN PLAZO');
+                                            return <span style={S.badge(bg, fg, border)}>{text}</span>;
+                                        })()}
                                     </div>
                                     <div style={{ fontSize: 13, fontWeight: 600, color: isDRELM ? '#5B21B6' : '#1E293B', margin: '4px 0' }}>{e.asunto}</div>
                                     <div style={{ display: 'flex', gap: 16, color: '#64748B', fontSize: 11, flexWrap: 'wrap' }}><span>Especialista: {e.especialista}</span><span>Oficina: {e.oficina}</span>{e.fechaVencimiento && <span>Vencimiento: {formatDateDMY(e.fechaVencimiento)}</span>}</div>
@@ -545,6 +563,7 @@ export default function App() {
                                             <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', margin: '4px 0' }}>{r.motivo || 'Sin motivo'}</div>
                                             <div style={{ display: 'flex', gap: 16, color: '#64748B', fontSize: 11, flexWrap: 'wrap' }}>
                                                 <span>Solicitante: {r.solicitante_nombre}</span>
+                                                <span>Personal: {STAFF.find(x => x.id === parseInt(r.personal_destino_id || r.personal_id))?.name || 'Personal'}</span>
                                                 <span>Fecha: {r.fecha_propuesta}</span>
                                                 <span>Hora: {r.hora_propuesta}</span>
                                             </div>
@@ -586,7 +605,7 @@ export default function App() {
                         </div>
                         <div style={S.card}>
                             <div style={S.sectionTitle}><Icon name="alert" size={16} color="#1E4D7B" />Reglas de Alerta Automatica</div>
-                            {[{ label: 'Expedientes proximos a vencer', freq: 'Notificacion diaria', color: '#B91C1C' }, { label: 'Actividades pendientes', freq: '48 horas antes del evento', color: '#B45309' }, { label: 'Solicitud de avance diario', freq: 'Todos los dias a las 08:00', color: '#1E4D7B' }].map((rule, i) => (
+                            {[{ label: 'Demora > 48 horas (Dias habiles)', freq: 'Color Rojo - Retraso Critico', color: '#B91C1C' }, { label: 'Fuera de Plazo (< 48 horas)', freq: 'Color Amarillo - Atrasado/Vencido', color: '#B45309' }, { label: 'Dentro de plazo o completado', freq: 'Color Verde - En Plazo', color: '#15803D' }].map((rule, i) => (
                                 <div key={i} style={{ padding: '10px 0', borderBottom: i < 2 ? '1px solid #E8ECF3' : 'none' }}><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: rule.color }} /><span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{rule.label}</span></div><div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2, paddingLeft: 16 }}>{rule.freq}</div></div>
                             ))}
                         </div>
