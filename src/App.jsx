@@ -3,9 +3,9 @@ import { useAuth } from './context/AuthContext';
 import { API } from './api/endpoints';
 import Icon from './components/Icon';
 import QRCode from './components/QRCode';
-import LoginForm from './components/LoginForm';
-import RegisterForm from './components/RegisterForm';
+import LoginScreen from './components/LoginScreen';
 import MeetingRequest from './components/MeetingRequest';
+import MonitoreoModule from './components/MonitoreoModule';
 import { STAFF, calcularDiasRestantes, formatDateDMY, priorityConfig, statusConfig, typeConfig, monthNames, dayNames, getDaysInMonth, getFirstDayOfMonth, fmtDate, todayStr } from './data/constants';
 import { calcularSLA } from './utils/slaCalculator';
 
@@ -172,16 +172,33 @@ export default function App() {
     const canExport = !user || isRole('admin') || isRole('personal');
     const isPublic = user && isRole('publico');
 
+    if (!user) {
+        return <LoginScreen />;
+    }
+
+    const ROLE_PERMS = {
+        admin: ["calendario", "actividades", "personal", "expedientes", "reuniones", "whatsapp", "monitoreo"],
+        personal: ["calendario", "actividades", "expedientes", "reuniones", "whatsapp"],
+        publico: ["calendario", "reuniones"]
+    };
+    const perms = ROLE_PERMS[user.rol] || [];
+
     const allTabs = [
         { id: 'calendario', label: 'Calendario', icon: 'calendar' },
         { id: 'actividades', label: 'Actividades', icon: 'list' },
         { id: 'personal', label: 'Personal', icon: 'users' },
         { id: 'expedientes', label: 'Expedientes', icon: 'folder' },
-        { id: 'reuniones', label: 'Reuniones', icon: 'calendar', show: true },
+        { id: 'reuniones', label: 'Reuniones', icon: 'calendar' },
         { id: 'whatsapp', label: 'Comunicaciones', icon: 'message' },
-        { id: 'integraciones', label: 'Integraciones', icon: 'settings', show: !user || isRole('admin') }
+        { id: 'monitoreo', label: 'Monitoreo', icon: 'barChart' }
     ];
-    const tabs = allTabs.filter(t => t.show !== false);
+    const tabs = allTabs.filter(t => perms.includes(t.id));
+
+    useEffect(() => {
+        if (!perms.includes(activeTab) && tabs.length > 0) {
+            setActiveTab(perms.includes('monitoreo') ? 'monitoreo' : tabs[0].id);
+        }
+    }, [activeTab, user]);
 
     // Inline styles
     const S = {
@@ -201,11 +218,7 @@ export default function App() {
                 {toasts.map(t => <div key={t.id} className={`toast toast-${t.type}`}>{t.msg}</div>)}
             </div>
 
-            {/* AUTH MODALS */}
-            {showLogin && <LoginForm onClose={() => setShowLogin(false)} onSwitchToRegister={() => { setShowLogin(false); setShowRegister(true); }} />}
-            {showRegister && <RegisterForm onClose={() => setShowRegister(false)} onSwitchToLogin={() => { setShowRegister(false); setShowLogin(true); }} />}
-
-            {/* HEADER */}
+            {/* AUTH MODALS REMOVED */}
             <header style={{ background: 'linear-gradient(180deg,#0C1929 0%,#122240 100%)', borderBottom: '3px solid #CA8A04', position: 'sticky', top: 0, zIndex: 50 }}>
                 <div style={{ maxWidth: 1400, margin: '0 auto', padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -228,15 +241,11 @@ export default function App() {
                                 {unreadNotifs > 0 && <span style={{ position: 'absolute', top: -3, right: -3, width: 18, height: 18, borderRadius: '50%', background: '#B91C1C', color: 'white', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #0C1929' }}>{unreadNotifs}</span>}
                             </button>
                         </div>
-                        {user ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{ width: 32, height: 32, borderRadius: 6, background: '#1B3A5C', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{user.nombre?.split(' ').map(n => n[0]).slice(0, 2).join('')}</div>
-                                <div><div style={{ fontSize: 11, color: '#E2E8F0', fontWeight: 600 }}>{user.nombre?.split(' ').slice(0, 2).join(' ')}</div><div style={{ fontSize: 9, color: '#94A3B8', textTransform: 'uppercase' }}>{user.rol}</div></div>
-                                <button onClick={logout} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: '#E2E8F0', cursor: 'pointer' }}><Icon name="logOut" size={14} /></button>
-                            </div>
-                        ) : (
-                            <button onClick={() => setShowLogin(true)} style={S.btn('rgba(255,255,255,0.06)', '#E2E8F0', 'rgba(255,255,255,0.15)')}><Icon name="logIn" size={14} />Ingresar</button>
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 32, height: 32, borderRadius: 6, background: '#1B3A5C', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{user.nombre?.split(' ').map(n => n[0]).slice(0, 2).join('')}</div>
+                            <div><div style={{ fontSize: 11, color: '#E2E8F0', fontWeight: 600 }}>{user.nombre?.split(' ').slice(0, 2).join(' ')}</div><div style={{ fontSize: 9, color: '#94A3B8', textTransform: 'uppercase' }}>{user.rol}</div></div>
+                            <button onClick={logout} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: '#E2E8F0', cursor: 'pointer' }}><Icon name="logOut" size={14} /></button>
+                        </div>
                     </div>
                 </div>
                 <nav style={{ maxWidth: 1400, margin: '0 auto', padding: '0 28px', display: 'flex', gap: 0, borderTop: '1px solid rgba(255,255,255,0.06)', overflowX: 'auto' }}>
@@ -612,23 +621,9 @@ export default function App() {
                     </div>
                 )}
 
-                {/* INTEGRACIONES */}
-                {activeTab === 'integraciones' && (
-                    <div className="integrations-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 16 }}>
-                        {[
-                            { icon: 'settings', title: 'N8N - EasyPanel', desc: 'Motor de automatizacion que orquesta todos los flujos del planificador.', code: '# Webhook del planificador\nPOST /webhook/RavsBot\nPOST /webhook/agebatp-nueva-actividad\nPOST /webhook/agebatp-auth-login\nPOST /webhook/agebatp-solicitar-reunion' },
-                            { icon: 'message', title: 'Evolution API - WhatsApp Business', desc: 'Interfaz de mensajeria para enviar y recibir comunicaciones del personal administrativo.', code: '# Instancia\nEndpoint: /message/sendText/{instance}\n# Capacidades:\n- Alertas de vencimiento\n- Confirmaciones de avance\n- Documentos adjuntos' },
-                            { icon: 'mail', title: 'Notificaciones por Correo', desc: 'Alertas por correo electronico configurado en N8N mediante SMTP institucional.' },
-                            { icon: 'download', title: 'Exportacion a Excel', desc: 'Descarga del planificador mensual en formato CSV compatible con Excel.', hasExport: true },
-                        ].map((item, i) => (
-                            <div key={i} style={S.card}>
-                                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#122240', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}><Icon name={item.icon} size={16} color="#1E4D7B" />{item.title}</h3>
-                                <p style={{ fontSize: 12, color: '#475569', lineHeight: 1.7 }}>{item.desc}</p>
-                                {item.code && <div style={{ background: '#0C1929', borderRadius: 6, padding: '14px 16px', fontFamily: "'JetBrains Mono'", fontSize: 11, color: '#93C5FD', marginTop: 12, lineHeight: 1.7, border: '1px solid #1B3A5C' }}><pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{item.code}</pre></div>}
-                                {item.hasExport && <button onClick={exportToCSV} style={{ marginTop: 14, ...S.btn('#1B3A5C', 'white', '#1E4D7B') }}><Icon name="download" size={14} color="white" />Descargar {monthNames[currentMonth]} {currentYear}</button>}
-                            </div>
-                        ))}
-                    </div>
+                {/* MONITOREO */}
+                {activeTab === 'monitoreo' && (
+                    <MonitoreoModule />
                 )}
             </main>
 

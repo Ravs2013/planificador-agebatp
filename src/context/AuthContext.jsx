@@ -8,14 +8,8 @@ export function AuthProvider({ children }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const stored = localStorage.getItem('agebatp_user');
-        if (stored) {
-            try {
-                setUser(JSON.parse(stored));
-            } catch {
-                localStorage.removeItem('agebatp_user');
-            }
-        }
+        // No longer using localStorage for security reasons.
+        // User state will be null on initial load, forcing the Login Screen.
         setLoading(false);
     }, []);
 
@@ -28,7 +22,6 @@ export function AuthProvider({ children }) {
                 permisos: result.user.permisos || []
             };
             setUser(userData);
-            localStorage.setItem('agebatp_user', JSON.stringify(userData));
             return { success: true, user: userData };
         }
         return { success: false, message: result.message || 'Credenciales incorrectas' };
@@ -41,7 +34,6 @@ export function AuthProvider({ children }) {
 
     const logout = () => {
         setUser(null);
-        localStorage.removeItem('agebatp_user');
     };
 
     const can = (permiso) => {

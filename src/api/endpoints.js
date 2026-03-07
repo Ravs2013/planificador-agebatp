@@ -121,6 +121,14 @@ export const API = {
     listarReuniones: () =>
         request('agebatp-listar-reuniones', null, 'GET'),
 
+    /** Cargar Data de Monitoreo e-SINAD (admin only) */
+    cargarMonitoreo: (data) =>
+        request('agebatp-cargar-monitoreo', { data }),
+
+    /** Listar Data de Monitoreo e-SINAD */
+    listarMonitoreo: () =>
+        request('agebatp-listar-monitoreo', null, 'GET'),
+
     /** Crear estructura de carpetas en Google Drive y OneDrive */
     crearCarpetasDrive: (year) =>
         request('agebatp-crear-carpetas-drive', { year: year || new Date().getFullYear().toString() })
