@@ -172,16 +172,12 @@ export default function App() {
     const canExport = !user || isRole('admin') || isRole('personal');
     const isPublic = user && isRole('publico');
 
-    if (!user) {
-        return <LoginScreen />;
-    }
-
     const ROLE_PERMS = {
         admin: ["calendario", "actividades", "personal", "expedientes", "reuniones", "whatsapp", "monitoreo"],
         personal: ["calendario", "actividades", "expedientes", "reuniones", "whatsapp"],
         publico: ["calendario", "reuniones"]
     };
-    const perms = ROLE_PERMS[user.rol] || [];
+    const perms = user ? (ROLE_PERMS[user.rol] || []) : [];
 
     const allTabs = [
         { id: 'calendario', label: 'Calendario', icon: 'calendar' },
@@ -195,10 +191,15 @@ export default function App() {
     const tabs = allTabs.filter(t => perms.includes(t.id));
 
     useEffect(() => {
-        if (!perms.includes(activeTab) && tabs.length > 0) {
+        if (user && !perms.includes(activeTab) && tabs.length > 0) {
             setActiveTab(perms.includes('monitoreo') ? 'monitoreo' : tabs[0].id);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab, user]);
+
+    if (!user) {
+        return <LoginScreen />;
+    }
 
     // Inline styles
     const S = {
