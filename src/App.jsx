@@ -242,8 +242,8 @@ export default function App() {
                             </button>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 32, height: 32, borderRadius: 6, background: '#1B3A5C', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{user.nombre?.split(' ').map(n => n[0]).slice(0, 2).join('')}</div>
-                            <div><div style={{ fontSize: 11, color: '#E2E8F0', fontWeight: 600 }}>{user.nombre?.split(' ').slice(0, 2).join(' ')}</div><div style={{ fontSize: 9, color: '#94A3B8', textTransform: 'uppercase' }}>{user.rol}</div></div>
+                            <div style={{ width: 32, height: 32, borderRadius: 6, background: '#1B3A5C', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{(user.nombre || '').split(' ').map(n => n[0] || '').slice(0, 2).join('')}</div>
+                            <div><div style={{ fontSize: 11, color: '#E2E8F0', fontWeight: 600 }}>{(user.nombre || '').split(' ').slice(0, 2).join(' ')}</div><div style={{ fontSize: 9, color: '#94A3B8', textTransform: 'uppercase' }}>{user.rol}</div></div>
                             <button onClick={logout} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: '#E2E8F0', cursor: 'pointer' }}><Icon name="logOut" size={14} /></button>
                         </div>
                     </div>
