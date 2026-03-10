@@ -89,13 +89,17 @@ export default function App() {
         }
     }, []);
 
-    // Cargar al montar + auto-refresh cada 30s para datos en tiempo real
+    // Cargar al montar + auto-refresh cada 30s — SOLO para admin y personal
     useEffect(() => {
+        if (!user || user.rol === 'publico') {
+            setDataLoading(false);
+            return;
+        }
         loadActividades();
         loadExpedientes();
         const interval = setInterval(() => { loadActividades(); loadExpedientes(); }, 30000);
         return () => clearInterval(interval);
-    }, [loadActividades, loadExpedientes]);
+    }, [loadActividades, loadExpedientes, user]);
 
     const [whatsappLog] = useState([
         { from: 'Liz Gutierrez', time: '08:32', msg: 'Confirmado asistencia al BIAE. Me encuentro en la I.E. Abraham Valdelomar N. 1150.', date: '2026-03-16', isYesterday: true },
