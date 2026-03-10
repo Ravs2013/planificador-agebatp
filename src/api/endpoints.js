@@ -99,7 +99,8 @@ export const API = {
             nombre: data.name,
             rol: data.role,
             telefono: data.phone || '',
-            email: data.email || ''
+            email: data.email || '',
+            contrasena: data.password || ''
         }),
 
     /** Eliminar personal (admin only) */
