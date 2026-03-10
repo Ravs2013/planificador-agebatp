@@ -745,12 +745,12 @@ export default function App() {
                         </div>
                         {selectedActivity.description && <div style={{ fontSize: 13, color: '#475569', marginBottom: 20, lineHeight: 1.7, padding: 14, background: '#F8FAFC', borderRadius: 6, border: '1px solid #E8ECF3' }}>{selectedActivity.description}</div>}
                         <div style={{ marginBottom: 20 }}>
-                            <div style={S.label}>Avance de la Actividad</div>
+                            <div style={S.label}>Avance de la Actividad (Automático vía Evidencia)</div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                                 <div style={{ flex: 1, height: 10, background: '#F1F5F9', borderRadius: 5, overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 5, width: `${selectedActivity.progress}%`, background: selectedActivity.progress < 30 ? '#B91C1C' : selectedActivity.progress < 70 ? '#B45309' : '#15803D' }} /></div>
                                 <span style={{ fontFamily: "'JetBrains Mono'", fontWeight: 700, fontSize: 18 }}>{selectedActivity.progress}%</span>
                             </div>
-                            <input type="range" min="0" max="100" value={selectedActivity.progress} onChange={e => { const v = parseInt(e.target.value); updateProgress(selectedActivity.id, v); setSelectedActivity({ ...selectedActivity, progress: v }); }} style={{ width: '100%', marginTop: 8, accentColor: '#1E4D7B' }} />
+                            <div style={{ fontSize: 10, color: '#64748B', marginTop: 6 }}>* El progreso aumenta un 25% por cada evidencia subida (Máx 100%).</div>
                         </div>
                         <div style={{ marginBottom: 20 }}>
                             <div style={S.label}>Personal Asignado</div>
@@ -765,7 +765,10 @@ export default function App() {
                         {/* Evidence Upload Section */}
                         {canCreate && (
                             <div style={{ marginTop: 20, paddingTop: 16, borderTop: '2px solid #F1F5F9' }}>
-                                <div style={S.label}><Icon name="upload" size={14} color="#1E4D7B" /> Subir Evidencia de Avance</div>
+                                <div style={{ ...S.label, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <Icon name="upload" size={14} color="#1E4D7B" />
+                                    Subir Evidencia de Avance <span style={{ fontSize: 9, background: '#B91C1C', color: 'white', padding: '1px 5px', borderRadius: 3, marginLeft: 4 }}>OBLIGATORIO</span>
+                                </div>
                                 <FileAttachment
                                     files={evidenceFiles}
                                     onChange={setEvidenceFiles}
