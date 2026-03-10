@@ -149,6 +149,8 @@ export default function App() {
 
     const handleAddActivity = async () => {
         if (!newActivity.title || !newActivity.date) { addToast('Complete titulo y fecha', 'error'); return; }
+        const validActions = newActivity.actions.filter(a => a.trim());
+        if (validActions.length === 0) { addToast('Debe agregar al menos 1 acción estratégica', 'error'); return; }
         const actData = {
             ...newActivity,
             id: `ACT-${Date.now()}`,
@@ -206,13 +208,14 @@ export default function App() {
     };
 
     const unreadNotifs = notifications.filter(n => !n.read).length;
-    const canCreate = user && (isRole('admin') || isRole('personal'));
-    const canExport = !user || isRole('admin') || isRole('personal');
+    const canCreate = user && (isRole('admin') || isRole('jefatura') || isRole('personal'));
+    const canExport = !user || isRole('admin') || isRole('jefatura') || isRole('personal');
     const isPublic = user && isRole('publico');
 
     const ROLE_PERMS = {
         admin: ["calendario", "actividades", "personal", "expedientes", "reuniones", "whatsapp", "monitoreo"],
-        personal: ["calendario", "actividades", "expedientes", "reuniones", "whatsapp"],
+        jefatura: ["calendario", "actividades", "personal", "expedientes", "reuniones", "whatsapp", "monitoreo"],
+        personal: ["calendario", "actividades", "expedientes", "reuniones"],
         publico: ["calendario", "reuniones"]
     };
     const perms = user ? (ROLE_PERMS[user.rol] || []) : [];
@@ -750,7 +753,7 @@ export default function App() {
                                 <div style={{ flex: 1, height: 10, background: '#F1F5F9', borderRadius: 5, overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 5, width: `${selectedActivity.progress}%`, background: selectedActivity.progress < 30 ? '#B91C1C' : selectedActivity.progress < 70 ? '#B45309' : '#15803D' }} /></div>
                                 <span style={{ fontFamily: "'JetBrains Mono'", fontWeight: 700, fontSize: 18 }}>{selectedActivity.progress}%</span>
                             </div>
-                            <div style={{ fontSize: 10, color: '#64748B', marginTop: 6 }}>* El progreso aumenta un 25% por cada evidencia subida (Máx 100%).</div>
+                            <div style={{ fontSize: 10, color: '#64748B', marginTop: 6 }}>* El progreso aumenta un {selectedActivity.actions?.length > 0 ? Math.round(100 / Math.max(1, selectedActivity.actions.length)) : 25}% por cada evidencia subida ({selectedActivity.actions?.length > 0 ? selectedActivity.actions.length : 4} evidencia(s) para 100%).</div>
                         </div>
                         <div style={{ marginBottom: 20 }}>
                             <div style={S.label}>Personal Asignado</div>
