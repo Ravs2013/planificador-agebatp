@@ -38,7 +38,7 @@ export const API = {
     register: (data) =>
         request('agebatp-auth-register', data),
 
-    /** Crear nueva actividad — guarda en Sheets y notifica por WhatsApp */
+    /** Crear nueva actividad — guarda en Sheets y notifica por WhatsApp + Outlook (con adjuntos opcionales) */
     crearActividad: (data) =>
         request('agebatp-nueva-actividad', {
             id: data.id || `ACT-${Date.now()}`,
@@ -52,7 +52,8 @@ export const API = {
             description: data.description,
             assigned: JSON.stringify(data.assigned || []),
             actions: data.actions || [],
-            created_by: data.created_by || 'Sistema'
+            created_by: data.created_by || 'Sistema',
+            attachments: data.attachments || [] // { name, base64, mimeType }
         }),
 
     /** Listar actividades desde Google Sheets */
@@ -131,5 +132,19 @@ export const API = {
 
     /** Crear estructura de carpetas en Google Drive y OneDrive */
     crearCarpetasDrive: (year) =>
-        request('agebatp-crear-carpetas-drive', { year: year || new Date().getFullYear().toString() })
+        request('agebatp-crear-carpetas-drive', { year: year || new Date().getFullYear().toString() }),
+
+    /** Subir evidencia de actividad — archivo en Base64, se guarda en Google Drive */
+    subirEvidencia: (actividadId, personalId, file) =>
+        request('agebatp-subir-evidencia', {
+            actividad_id: actividadId,
+            personal_id: personalId,
+            filename: file.name,
+            mimeType: file.mimeType,
+            base64: file.base64
+        }),
+
+    /** Listar evidencias de una actividad */
+    listarEvidencias: (actividadId) =>
+        request(`agebatp-listar-evidencias?actividad_id=${actividadId}`, null, 'GET')
 };

@@ -6,6 +6,7 @@ import QRCode from './components/QRCode';
 import LoginScreen from './components/LoginScreen';
 import MeetingRequest from './components/MeetingRequest';
 import MonitoreoModule from './components/MonitoreoModule';
+import FileAttachment from './components/FileAttachment';
 import { STAFF, calcularDiasRestantes, formatDateDMY, priorityConfig, statusConfig, typeConfig, monthNames, dayNames, getDaysInMonth, getFirstDayOfMonth, fmtDate, todayStr } from './data/constants';
 import { calcularSLA } from './utils/slaCalculator';
 
@@ -35,6 +36,10 @@ export default function App() {
     const [meetingRequests, setMeetingRequests] = useState([]);
     const [expedientes, setExpedientes] = useState([]);
     const [newActivity, setNewActivity] = useState({ title: '', type: 'estrategica', date: '', endDate: '', timeStart: '', timeEnd: '', location: '', priority: 'media', assigned: [], description: '', actions: [''] });
+    const [activityFiles, setActivityFiles] = useState([]);
+    const [evidenceFiles, setEvidenceFiles] = useState([]);
+    const [evidenceLoading, setEvidenceLoading] = useState(false);
+    const [existingEvidence, setExistingEvidence] = useState([]);
 
     // Funcion para cargar actividades de Google Sheets
     const loadActividades = useCallback(async () => {
@@ -140,18 +145,47 @@ export default function App() {
 
     const handleAddActivity = async () => {
         if (!newActivity.title || !newActivity.date) { addToast('Complete titulo y fecha', 'error'); return; }
-        const actData = { ...newActivity, id: `ACT-${Date.now()}`, status: 'pendiente', progress: 0, endDate: newActivity.endDate || newActivity.date, time: newActivity.timeStart && newActivity.timeEnd ? `${newActivity.timeStart} - ${newActivity.timeEnd}` : newActivity.timeStart || '', actions: newActivity.actions.filter(a => a.trim()), created_by: user?.nombre || 'Admin' };
+        const actData = {
+            ...newActivity,
+            id: `ACT-${Date.now()}`,
+            status: 'pendiente',
+            progress: 0,
+            endDate: newActivity.endDate || newActivity.date,
+            time: newActivity.timeStart && newActivity.timeEnd ? `${newActivity.timeStart} - ${newActivity.timeEnd}` : newActivity.timeStart || '',
+            actions: newActivity.actions.filter(a => a.trim()),
+            created_by: user?.nombre || 'Admin',
+            attachments: activityFiles.map(f => ({ name: f.name, base64: f.base64, mimeType: f.mimeType }))
+        };
         setAddLoading(true);
         try {
             const result = await API.crearActividad(actData);
             if (result.success) {
                 setActivities(prev => [...prev, actData]);
                 setNewActivity({ title: '', type: 'estrategica', date: '', endDate: '', timeStart: '', timeEnd: '', location: '', priority: 'media', assigned: [], description: '', actions: [''] });
+                setActivityFiles([]);
                 setShowAddModal(false);
                 addToast('Actividad creada. Se notifico al personal asignado.', 'success');
             } else { addToast('Error al crear la actividad', 'error'); }
         } catch { addToast('Error de conexion con el servidor', 'error'); }
         setAddLoading(false);
+    };
+
+    const handleUploadEvidence = async (activity) => {
+        if (evidenceFiles.length === 0) { addToast('Seleccione al menos un archivo', 'error'); return; }
+        setEvidenceLoading(true);
+        try {
+            for (const file of evidenceFiles) {
+                await API.subirEvidencia(activity.id, user?.id || 'admin', file);
+            }
+            addToast(`${evidenceFiles.length} evidencia(s) subida(s) correctamente`, 'success');
+            setEvidenceFiles([]);
+            // Reload evidences
+            try {
+                const ev = await API.listarEvidencias(activity.id);
+                if (Array.isArray(ev)) setExistingEvidence(ev);
+            } catch { /* no-op */ }
+        } catch { addToast('Error al subir evidencia', 'error'); }
+        setEvidenceLoading(false);
     };
 
     const updateProgress = (actId, progress) => {
@@ -666,8 +700,17 @@ export default function App() {
                                 </div>
                             ))}
                         </div>
+                        {/* File Attachments (optional) */}
+                        <div style={{ marginBottom: 16 }}>
+                            <FileAttachment
+                                files={activityFiles}
+                                onChange={setActivityFiles}
+                                label="Adjuntar Archivos (opcional — se envían por correo)"
+                                compact
+                            />
+                        </div>
                         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24, paddingTop: 16, borderTop: '1px solid #E8ECF3' }}>
-                            <button onClick={() => setShowAddModal(false)} style={S.btn('#FFFFFF', '#475569', '#D6DCE8')}>Cancelar</button>
+                            <button onClick={() => { setShowAddModal(false); setActivityFiles([]); }} style={S.btn('#FFFFFF', '#475569', '#D6DCE8')}>Cancelar</button>
                             <button onClick={handleAddActivity} disabled={addLoading} style={{ ...S.btn('#1B3A5C', '#FFFFFF', '#1E4D7B'), opacity: addLoading ? 0.7 : 1 }}>
                                 {addLoading ? <span className="spinner" /> : 'Guardar Actividad'}
                             </button>
@@ -713,6 +756,37 @@ export default function App() {
                             <div>
                                 <div style={S.label}>Acciones Estrategicas</div>
                                 {selectedActivity.actions.map((action, idx) => <div key={idx} style={{ display: 'flex', gap: 10, padding: '8px 0', fontSize: 13, borderBottom: '1px solid #E8ECF3', color: '#334155' }}><span style={{ fontFamily: "'JetBrains Mono'", fontWeight: 700, color: '#1E4D7B', fontSize: 12, minWidth: 24 }}>{String(idx + 1).padStart(2, '0')}</span>{action}</div>)}
+                            </div>
+                        )}
+                        {/* Evidence Upload Section */}
+                        {canCreate && (
+                            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '2px solid #F1F5F9' }}>
+                                <div style={S.label}><Icon name="upload" size={14} color="#1E4D7B" /> Subir Evidencia de Avance</div>
+                                <FileAttachment
+                                    files={evidenceFiles}
+                                    onChange={setEvidenceFiles}
+                                    label=""
+                                    compact
+                                />
+                                <button
+                                    onClick={() => handleUploadEvidence(selectedActivity)}
+                                    disabled={evidenceLoading || evidenceFiles.length === 0}
+                                    style={{ ...S.btn(evidenceFiles.length > 0 ? '#15803D' : '#94A3B8', '#FFFFFF'), marginTop: 10, width: '100%', justifyContent: 'center', opacity: evidenceLoading ? 0.7 : 1 }}
+                                >
+                                    {evidenceLoading ? <span className="spinner" /> : <><Icon name="upload" size={14} /> Subir {evidenceFiles.length} Evidencia(s)</>}
+                                </button>
+                                {existingEvidence.length > 0 && (
+                                    <div style={{ marginTop: 12 }}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>Evidencias Registradas ({existingEvidence.length})</div>
+                                        {existingEvidence.map((ev, i) => (
+                                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, marginBottom: 4, fontSize: 12, color: '#15803D' }}>
+                                                <Icon name="check" size={14} color="#15803D" />
+                                                <span style={{ flex: 1 }}>{ev.nombre_archivo || ev.filename || `Evidencia ${i + 1}`}</span>
+                                                <span style={{ fontSize: 10, color: '#94A3B8' }}>{ev.fecha || ''}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
