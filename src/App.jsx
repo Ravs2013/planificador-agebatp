@@ -60,7 +60,10 @@ export default function App() {
                     location: row.lugar || row.location || '',
                     priority: row.prioridad || row.priority || 'media',
                     status: row.estado || row.status || 'pendiente',
-                    progress: parseInt(row.progreso || row.progress || '0'),
+                    progress: Math.max(
+                        parseInt(row.progreso || row.progress || '0'), 
+                        parseInt(JSON.parse(localStorage.getItem('agebatp_progress_override') || '{}')[row.id || row.actividad_id] || 0)
+                    ),
                     assigned: typeof row.personal_asignado === 'string' ? JSON.parse(row.personal_asignado || '[]') : (row.assigned || []),
                     description: row.descripcion || row.description || '',
                     actions: typeof row.acciones === 'string' ? JSON.parse(row.acciones || '[]') : (row.actions || [])
@@ -104,6 +107,39 @@ export default function App() {
         const interval = setInterval(() => { loadActividades(); loadExpedientes(); }, 30000);
         return () => clearInterval(interval);
     }, [loadActividades, loadExpedientes, user]);
+
+    // Fetch evidencias al abrir modal de Actividad y recalcular progreso asincronamente
+    useEffect(() => {
+        if (selectedActivity) {
+            setExistingEvidence([]);
+            API.listarEvidencias(selectedActivity.id, 'actividad')
+                .then(r => { 
+                    if (r && Array.isArray(r.evidencias)) {
+                        setExistingEvidence(r.evidencias);
+                        const totalEvidencias = r.evidencias.length;
+                        const totalAcciones = selectedActivity.actions && selectedActivity.actions.length > 0 ? selectedActivity.actions.length : 4;
+                        const nuevoProgreso = Math.min(100, Math.round((totalEvidencias / totalAcciones) * 100));
+                        
+                        updateProgress(selectedActivity.id, nuevoProgreso);
+                        
+                        const overrides = JSON.parse(localStorage.getItem('agebatp_progress_override') || '{}');
+                        overrides[selectedActivity.id] = nuevoProgreso;
+                        localStorage.setItem('agebatp_progress_override', JSON.stringify(overrides));
+                    }
+                })
+                .catch(() => {});
+        }
+    }, [selectedActivity]);
+
+    // Fetch evidencias al abrir modal de Expediente
+    useEffect(() => {
+        if (selectedExpediente) {
+            setExistingEvidence([]);
+            API.listarEvidencias(selectedExpediente.id, 'expediente')
+                .then(r => { if (r && Array.isArray(r.evidencias)) setExistingEvidence(r.evidencias); })
+                .catch(() => {});
+        }
+    }, [selectedExpediente]);
 
     const [whatsappLog] = useState([
         { from: 'Liz Gutierrez', time: '08:32', msg: 'Confirmado asistencia al BIAE. Me encuentro en la I.E. Abraham Valdelomar N. 1150.', date: '2026-03-16', isYesterday: true },
@@ -192,7 +228,22 @@ export default function App() {
             // Reload evidences
             try {
                 const ev = await API.listarEvidencias(activity.id);
-                if (Array.isArray(ev)) setExistingEvidence(ev);
+                if (Array.isArray(ev)) {
+                    setExistingEvidence(ev);
+                    
+                    // Calcular el nuevo progreso exclusivamente con codigo frontend
+                    const totalEvidencias = ev.length;
+                    const totalAcciones = activity.actions && activity.actions.length > 0 ? activity.actions.length : 4;
+                    const nuevoProgreso = Math.min(100, Math.round((totalEvidencias / totalAcciones) * 100));
+                    
+                    // Actualizar UI
+                    updateProgress(activity.id, nuevoProgreso);
+                    
+                    // Guardar en cache local para que no se borre al refrescar de GSheets
+                    const overrides = JSON.parse(localStorage.getItem('agebatp_progress_override') || '{}');
+                    overrides[activity.id] = nuevoProgreso;
+                    localStorage.setItem('agebatp_progress_override', JSON.stringify(overrides));
+                }
             } catch { /* no-op */ }
         } catch { addToast('Error al subir evidencia', 'error'); }
         setEvidenceLoading(false);
