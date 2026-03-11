@@ -145,6 +145,17 @@ export const API = {
             base64: file.base64
         }),
 
+    /** Subir evidencia de expediente (1 archivo = 100%) */
+    subirEvidenciaExpediente: (data) =>
+        request('agebatp-subir-evidencia-expediente', {
+            expediente_id: data.expediente_id,
+            asunto: data.asunto,
+            especialista: data.especialista,
+            filename: data.archivos[0].name,
+            mimeType: data.archivos[0].mimeType,
+            base64: data.archivos[0].base64
+        }),
+
     /** Listar evidencias de una actividad */
     listarEvidencias: (actividadId) =>
         request(`agebatp-listar-evidencias?actividad_id=${actividadId}`, null, 'GET')

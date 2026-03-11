@@ -40,6 +40,10 @@ export default function App() {
     const [evidenceFiles, setEvidenceFiles] = useState([]);
     const [evidenceLoading, setEvidenceLoading] = useState(false);
     const [existingEvidence, setExistingEvidence] = useState([]);
+    const [selectedExpediente, setSelectedExpediente] = useState(null);
+    const [expEvidenceFiles, setExpEvidenceFiles] = useState([]);
+    const [expEvidenceLoading, setExpEvidenceLoading] = useState(false);
+    const [expEvidenceMap, setExpEvidenceMap] = useState({});
 
     // Funcion para cargar actividades de Google Sheets
     const loadActividades = useCallback(async () => {
@@ -563,25 +567,34 @@ export default function App() {
                         {expedientes.filter(e => e.categoria === viewExpedientes).map(e => {
                             const diasR = e.fechaVencimiento ? calcularDiasRestantes(e.fechaVencimiento) : null;
                             const isDRELM = e.origen === 'DRELM' || (e.asunto && e.asunto.toUpperCase().includes('DRELM'));
+                            const expProgress = expEvidenceMap[e.id] ? 100 : 0;
                             return (
-                                <div key={e.id} style={{ ...S.card, borderLeft: `4px solid ${isDRELM ? '#7C3AED' : viewExpedientes === 'vencer' ? '#B91C1C' : viewExpedientes === 'plazo' ? '#B45309' : '#1E4D7B'}`, padding: 14, marginBottom: 10, background: isDRELM ? '#F5F3FF' : '#FFFFFF', boxShadow: isDRELM ? '0 0 0 1px #C4B5FD, 0 2px 8px rgba(124,58,237,0.08)' : undefined }}>
+                                <div key={e.id} onClick={() => setSelectedExpediente(e)} style={{ ...S.card, borderLeft: `4px solid ${isDRELM ? '#7C3AED' : viewExpedientes === 'vencer' ? '#B91C1C' : viewExpedientes === 'plazo' ? '#B45309' : '#1E4D7B'}`, padding: 14, marginBottom: 10, background: isDRELM ? '#F5F3FF' : '#FFFFFF', boxShadow: isDRELM ? '0 0 0 1px #C4B5FD, 0 2px 8px rgba(124,58,237,0.08)' : undefined, cursor: 'pointer' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', flexWrap: 'wrap', gap: 8 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
                                             <span style={{ fontFamily: "'JetBrains Mono'", fontSize: 11, color: '#1E4D7B', fontWeight: 600 }}>{e.id}</span>
                                             {isDRELM && <span style={{ fontSize: 9, fontWeight: 800, color: '#7C3AED', background: '#EDE9FE', border: '1px solid #C4B5FD', padding: '2px 8px', borderRadius: 4, letterSpacing: 0.8 }}>DRELM</span>}
                                         </div>
-                                        {(() => {
-                                            if (!e.fechaVencimiento) return null;
-                                            const sla = calcularSLA(e.fechaVencimiento);
-                                            const bg = sla === 'danger' ? '#FEF2F2' : sla === 'warning' ? '#FFFBEB' : '#F0FDF4';
-                                            const fg = sla === 'danger' ? '#B91C1C' : sla === 'warning' ? '#B45309' : '#15803D';
-                                            const border = sla === 'danger' ? '#FECACA' : sla === 'warning' ? '#FDE68A' : '#BBF7D0';
-                                            const text = sla === 'danger' ? 'RETRASO CRITICO' : sla === 'warning' ? 'VENCIDO' : (diasR !== null ? (diasR <= 3 && diasR > 0 ? `Vence en ${diasR} dias` : `${diasR} dias restantes`) : 'EN PLAZO');
-                                            return <span style={S.badge(bg, fg, border)}>{text}</span>;
-                                        })()}
+                                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            {expProgress >= 100 && <span style={S.badge('#F0FDF4', '#15803D', '#BBF7D0')}>EVIDENCIA ✓</span>}
+                                            {(() => {
+                                                if (!e.fechaVencimiento) return null;
+                                                const sla = calcularSLA(e.fechaVencimiento);
+                                                const bg = sla === 'danger' ? '#FEF2F2' : sla === 'warning' ? '#FFFBEB' : '#F0FDF4';
+                                                const fg = sla === 'danger' ? '#B91C1C' : sla === 'warning' ? '#B45309' : '#15803D';
+                                                const border = sla === 'danger' ? '#FECACA' : sla === 'warning' ? '#FDE68A' : '#BBF7D0';
+                                                const text = sla === 'danger' ? 'RETRASO CRITICO' : sla === 'warning' ? 'VENCIDO' : (diasR !== null ? (diasR <= 3 && diasR > 0 ? `Vence en ${diasR} dias` : `${diasR} dias restantes`) : 'EN PLAZO');
+                                                return <span style={S.badge(bg, fg, border)}>{text}</span>;
+                                            })()}
+                                        </div>
                                     </div>
                                     <div style={{ fontSize: 13, fontWeight: 600, color: isDRELM ? '#5B21B6' : '#1E293B', margin: '4px 0' }}>{e.asunto}</div>
                                     <div style={{ display: 'flex', gap: 16, color: '#64748B', fontSize: 11, flexWrap: 'wrap' }}><span>Especialista: {e.especialista}</span><span>Oficina: {e.oficina}</span>{e.fechaVencimiento && <span>Vencimiento: {formatDateDMY(e.fechaVencimiento)}</span>}</div>
+                                    {/* Progress bar */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                                        <div style={{ flex: 1, height: 6, background: '#F1F5F9', borderRadius: 3, overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 3, width: `${expProgress}%`, background: expProgress >= 100 ? '#15803D' : '#B91C1C', transition: 'width 0.3s' }} /></div>
+                                        <span style={{ fontFamily: "'JetBrains Mono'", fontSize: 12, fontWeight: 600, minWidth: 40, textAlign: 'right', color: expProgress >= 100 ? '#15803D' : '#B91C1C' }}>{expProgress}%</span>
+                                    </div>
                                 </div>
                             );
                         })}
@@ -805,6 +818,87 @@ export default function App() {
                     </div>
                 </div>
             )}
+
+            {/* MODAL DETALLE EXPEDIENTE */}
+            {selectedExpediente && (() => {
+                const e = selectedExpediente;
+                const expProgress = expEvidenceMap[e.id] ? 100 : 0;
+                const isDone = expProgress >= 100;
+                return (
+                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100, padding: 16, backdropFilter: 'blur(4px)' }} onClick={() => { setSelectedExpediente(null); setExpEvidenceFiles([]); }}>
+                        <div onClick={ev => ev.stopPropagation()} style={{ background: '#FFF', borderRadius: 12, maxWidth: 560, width: '100%', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 25px 50px rgba(0,0,0,0.25)' }}>
+                            {/* Header */}
+                            <div style={{ background: '#1B3A5C', padding: '18px 24px', borderRadius: '12px 12px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 12, color: '#94A3B8' }}>{e.id}</div>
+                                    <div style={{ fontSize: 16, fontWeight: 700, color: '#FFF', marginTop: 2 }}>{e.asunto}</div>
+                                </div>
+                                <button onClick={() => { setSelectedExpediente(null); setExpEvidenceFiles([]); }} style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: 20, cursor: 'pointer', padding: 4 }}>&times;</button>
+                            </div>
+                            {/* Info */}
+                            <div style={{ padding: '20px 24px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                                    <div><div style={{ fontSize: 10, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Especialista</div><div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginTop: 2 }}>{e.especialista}</div></div>
+                                    <div><div style={{ fontSize: 10, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Oficina</div><div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginTop: 2 }}>{e.oficina}</div></div>
+                                    <div><div style={{ fontSize: 10, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Origen</div><div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginTop: 2 }}>{e.origen || '—'}</div></div>
+                                    <div><div style={{ fontSize: 10, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Vencimiento</div><div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginTop: 2 }}>{e.fechaVencimiento ? formatDateDMY(e.fechaVencimiento) : '—'}</div></div>
+                                </div>
+                                {/* Progress */}
+                                <div style={{ background: '#F8FAFC', borderRadius: 8, padding: 16, border: '1px solid #E2E8F0', marginBottom: 20 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                        <span style={{ fontSize: 12, fontWeight: 700, color: '#1E293B' }}>Progreso de Evidencia</span>
+                                        <span style={{ fontFamily: "'JetBrains Mono'", fontSize: 16, fontWeight: 700, color: isDone ? '#15803D' : '#B91C1C' }}>{expProgress}%</span>
+                                    </div>
+                                    <div style={{ height: 8, background: '#E2E8F0', borderRadius: 4, overflow: 'hidden' }}>
+                                        <div style={{ height: '100%', borderRadius: 4, width: `${expProgress}%`, background: isDone ? '#15803D' : '#B91C1C', transition: 'width 0.4s ease' }} />
+                                    </div>
+                                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 6, textAlign: 'center' }}>
+                                        {isDone ? '✓ Evidencia enviada — Expediente completo' : 'Falta enviar 1 evidencia para completar el expediente'}
+                                    </div>
+                                </div>
+                                {/* Upload evidence */}
+                                {isDone ? (
+                                    <div style={{ background: '#F0FDF4', borderRadius: 8, padding: 16, border: '1px solid #BBF7D0', textAlign: 'center' }}>
+                                        <div style={{ fontSize: 32, marginBottom: 6 }}>✅</div>
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: '#15803D' }}>Evidencia Completada</div>
+                                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>La evidencia fue subida exitosamente a Google Drive</div>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: '#1E293B', marginBottom: 8 }}>Subir Evidencia del Expediente</div>
+                                        <FileAttachment files={expEvidenceFiles} onChange={setExpEvidenceFiles} maxFiles={1} compact label="Archivo de evidencia (1 archivo)" />
+                                        <button
+                                            disabled={expEvidenceFiles.length === 0 || expEvidenceLoading}
+                                            onClick={async () => {
+                                                if (expEvidenceFiles.length === 0) return;
+                                                setExpEvidenceLoading(true);
+                                                try {
+                                                    await API.subirEvidenciaExpediente({
+                                                        expediente_id: e.id,
+                                                        asunto: e.asunto,
+                                                        especialista: e.especialista,
+                                                        archivos: expEvidenceFiles
+                                                    });
+                                                    setExpEvidenceMap(prev => ({ ...prev, [e.id]: true }));
+                                                    setExpEvidenceFiles([]);
+                                                    addToast(`Evidencia del expediente ${e.id} subida exitosamente — 100% completo`, 'success');
+                                                } catch (err) {
+                                                    addToast('Error al subir evidencia: ' + (err.message || 'Error desconocido'), 'error');
+                                                } finally {
+                                                    setExpEvidenceLoading(false);
+                                                }
+                                            }}
+                                            style={{ ...S.btn(expEvidenceFiles.length === 0 ? '#94A3B8' : '#15803D', '#FFF'), width: '100%', marginTop: 12, padding: '12px 20px', fontSize: 13, opacity: expEvidenceFiles.length === 0 ? 0.6 : 1 }}
+                                        >
+                                            {expEvidenceLoading ? <><span className="spinner" style={{ marginRight: 8 }} />Subiendo...</> : '📤 Enviar Evidencia (100% al completar)'}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* FOOTER */}
             <footer style={{ borderTop: '3px solid #CA8A04', background: '#0C1929', padding: '16px 28px', textAlign: 'center' }}>
