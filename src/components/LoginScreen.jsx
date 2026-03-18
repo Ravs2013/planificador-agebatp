@@ -93,9 +93,7 @@ export default function LoginScreen() {
             <div style={{ width: "100%", maxWidth: mode === "register" ? 460 : 400, background: C.white, borderRadius: 16, padding: "44px 36px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", position: "relative" }}>
                 <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, borderRadius: "16px 16px 0 0", background: `linear-gradient(90deg, ${C.gold1}, ${C.gold2}, ${C.gold1})` }} />
                 <div style={{ textAlign: "center", marginBottom: 28 }}>
-                    <div style={{ width: 56, height: 56, borderRadius: 14, margin: "0 auto 14px", background: `linear-gradient(135deg, ${C.gold2}, ${C.gold1})`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 12px ${C.gold2}40` }}>
-                        <Icon name="shield" size={28} color={C.white} />
-                    </div>
+                    <img src="/logo-agebatp.jpeg" alt="Logo AGEBATP - UGEL 03" style={{ width: 64, height: 64, borderRadius: 14, margin: "0 auto 14px", objectFit: "cover", boxShadow: `0 4px 12px ${C.gold2}40`, display: "block", border: `2px solid ${C.g200}` }} />
                     <h1 style={{ color: C.navy1, fontSize: "1.6rem", fontFamily: "'DM Serif Display',serif", fontWeight: 400, margin: 0 }}>Acceso al Sistema</h1>
                     <p style={{ color: C.g500, fontSize: "0.85rem", marginTop: 4, fontFamily: "'DM Sans',sans-serif" }}>Planificador AGEBATP — UGEL 03</p>
                 </div>

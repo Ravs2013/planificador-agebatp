@@ -44,6 +44,7 @@ export default function App() {
     const [expEvidenceFiles, setExpEvidenceFiles] = useState([]);
     const [expEvidenceLoading, setExpEvidenceLoading] = useState(false);
     const [expEvidenceMap, setExpEvidenceMap] = useState({});
+    const [expSaveLoading, setExpSaveLoading] = useState(false);
 
     // Funcion para cargar actividades de Google Sheets
     const loadActividades = useCallback(async () => {
@@ -319,9 +320,7 @@ export default function App() {
             <header style={{ background: 'linear-gradient(180deg,#0C1929 0%,#122240 100%)', borderBottom: '3px solid #CA8A04', position: 'sticky', top: 0, zIndex: 50 }}>
                 <div style={{ maxWidth: 1400, margin: '0 auto', padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                        <div style={{ width: 46, height: 46, borderRadius: 8, background: 'linear-gradient(135deg,#CA8A04,#A16207)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(202,138,4,0.3)' }}>
-                            <Icon name="shield" size={22} color="#FFFFFF" />
-                        </div>
+                        <img src="/logo-agebatp.jpeg" alt="AGEBATP" style={{ width: 46, height: 46, borderRadius: 8, objectFit: 'cover', boxShadow: '0 2px 8px rgba(202,138,4,0.3)' }} />
                         <div>
                             <div style={{ fontFamily: "'DM Serif Display',Georgia,serif", fontSize: 19, color: '#FFFFFF', letterSpacing: 0.2 }}>Planificador Mensual AGEBATP</div>
                             <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 500, letterSpacing: 1.2, textTransform: 'uppercase', marginTop: 2 }}>UGEL 03 - Unidad de Gestion Educativa Local</div>
@@ -604,15 +603,19 @@ export default function App() {
                                     <div><label style={S.label}>Fecha Vencimiento</label><input type="date" value={newExpediente.fechaVencimiento} onChange={e => setNewExpediente(p => ({ ...p, fechaVencimiento: e.target.value }))} style={S.input} /></div>
                                     <div><label style={S.label}>Origen</label><input value={newExpediente.origen} onChange={e => setNewExpediente(p => ({ ...p, origen: e.target.value }))} style={S.input} placeholder="Ej: DRELM, UGEL" /></div>
                                 </div>
-                                <button onClick={async () => {
+                                <button disabled={expSaveLoading} onClick={async () => {
                                     if (!newExpediente.id || !newExpediente.asunto || !newExpediente.especialista) { addToast('Complete numero de expediente, asunto y especialista', 'error'); return; }
+                                    setExpSaveLoading(true);
                                     try {
                                         await API.agregarExpediente(newExpediente);
                                         setNewExpediente({ id: '', asunto: '', especialista: '', oficina: '', categoria: 'vencer', fechaVencimiento: '', origen: '' });
                                         setShowAddExpediente(false);
                                         addToast('Expediente registrado y guardado en Sheets', 'success');
                                     } catch { addToast('Error al guardar expediente', 'error'); }
-                                }} style={{ ...S.btn('#15803D', '#FFF'), marginTop: 12, width: '100%' }}>Guardar Expediente</button>
+                                    setExpSaveLoading(false);
+                                }} style={{ ...S.btn('#15803D', '#FFF'), marginTop: 12, width: '100%', opacity: expSaveLoading ? 0.7 : 1 }}>
+                                    {expSaveLoading ? <span className="spinner" /> : 'Guardar Expediente'}
+                                </button>
                             </div>
                         )}
                         {expedientes.filter(e => e.categoria === viewExpedientes).map(e => {

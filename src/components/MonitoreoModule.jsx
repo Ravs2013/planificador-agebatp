@@ -40,15 +40,27 @@ const I = {
 };
 
 /* ═══════════════════════════════════════════════════════════
+   CLASIFICACIÓN DE PERSONAL
+   Oficinistas: asignan expedientes y filtran devoluciones
+   Especialistas: procesan expedientes (EBA o ETP)
+   ═══════════════════════════════════════════════════════════ */
+const OFICINISTAS_NOMBRES = [
+    "Lucy Ana Vasquez Aliaga",
+    "Liz Miluska Gutierrez Silva",
+    "Beronica Olinda Cuellar Cornelio",
+];
+const esOficinista = (nombre) => OFICINISTAS_NOMBRES.some(n => nombre?.toLowerCase().includes(n.split(" ")[0].toLowerCase()) && nombre?.toLowerCase().includes(n.split(" ").slice(-1)[0].toLowerCase()));
+
+/* ═══════════════════════════════════════════════════════════
    DATA DEMO DE RESERVA
    ═══════════════════════════════════════════════════════════ */
 const DEMO_SPECIALISTS = [
-    { id: 1, nombre: "Liz Miluska Gutierrez Silva", tipo: "ETP", pi: 11, pe: 2, pt: 0, ri: 274, re: 40, rt: 0, tp: 13, tr: 314, tt: 327, pp: 4, pr: 96 },
-    { id: 2, nombre: "Juan Alberto Quispe Solano", tipo: "ETP", pi: 6, pe: 38, pt: 0, ri: 26, re: 123, rt: 0, tp: 44, tr: 149, tt: 193, pp: 23, pr: 77 },
-    { id: 3, nombre: "Nelida Albino Igreda", tipo: "EBA", pi: 6, pe: 7, pt: 0, ri: 40, re: 70, rt: 0, tp: 13, tr: 110, tt: 123, pp: 11, pr: 89 },
-    { id: 4, nombre: "Francisco Villalobos Gonzales", tipo: "ETP", pi: 3, pe: 16, pt: 0, ri: 17, re: 52, rt: 0, tp: 19, tr: 69, tt: 88, pp: 22, pr: 78 },
-    { id: 5, nombre: "Lucy Ana Vasquez Aliaga", tipo: "EBA", pi: 2, pe: 0, pt: 0, ri: 6, re: 3, rt: 0, tp: 2, tr: 9, tt: 11, pp: 18, pr: 82 },
-    { id: 6, nombre: "Beronica Olinda Cuellar Cornelio", tipo: "ETP", pi: 9, pe: 0, pt: 0, ri: 426, re: 88, rt: 0, tp: 9, tr: 514, tt: 523, pp: 2, pr: 98 },
+    { id: 1, nombre: "Liz Miluska Gutierrez Silva", rol: "oficinista", tipo: "-", pi: 11, pe: 2, pt: 0, ri: 274, re: 40, rt: 0, tp: 13, tr: 314, tt: 327, pp: 4, pr: 96 },
+    { id: 2, nombre: "Juan Alberto Quispe Solano", rol: "especialista", tipo: "ETP", pi: 6, pe: 38, pt: 0, ri: 26, re: 123, rt: 0, tp: 44, tr: 149, tt: 193, pp: 23, pr: 77 },
+    { id: 3, nombre: "Nelida Albino Igreda", rol: "especialista", tipo: "EBA", pi: 6, pe: 7, pt: 0, ri: 40, re: 70, rt: 0, tp: 13, tr: 110, tt: 123, pp: 11, pr: 89 },
+    { id: 4, nombre: "Francisco Villalobos Gonzales", rol: "especialista", tipo: "ETP", pi: 3, pe: 16, pt: 0, ri: 17, re: 52, rt: 0, tp: 19, tr: 69, tt: 88, pp: 22, pr: 78 },
+    { id: 5, nombre: "Lucy Ana Vasquez Aliaga", rol: "oficinista", tipo: "-", pi: 2, pe: 0, pt: 0, ri: 6, re: 3, rt: 0, tp: 2, tr: 9, tt: 11, pp: 18, pr: 82 },
+    { id: 6, nombre: "Beronica Olinda Cuellar Cornelio", rol: "oficinista", tipo: "-", pi: 9, pe: 0, pt: 0, ri: 426, re: 88, rt: 0, tp: 9, tr: 514, tt: 523, pp: 2, pr: 98 },
 ];
 
 const DAILY_PROGRESS = (() => {
@@ -57,9 +69,9 @@ const DAILY_PROGRESS = (() => {
         if (d.getDay() !== 0 && d.getDay() !== 6) {
             days.push({
                 fecha: d.toISOString().split("T")[0], label: `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`,
-                "Cuellar C.": Math.round(6 + Math.random() * 10), "Gutierrez S.": Math.round(4 + Math.random() * 6),
+                "Cuellar C. ✦": Math.round(6 + Math.random() * 10), "Gutierrez S. ✦": Math.round(4 + Math.random() * 6),
                 "Quispe S.": Math.round(2 + Math.random() * 4), "Albino I.": Math.round(1 + Math.random() * 3),
-                "Villalobos G.": Math.round(1 + Math.random() * 2), "Vasquez A.": Math.round(Math.random() * 1),
+                "Villalobos G.": Math.round(1 + Math.random() * 2), "Vasquez A. ✦": Math.round(Math.random() * 1),
             });
         }
         d.setDate(d.getDate() + 1);
@@ -101,7 +113,8 @@ export default function MonitoreoModule() {
     const { isRole } = useAuth();
     const fileInputRef = useRef(null);
 
-    const [filter, setFilter] = useState("todos");
+    const [rolFilter, setRolFilter] = useState("todos");   // todos | especialistas | oficinistas
+    const [filter, setFilter] = useState("todos");          // todos | EBA | ETP  (solo para especialistas)
     const [view, setView] = useState("resumen");
     const [specialists, setSpecialists] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -116,22 +129,27 @@ export default function MonitoreoModule() {
                 // Parse from JSON structure that backend gives (mapping keys if necessary)
                 // If the backend returns standard SheetJS JSON, map it appropriately
                 // Assuming your backend returns mapped metrics already:
-                const mapped = res.map((r, idx) => ({
-                    id: idx + 1,
-                    nombre: r.nombre || r.Nombre || r.Especialista || "Desconocido",
-                    tipo: r.tipo || r.Tipo || "ETP",
-                    pi: parseInt(r.pi || r["Pendiente Int"] || 0),
-                    pe: parseInt(r.pe || r["Pendiente Ext"] || 0),
-                    pt: parseInt(r.pt || r["Otros Pend."] || 0),
-                    ri: parseInt(r.ri || r["Resuelto Int"] || 0),
-                    re: parseInt(r.re || r["Resuelto Ext"] || 0),
-                    rt: parseInt(r.rt || r["Otros Res."] || 0),
-                    tp: parseInt(r.tp || r["Total Pendiente"] || 0),
-                    tr: parseInt(r.tr || r["Total Resuelto"] || 0),
-                    tt: parseInt(r.tt || r["Total Expedientes"] || 0),
-                    pp: parseInt(r.pp || 0),
-                    pr: parseInt(r.pr || r["Eficiencia"] || 0)
-                }));
+                const mapped = res.map((r, idx) => {
+                    const nombre = r.nombre || r.Nombre || r.Especialista || "Desconocido";
+                    const isOfic = esOficinista(nombre);
+                    return {
+                        id: idx + 1,
+                        nombre,
+                        rol: isOfic ? "oficinista" : "especialista",
+                        tipo: isOfic ? "-" : (r.tipo || r.Tipo || "ETP"),
+                        pi: parseInt(r.pi || r["Pendiente Int"] || 0),
+                        pe: parseInt(r.pe || r["Pendiente Ext"] || 0),
+                        pt: parseInt(r.pt || r["Otros Pend."] || 0),
+                        ri: parseInt(r.ri || r["Resuelto Int"] || 0),
+                        re: parseInt(r.re || r["Resuelto Ext"] || 0),
+                        rt: parseInt(r.rt || r["Otros Res."] || 0),
+                        tp: parseInt(r.tp || r["Total Pendiente"] || 0),
+                        tr: parseInt(r.tr || r["Total Resuelto"] || 0),
+                        tt: parseInt(r.tt || r["Total Expedientes"] || 0),
+                        pp: parseInt(r.pp || 0),
+                        pr: parseInt(r.pr || r["Eficiencia"] || 0)
+                    };
+                });
                 setSpecialists(mapped);
             } else {
                 setSpecialists(DEMO_SPECIALISTS);
@@ -189,24 +207,36 @@ export default function MonitoreoModule() {
         }
     };
 
-    const filtered = useMemo(() => filter === "todos" ? specialists : specialists.filter(s => s.tipo === filter), [filter, specialists]);
+    // Filtrado por rol y luego por tipo
+    const byRol = useMemo(() => rolFilter === "todos" ? specialists : specialists.filter(s => s.rol === (rolFilter === "especialistas" ? "especialista" : "oficinista")), [rolFilter, specialists]);
+    const filtered = useMemo(() => filter === "todos" ? byRol : byRol.filter(s => s.tipo === filter), [filter, byRol]);
     const sorted = useMemo(() => [...filtered].sort((a, b) => b.tr - a.tr), [filtered]);
     const maxTT = Math.max(...specialists.map(s => s.tt), 1);
     const totals = useMemo(() => ({ exp: filtered.reduce((s, x) => s + x.tt, 0), proc: filtered.reduce((s, x) => s + x.tr, 0), pend: filtered.reduce((s, x) => s + x.tp, 0), avg: filtered.length ? Math.round(filtered.reduce((s, x) => s + x.pr, 0) / filtered.length) : 0 }), [filtered]);
 
-    const barData = sorted.map(s => ({ nombre: s.nombre.split(" ").slice(0, 2).join(" "), Procesados: s.tr, Pendientes: s.tp }));
+    // Conteo por rol
+    const nEspecialistas = specialists.filter(s => s.rol === "especialista").length;
+    const nOficinistas = specialists.filter(s => s.rol === "oficinista").length;
+
+    // Datos separados para ranking
+    const sortedEspecialistas = useMemo(() => sorted.filter(s => s.rol === "especialista"), [sorted]);
+    const sortedOficinistas = useMemo(() => sorted.filter(s => s.rol === "oficinista"), [sorted]);
+
+    const barData = sorted.map(s => ({ nombre: s.nombre.split(" ").slice(0, 2).join(" ") + (s.rol === "oficinista" ? " ✦" : ""), Procesados: s.tr, Pendientes: s.tp }));
     const pieData = [{ name: "Procesados", value: totals.proc }, { name: "Pendientes", value: totals.pend }];
 
+    // Comparativa EBA vs ETP — solo especialistas reales
     const typeComp = useMemo(() => {
-        const calc = t => { const s = specialists.filter(x => x.tipo === t); return { total: s.reduce((a, b) => a + b.tt, 0), proc: s.reduce((a, b) => a + b.tr, 0), pend: s.reduce((a, b) => a + b.tp, 0), avg: s.length ? Math.round(s.reduce((a, b) => a + b.pr, 0) / s.length) : 0, n: s.length, items: s }; };
+        const calc = t => { const s = specialists.filter(x => x.rol === "especialista" && x.tipo === t); return { total: s.reduce((a, b) => a + b.tt, 0), proc: s.reduce((a, b) => a + b.tr, 0), pend: s.reduce((a, b) => a + b.tp, 0), avg: s.length ? Math.round(s.reduce((a, b) => a + b.pr, 0) / s.length) : 0, n: s.length, items: s }; };
         return { eba: calc("EBA"), etp: calc("ETP") };
     }, [specialists]);
 
-    const radarData = sorted.map(s => ({ nombre: s.nombre.split(" ")[0], eficiencia: s.pr, volumen: Math.round((s.tt / maxTT) * 100), internos: Math.round((s.ri / Math.max(s.ri + s.pi, 1)) * 100), externos: Math.round((s.re / Math.max(s.re + s.pe, 1)) * 100) }));
+    const radarEspecialistas = useMemo(() => specialists.filter(s => s.rol === "especialista").sort((a,b) => b.tr - a.tr), [specialists]);
+    const radarData = radarEspecialistas.map(s => ({ nombre: s.nombre.split(" ")[0], eficiencia: s.pr, volumen: Math.round((s.tt / maxTT) * 100), internos: Math.round((s.ri / Math.max(s.ri + s.pi, 1)) * 100), externos: Math.round((s.re / Math.max(s.re + s.pe, 1)) * 100) }));
 
     const handleExport = () => {
-        const h = "Ranking,Especialista,Tipo,Total,Procesados,Pendientes,Eficiencia%,Pend.Int,Pend.Ext,Proc.Int,Proc.Ext\n";
-        const r = sorted.map((s, i) => `${i + 1},${s.nombre},${s.tipo},${s.tt},${s.tr},${s.tp},${s.pr}%,${s.pi},${s.pe},${s.ri},${s.re}`).join("\n");
+        const h = "Ranking,Nombre,Rol,Tipo,Total,Procesados,Pendientes,Eficiencia%,Pend.Int,Pend.Ext,Proc.Int,Proc.Ext\n";
+        const r = sorted.map((s, i) => `${i + 1},${s.nombre},${s.rol === "oficinista" ? "Oficinista" : "Especialista"},${s.tipo},${s.tt},${s.tr},${s.tp},${s.pr}%,${s.pi},${s.pe},${s.ri},${s.re}`).join("\n");
         const b = new Blob(["\uFEFF" + h + r], { type: "text/csv;charset=utf-8;" }); const a = document.createElement("a"); a.href = URL.createObjectURL(b);
         a.download = `Monitoreo_AGEBATP_${new Date().toISOString().split("T")[0]}.csv`; a.click();
     };
@@ -222,8 +252,8 @@ export default function MonitoreoModule() {
             {/* HEADER CONTROLS */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 14 }}>
                 <div>
-                    <h2 style={{ color: C.navy1, fontSize: "1.4rem", margin: 0, fontFamily: "'DM Serif Display',serif" }}>Monitoreo de Especialistas</h2>
-                    <p style={{ color: C.g500, fontSize: "0.82rem", margin: "4px 0 0", fontFamily: "'DM Sans'" }}>Periodo Actual  |  Fuente: e-SINAD — UGEL 03</p>
+                    <h2 style={{ color: C.navy1, fontSize: "1.4rem", margin: 0, fontFamily: "'DM Serif Display',serif" }}>Monitoreo de Personal AGEBATP</h2>
+                    <p style={{ color: C.g500, fontSize: "0.82rem", margin: "4px 0 0", fontFamily: "'DM Sans'" }}>Periodo Actual  |  Fuente: e-SINAD — UGEL 03 &nbsp;·&nbsp; <span style={{ color: C.navy5 }}>{nEspecialistas} especialistas</span> &nbsp;·&nbsp; <span style={{ color: C.gold1 }}>{nOficinistas} oficinistas</span></p>
                     {toast && <div style={{ marginTop: 10, padding: "6px 14px", borderRadius: 6, fontSize: "0.8rem", color: toast.type === "success" ? C.green : C.red, background: toast.type === "success" ? "#F0FDF4" : "#FEF2F2", border: `1px solid ${toast.type === "success" ? "#BBF7D0" : "#FECACA"}`, display: "inline-block" }}>{toast.msg}</div>}
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -237,9 +267,18 @@ export default function MonitoreoModule() {
                         </button>
                     )}
 
+                    {/* Filtro por ROL */}
                     <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: `1px solid ${C.g200}` }}>
-                        {[["todos", "Todos"], ["EBA", "EBA"], ["ETP", "ETP"]].map(([v, l]) => <button key={v} onClick={() => setFilter(v)} style={btn(filter === v, C.navy3, C.white)}>{l}</button>)}
+                        {[["todos", "Todos"], ["especialistas", "Especialistas"], ["oficinistas", "Oficinistas"]].map(([v, l]) => <button key={v} onClick={() => { setRolFilter(v); if (v === "oficinistas") setFilter("todos"); }} style={btn(rolFilter === v, C.navy3, C.white)}>{l}</button>)}
                     </div>
+
+                    {/* Filtro por TIPO — solo si no son oficinistas */}
+                    {rolFilter !== "oficinistas" && (
+                        <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: `1px solid ${C.g200}` }}>
+                            {[["todos", "Todos"], ["EBA", "EBA"], ["ETP", "ETP"]].map(([v, l]) => <button key={v} onClick={() => setFilter(v)} style={btn(filter === v, C.navy4, C.white)}>{l}</button>)}
+                        </div>
+                    )}
+
                     <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: `1px solid ${C.g200}` }}>
                         {[["resumen", "Resumen"], ["ranking", "Ranking"], ["comparativa", "EBA vs ETP"], ["tendencia", "Tendencia"]].map(([v, l]) => <button key={v} onClick={() => setView(v)} style={btn(view === v, C.gold2, C.white)}>{l}</button>)}
                     </div>
@@ -251,7 +290,7 @@ export default function MonitoreoModule() {
 
             {/* KPIs */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14, marginBottom: 24 }}>
-                <StatCard icon={I.file(20, C.navy4)} label="Total Expedientes" value={totals.exp.toLocaleString()} sub={`${filtered.length} especialistas`} border={C.navy4} />
+                <StatCard icon={I.file(20, C.navy4)} label="Total Expedientes" value={totals.exp.toLocaleString()} sub={`${filtered.length} personas (${filtered.filter(s=>s.rol==="especialista").length} esp. · ${filtered.filter(s=>s.rol==="oficinista").length} ofic.)`} border={C.navy4} />
                 <StatCard icon={I.check(20, C.green)} label="Procesados" value={totals.proc.toLocaleString()} sub={`${totals.exp ? Math.round(totals.proc / totals.exp * 100) : 0}% del total`} border={C.green} trend={5} />
                 <StatCard icon={I.clock(20, C.amber)} label="Pendientes" value={totals.pend.toLocaleString()} sub="Requieren atencion" border={C.amber} trend={-12} />
                 <StatCard icon={I.trend(20, C.navy5)} label="Eficiencia Promedio" value={`${totals.avg}%`} sub="Tasa de resolucion" border={C.navy5} />
@@ -281,25 +320,60 @@ export default function MonitoreoModule() {
 
             {/* RANKING */}
             {view === "ranking" && (
-                <div style={{ ...card, padding: 0, overflow: "hidden" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 70px 90px 90px 110px 60px", padding: "12px 18px", gap: 10, borderBottom: `2px solid ${C.g200}`, background: C.g50 }}>
-                        {["#", "Especialista", "Total", "Procesados", "Pendientes", "Eficiencia", "Estado"].map(h => <p key={h} style={{ color: C.g500, fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", margin: 0, fontFamily: "'DM Sans'", textAlign: h === "#" || h === "Especialista" ? "left" : "center" }}>{h}</p>)}
-                    </div>
-                    {sorted.map((s, i) => {
-                        const hi = s.pr >= 90, lo = s.pr < 80, sc = hi ? C.green : lo ? C.red : C.amber;
-                        return (
-                            <div key={s.id} style={{ display: "grid", gridTemplateColumns: "36px 1fr 70px 90px 90px 110px 60px", alignItems: "center", padding: "14px 18px", gap: 10, borderBottom: `1px solid ${C.g100}`, transition: "background 0.15s", cursor: "default" }}
-                                onMouseEnter={e => e.currentTarget.style.background = C.g50} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                <div style={{ width: 30, height: 30, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: i < 3 ? `${C.gold2}18` : C.g100, color: i < 3 ? C.gold1 : C.g500, fontWeight: 700, fontSize: "0.82rem", fontFamily: "'JetBrains Mono'" }}>{i + 1}</div>
-                                <div><p style={{ color: C.navy1, fontWeight: 600, fontSize: "0.87rem", margin: 0, fontFamily: "'DM Sans'" }}>{s.nombre}</p><span style={{ display: "inline-block", marginTop: 3, padding: "1px 8px", borderRadius: 4, fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.06em", fontFamily: "'JetBrains Mono'", background: s.tipo === "EBA" ? `${C.navy5}15` : `${C.gold2}15`, color: s.tipo === "EBA" ? C.navy5 : C.gold1 }}>{s.tipo}</span></div>
-                                <div style={{ textAlign: "center" }}><p style={{ color: C.navy1, fontWeight: 700, fontSize: "1rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{s.tt}</p><p style={{ color: C.g400, fontSize: "0.65rem", margin: 0 }}>Total</p></div>
-                                <div style={{ textAlign: "center" }}><p style={{ color: C.green, fontWeight: 700, fontSize: "0.95rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{s.tr}</p><p style={{ color: C.g400, fontSize: "0.65rem", margin: 0 }}>Procesados</p></div>
-                                <div style={{ textAlign: "center" }}><p style={{ color: s.tp > 20 ? C.red : C.amber, fontWeight: 700, fontSize: "0.95rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{s.tp}</p><p style={{ color: C.g400, fontSize: "0.65rem", margin: 0 }}>Pendientes</p></div>
-                                <div><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}><span style={{ fontSize: "0.68rem", color: C.g500 }}>Eficiencia</span><span style={{ fontSize: "0.78rem", fontWeight: 700, color: sc, fontFamily: "'JetBrains Mono'" }}>{s.pr}%</span></div><div style={{ height: 5, borderRadius: 3, background: C.g200, overflow: "hidden" }}><div style={{ height: "100%", borderRadius: 3, width: `${s.pr}%`, background: sc, transition: "width 0.8s ease" }} /></div></div>
-                                <div style={{ display: "flex", justifyContent: "center" }}>{hi ? I.check(18, C.green) : lo ? I.alert(18, C.red) : I.clock(18, C.amber)}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                    {/* —— Sección Especialistas —— */}
+                    {(rolFilter === "todos" || rolFilter === "especialistas") && sortedEspecialistas.length > 0 && (
+                        <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+                            <div style={{ padding: "14px 18px", background: `${C.navy5}08`, borderBottom: `2px solid ${C.navy5}25` }}>
+                                <h3 style={{ color: C.navy1, fontSize: "1rem", margin: 0, fontFamily: "'DM Serif Display',serif" }}>Especialistas <span style={{ fontSize: "0.78rem", color: C.g500, fontFamily: "'DM Sans'", fontWeight: 400 }}>— Procesan expedientes</span></h3>
                             </div>
-                        );
-                    })}
+                            <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 70px 90px 90px 110px 60px", padding: "12px 18px", gap: 10, borderBottom: `2px solid ${C.g200}`, background: C.g50 }}>
+                                {["#", "Especialista", "Total", "Procesados", "Pendientes", "Eficiencia", "Estado"].map(h => <p key={h} style={{ color: C.g500, fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", margin: 0, fontFamily: "'DM Sans'", textAlign: h === "#" || h === "Especialista" ? "left" : "center" }}>{h}</p>)}
+                            </div>
+                            {sortedEspecialistas.map((s, i) => {
+                                const hi = s.pr >= 90, lo = s.pr < 80, sc = hi ? C.green : lo ? C.red : C.amber;
+                                return (
+                                    <div key={s.id} style={{ display: "grid", gridTemplateColumns: "36px 1fr 70px 90px 90px 110px 60px", alignItems: "center", padding: "14px 18px", gap: 10, borderBottom: `1px solid ${C.g100}`, transition: "background 0.15s", cursor: "default" }}
+                                        onMouseEnter={e => e.currentTarget.style.background = C.g50} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                                        <div style={{ width: 30, height: 30, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: i < 3 ? `${C.gold2}18` : C.g100, color: i < 3 ? C.gold1 : C.g500, fontWeight: 700, fontSize: "0.82rem", fontFamily: "'JetBrains Mono'" }}>{i + 1}</div>
+                                        <div><p style={{ color: C.navy1, fontWeight: 600, fontSize: "0.87rem", margin: 0, fontFamily: "'DM Sans'" }}>{s.nombre}</p><span style={{ display: "inline-block", marginTop: 3, padding: "1px 8px", borderRadius: 4, fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.06em", fontFamily: "'JetBrains Mono'", background: s.tipo === "EBA" ? `${C.navy5}15` : `${C.gold2}15`, color: s.tipo === "EBA" ? C.navy5 : C.gold1 }}>{s.tipo}</span></div>
+                                        <div style={{ textAlign: "center" }}><p style={{ color: C.navy1, fontWeight: 700, fontSize: "1rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{s.tt}</p><p style={{ color: C.g400, fontSize: "0.65rem", margin: 0 }}>Total</p></div>
+                                        <div style={{ textAlign: "center" }}><p style={{ color: C.green, fontWeight: 700, fontSize: "0.95rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{s.tr}</p><p style={{ color: C.g400, fontSize: "0.65rem", margin: 0 }}>Procesados</p></div>
+                                        <div style={{ textAlign: "center" }}><p style={{ color: s.tp > 20 ? C.red : C.amber, fontWeight: 700, fontSize: "0.95rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{s.tp}</p><p style={{ color: C.g400, fontSize: "0.65rem", margin: 0 }}>Pendientes</p></div>
+                                        <div><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}><span style={{ fontSize: "0.68rem", color: C.g500 }}>Eficiencia</span><span style={{ fontSize: "0.78rem", fontWeight: 700, color: sc, fontFamily: "'JetBrains Mono'" }}>{s.pr}%</span></div><div style={{ height: 5, borderRadius: 3, background: C.g200, overflow: "hidden" }}><div style={{ height: "100%", borderRadius: 3, width: `${s.pr}%`, background: sc, transition: "width 0.8s ease" }} /></div></div>
+                                        <div style={{ display: "flex", justifyContent: "center" }}>{hi ? I.check(18, C.green) : lo ? I.alert(18, C.red) : I.clock(18, C.amber)}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {/* —— Sección Oficinistas —— */}
+                    {(rolFilter === "todos" || rolFilter === "oficinistas") && sortedOficinistas.length > 0 && (
+                        <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+                            <div style={{ padding: "14px 18px", background: `${C.gold2}08`, borderBottom: `2px solid ${C.gold2}25` }}>
+                                <h3 style={{ color: C.navy1, fontSize: "1rem", margin: 0, fontFamily: "'DM Serif Display',serif" }}>Oficinistas <span style={{ fontSize: "0.78rem", color: C.g500, fontFamily: "'DM Sans'", fontWeight: 400 }}>— Asignan expedientes y filtran devoluciones</span></h3>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 70px 90px 90px 110px 60px", padding: "12px 18px", gap: 10, borderBottom: `2px solid ${C.g200}`, background: C.g50 }}>
+                                {["#", "Oficinista", "Total", "Asignados", "Pendientes", "Revisión", "Estado"].map(h => <p key={h} style={{ color: C.g500, fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", margin: 0, fontFamily: "'DM Sans'", textAlign: h === "#" || h === "Oficinista" ? "left" : "center" }}>{h}</p>)}
+                            </div>
+                            {sortedOficinistas.map((s, i) => {
+                                const hi = s.pr >= 90, lo = s.pr < 80, sc = hi ? C.green : lo ? C.red : C.amber;
+                                return (
+                                    <div key={s.id} style={{ display: "grid", gridTemplateColumns: "36px 1fr 70px 90px 90px 110px 60px", alignItems: "center", padding: "14px 18px", gap: 10, borderBottom: `1px solid ${C.g100}`, transition: "background 0.15s", cursor: "default" }}
+                                        onMouseEnter={e => e.currentTarget.style.background = C.g50} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                                        <div style={{ width: 30, height: 30, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: `${C.gold2}18`, color: C.gold1, fontWeight: 700, fontSize: "0.82rem", fontFamily: "'JetBrains Mono'" }}>{i + 1}</div>
+                                        <div><p style={{ color: C.navy1, fontWeight: 600, fontSize: "0.87rem", margin: 0, fontFamily: "'DM Sans'" }}>{s.nombre}</p><span style={{ display: "inline-block", marginTop: 3, padding: "1px 8px", borderRadius: 4, fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.06em", fontFamily: "'JetBrains Mono'", background: `${C.g500}15`, color: C.g600 }}>OFICINISTA</span></div>
+                                        <div style={{ textAlign: "center" }}><p style={{ color: C.navy1, fontWeight: 700, fontSize: "1rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{s.tt}</p><p style={{ color: C.g400, fontSize: "0.65rem", margin: 0 }}>Total</p></div>
+                                        <div style={{ textAlign: "center" }}><p style={{ color: C.green, fontWeight: 700, fontSize: "0.95rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{s.tr}</p><p style={{ color: C.g400, fontSize: "0.65rem", margin: 0 }}>Asignados</p></div>
+                                        <div style={{ textAlign: "center" }}><p style={{ color: s.tp > 20 ? C.red : C.amber, fontWeight: 700, fontSize: "0.95rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{s.tp}</p><p style={{ color: C.g400, fontSize: "0.65rem", margin: 0 }}>Pendientes</p></div>
+                                        <div><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}><span style={{ fontSize: "0.68rem", color: C.g500 }}>Revisión</span><span style={{ fontSize: "0.78rem", fontWeight: 700, color: sc, fontFamily: "'JetBrains Mono'" }}>{s.pr}%</span></div><div style={{ height: 5, borderRadius: 3, background: C.g200, overflow: "hidden" }}><div style={{ height: "100%", borderRadius: 3, width: `${s.pr}%`, background: sc, transition: "width 0.8s ease" }} /></div></div>
+                                        <div style={{ display: "flex", justifyContent: "center" }}>{hi ? I.check(18, C.green) : lo ? I.alert(18, C.red) : I.clock(18, C.amber)}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -352,15 +426,18 @@ export default function MonitoreoModule() {
             {view === "tendencia" && (
                 <div style={card}>
                     <h3 style={h3s}>Tendencia Diaria de Procesamiento</h3>
-                    <p style={{ color: C.g500, fontSize: "0.78rem", margin: "0 0 18px", fontFamily: "'DM Sans'" }}>Expedientes procesados por dia habil (ultimos 30 dias)</p>
+                    <p style={{ color: C.g500, fontSize: "0.78rem", margin: "0 0 6px", fontFamily: "'DM Sans'" }}>Expedientes procesados por dia habil (ultimos 30 dias)</p>
+                    <p style={{ color: C.g400, fontSize: "0.7rem", margin: "0 0 18px", fontFamily: "'DM Sans'" }}>✦ = Oficinista (asignación/revisión)</p>
                     <ResponsiveContainer width="100%" height={380}>
                         <AreaChart data={DAILY_PROGRESS.slice(-30)}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="label" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'JetBrains Mono'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} />
-                            <Area type="monotone" dataKey="Cuellar C." stroke={C.gold2} fill={`${C.gold2}15`} strokeWidth={2} />
-                            <Area type="monotone" dataKey="Gutierrez S." stroke={C.green} fill={`${C.green}15`} strokeWidth={2} />
+                            {/* Especialistas — línea sólida */}
                             <Area type="monotone" dataKey="Quispe S." stroke={C.navy5} fill={`${C.navy5}15`} strokeWidth={2} />
                             <Area type="monotone" dataKey="Albino I." stroke={C.red} fill={`${C.red}15`} strokeWidth={2} />
                             <Area type="monotone" dataKey="Villalobos G." stroke={C.amber} fill={`${C.amber}15`} strokeWidth={2} />
-                            <Area type="monotone" dataKey="Vasquez A." stroke={C.g500} fill={`${C.g500}15`} strokeWidth={2} />
+                            {/* Oficinistas — con ✦ en nombre */}
+                            <Area type="monotone" dataKey="Cuellar C. ✦" stroke={C.g500} fill={`${C.g500}10`} strokeWidth={1.5} strokeDasharray="5 3" />
+                            <Area type="monotone" dataKey="Gutierrez S. ✦" stroke={C.g400} fill={`${C.g400}10`} strokeWidth={1.5} strokeDasharray="5 3" />
+                            <Area type="monotone" dataKey="Vasquez A. ✦" stroke={C.g300} fill={`${C.g300}10`} strokeWidth={1.5} strokeDasharray="5 3" />
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>

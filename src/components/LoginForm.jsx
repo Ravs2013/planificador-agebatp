@@ -31,11 +31,9 @@ export default function LoginForm({ onSwitchToRegister, onClose }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(12,25,41,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(6px)' }}>
             <div style={{ background: '#FFFFFF', borderRadius: 10, padding: 36, width: '100%', maxWidth: 420, boxShadow: '0 20px 60px rgba(15,23,42,0.25)', animation: 'fadeIn 0.25s ease' }}>
                 <div style={{ textAlign: 'center', marginBottom: 28 }}>
-                    <div style={{ width: 56, height: 56, borderRadius: 10, background: 'linear-gradient(135deg,#CA8A04,#A16207)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(202,138,4,0.3)', marginBottom: 16 }}>
-                        <Icon name="shield" size={28} color="#FFFFFF" />
-                    </div>
+                    <img src="/logo-agebatp.jpeg" alt="Logo AGEBATP - UGEL 03" style={{ width: 72, height: 72, borderRadius: 12, objectFit: 'cover', boxShadow: '0 4px 12px rgba(15,23,42,0.15)', marginBottom: 16, border: '2px solid #E2E8F0' }} />
                     <div style={{ fontFamily: "'DM Serif Display',Georgia,serif", fontSize: 22, color: '#122240' }}>Acceso al Sistema</div>
-                    <div style={{ fontSize: 12, color: '#64748B', marginTop: 4, fontWeight: 500 }}>Planificador AGEBATP - UGEL 03</div>
+                    <div style={{ fontSize: 12, color: '#64748B', marginTop: 4, fontWeight: 500 }}>Planificador AGEBATP — UGEL 03</div>
                 </div>
 
                 <form onSubmit={handleSubmit}>
