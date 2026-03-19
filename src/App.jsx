@@ -142,12 +142,7 @@ export default function App() {
         }
     }, [selectedExpediente]);
 
-    const [whatsappLog] = useState([
-        { from: 'Liz Gutierrez', time: '08:32', msg: 'Confirmado asistencia al BIAE. Me encuentro en la I.E. Abraham Valdelomar N. 1150.', date: '2026-03-16', isYesterday: true },
-        { from: 'Juan Quispe', time: '09:15', msg: 'Informe de supervision de I.E. completado. Se adjuntan evidencias fotograficas.', date: '2026-03-16', isYesterday: true },
-        { from: 'Nelida Albino', time: '10:45', msg: 'En proceso de revision del expediente MPT2026-EXT-0145633. Estimado de cierre: hoy 15:00.', date: '2026-03-17', isYesterday: false },
-        { from: 'Francisco Villalobos', time: '11:20', msg: 'Coordinacion con CETPRO completada. Modulos verificados segun normativa vigente.', date: '2026-03-17', isYesterday: false },
-    ]);
+
 
     const [notifications, setNotifications] = useState([
         { id: 1, type: 'vencimiento', msg: 'Expediente EAP2026-INT-0088100 vence en 2 dias', time: 'Hace 1 hora', read: false },
@@ -269,8 +264,8 @@ export default function App() {
     const isPublic = user && isRole('publico');
 
     const ROLE_PERMS = {
-        admin: ["calendario", "actividades", "personal", "expedientes", "reuniones", "whatsapp", "monitoreo"],
-        jefatura: ["calendario", "actividades", "personal", "expedientes", "reuniones", "whatsapp", "monitoreo"],
+        admin: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo"],
+        jefatura: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo"],
         personal: ["calendario", "actividades", "expedientes", "reuniones"],
         publico: ["calendario", "reuniones"]
     };
@@ -282,7 +277,6 @@ export default function App() {
         { id: 'personal', label: 'Personal', icon: 'users' },
         { id: 'expedientes', label: 'Expedientes', icon: 'folder' },
         { id: 'reuniones', label: 'Reuniones', icon: 'calendar' },
-        { id: 'whatsapp', label: 'Comunicaciones', icon: 'message' },
         { id: 'monitoreo', label: 'Monitoreo', icon: 'barChart' }
     ];
     const tabs = allTabs.filter(t => perms.includes(t.id));
@@ -607,12 +601,15 @@ export default function App() {
                                     if (!newExpediente.id || !newExpediente.asunto || !newExpediente.especialista) { addToast('Complete numero de expediente, asunto y especialista', 'error'); return; }
                                     setExpSaveLoading(true);
                                     try {
-                                        await API.agregarExpediente(newExpediente);
+                                        // Add to local state immediately for instant feedback
+                                        setExpedientes(prev => [...prev, { ...newExpediente }]);
                                         setNewExpediente({ id: '', asunto: '', especialista: '', oficina: '', categoria: 'vencer', fechaVencimiento: '', origen: '' });
                                         setShowAddExpediente(false);
+                                        setExpSaveLoading(false);
                                         addToast('Expediente registrado y guardado en Sheets', 'success');
-                                    } catch { addToast('Error al guardar expediente', 'error'); }
-                                    setExpSaveLoading(false);
+                                        // Fire-and-forget API call — don't block UI
+                                        API.agregarExpediente(newExpediente).catch(err => console.warn('Sync expediente error:', err));
+                                    } catch { addToast('Error al guardar expediente', 'error'); setExpSaveLoading(false); }
                                 }} style={{ ...S.btn('#15803D', '#FFF'), marginTop: 12, width: '100%', opacity: expSaveLoading ? 0.7 : 1 }}>
                                     {expSaveLoading ? <span className="spinner" /> : 'Guardar Expediente'}
                                 </button>
@@ -707,31 +704,7 @@ export default function App() {
                     </div>
                 )}
 
-                {/* COMUNICACIONES */}
-                {activeTab === 'whatsapp' && (
-                    <div className="grid-comms" style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 20, alignItems: 'start' }}>
-                        <div style={S.card}>
-                            <div style={S.sectionTitle}><Icon name="message" size={16} color="#1E4D7B" />Canal de Comunicaciones - Evolution API</div>
-                            <div style={{ marginBottom: 14, padding: 12, background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, fontSize: 12, color: '#15803D', fontWeight: 600 }}>Conexion activa - Evolution API + N8N EasyPanel</div>
-                            <div style={{ maxHeight: 420, overflowY: 'auto' }}>
-                                {whatsappLog.map((msg, i) => (
-                                    <div key={i} style={{ padding: '12px 16px', borderRadius: 8, marginBottom: 10, maxWidth: '85%', fontSize: 13, lineHeight: 1.6, background: msg.isYesterday ? '#FEF9C3' : '#F8FAFC', border: `1px solid ${msg.isYesterday ? '#FDE68A' : '#E8ECF3'}` }}>
-                                        {msg.isYesterday && <div style={{ fontSize: 9, fontWeight: 700, color: '#A16207', background: '#FEF9C3', border: '1px solid #FDE68A', padding: '2px 8px', borderRadius: 3, display: 'inline-block', marginBottom: 4, letterSpacing: 0.5, textTransform: 'uppercase' }}>Avance del dia anterior</div>}
-                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#1B3A5C', marginBottom: 3 }}>{msg.from}</div>
-                                        <div>{msg.msg}</div>
-                                        <div style={{ fontSize: 10, color: '#94A3B8', textAlign: 'right', marginTop: 6 }}>{msg.date} - {msg.time} hrs.</div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div style={S.card}>
-                            <div style={S.sectionTitle}><Icon name="alert" size={16} color="#1E4D7B" />Reglas de Alerta Automatica</div>
-                            {[{ label: 'Demora > 48 horas (Dias habiles)', freq: 'Color Rojo - Retraso Critico', color: '#B91C1C' }, { label: 'Fuera de Plazo (< 48 horas)', freq: 'Color Amarillo - Atrasado/Vencido', color: '#B45309' }, { label: 'Dentro de plazo o completado', freq: 'Color Verde - En Plazo', color: '#15803D' }].map((rule, i) => (
-                                <div key={i} style={{ padding: '10px 0', borderBottom: i < 2 ? '1px solid #E8ECF3' : 'none' }}><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: rule.color }} /><span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{rule.label}</span></div><div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2, paddingLeft: 16 }}>{rule.freq}</div></div>
-                            ))}
-                        </div>
-                    </div>
-                )}
+
 
                 {/* MONITOREO */}
                 {activeTab === 'monitoreo' && (
