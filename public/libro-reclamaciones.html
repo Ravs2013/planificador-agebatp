@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Libro de Reclamaciones Virtual - AGEBATP UGEL 03">
+    <title>Libro de Reclamaciones | AGEBATP - UGEL 03</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f8fafc;
+            color: #334155;
+            line-height: 1.7;
+        }
+        .header {
+            background: linear-gradient(135deg, #7c2d12 0%, #dc2626 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        .header img {
+            width: 80px;
+            height: 80px;
+            border-radius: 16px;
+            margin-bottom: 16px;
+            object-fit: cover;
+            border: 3px solid rgba(255,255,255,0.3);
+        }
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .header p {
+            font-size: 0.95rem;
+            opacity: 0.85;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 24px;
+        }
+        .legal-notice {
+            background: #fef2f2;
+            border-left: 4px solid #dc2626;
+            padding: 12px 20px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 32px;
+            font-size: 0.9rem;
+            color: #991b1b;
+        }
+        h2 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #7c2d12;
+            margin: 28px 0 14px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #fee2e2;
+        }
+        p { margin-bottom: 14px; }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+        }
+        label .required {
+            color: #dc2626;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.95rem;
+            color: #334155;
+            transition: border-color 0.2s;
+            background: #f9fafb;
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #dc2626;
+            background: white;
+        }
+        textarea { resize: vertical; min-height: 120px; }
+        .radio-group {
+            display: flex;
+            gap: 24px;
+            margin-top: 8px;
+        }
+        .radio-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 400;
+            cursor: pointer;
+        }
+        .radio-group input[type="radio"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #dc2626;
+        }
+        .submit-btn {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(220, 38, 38, 0.3);
+        }
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .success-msg {
+            display: none;
+            background: #f0fdf4;
+            border: 2px solid #86efac;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            color: #166534;
+        }
+        .success-msg h3 {
+            font-size: 1.2rem;
+            margin-bottom: 8px;
+        }
+        .info-box {
+            background: #fefce8;
+            border: 1px solid #fde047;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin: 20px 0;
+            font-size: 0.9rem;
+            color: #854d0e;
+        }
+        .contact-box {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .contact-box strong {
+            color: #991b1b;
+        }
+        .two-cols {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        .footer {
+            text-align: center;
+            padding: 30px 20px;
+            color: #94a3b8;
+            font-size: 0.85rem;
+        }
+        .footer a {
+            color: #dc2626;
+            text-decoration: none;
+        }
+        @media (max-width: 600px) {
+            .card { padding: 24px; }
+            .header h1 { font-size: 1.4rem; }
+            .two-cols { grid-template-columns: 1fr; }
+            .radio-group { flex-direction: column; gap: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="/logo-agebatp.jpeg" alt="Logo AGEBATP">
+        <h1>📋 Libro de Reclamaciones</h1>
+        <p>AGEBATP — Área de Gestión de la Educación Básica Alternativa y Técnico Productiva</p>
+        <p>UGEL 03 — Lima Metropolitana</p>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <div class="legal-notice">
+                📜 Conforme a lo establecido en el Código de Protección y Defensa del Consumidor — <strong>Ley N° 29571</strong> y el <strong>D.S. N° 011-2011-PCM</strong>, ponemos a disposición nuestro Libro de Reclamaciones virtual.
+            </div>
+
+            <div class="info-box">
+                ⚠️ <strong>Importante:</strong> Su reclamo o queja será atendido en un plazo máximo de <strong>30 días calendario</strong>. La respuesta será enviada al correo electrónico proporcionado.
+            </div>
+
+            <h2>Formulario de Reclamación</h2>
+
+            <form id="reclamacionForm">
+                <h2 style="color: #374151; border-color: #e5e7eb;">Datos del Solicitante</h2>
+
+                <div class="two-cols">
+                    <div class="form-group">
+                        <label>Nombres <span class="required">*</span></label>
+                        <input type="text" name="nombres" required placeholder="Ingrese sus nombres">
+                    </div>
+                    <div class="form-group">
+                        <label>Apellidos <span class="required">*</span></label>
+                        <input type="text" name="apellidos" required placeholder="Ingrese sus apellidos">
+                    </div>
+                </div>
+
+                <div class="two-cols">
+                    <div class="form-group">
+                        <label>Tipo de Documento <span class="required">*</span></label>
+                        <select name="tipo_documento" required>
+                            <option value="">Seleccione...</option>
+                            <option value="DNI">DNI</option>
+                            <option value="CE">Carné de Extranjería</option>
+                            <option value="PASAPORTE">Pasaporte</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Número de Documento <span class="required">*</span></label>
+                        <input type="text" name="numero_documento" required placeholder="Ingrese su número">
+                    </div>
+                </div>
+
+                <div class="two-cols">
+                    <div class="form-group">
+                        <label>Correo Electrónico <span class="required">*</span></label>
+                        <input type="email" name="correo" required placeholder="correo@ejemplo.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Teléfono <span class="required">*</span></label>
+                        <input type="tel" name="telefono" required placeholder="999 999 999">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Dirección</label>
+                    <input type="text" name="direccion" placeholder="Ingrese su dirección (opcional)">
+                </div>
+
+                <h2 style="color: #374151; border-color: #e5e7eb;">Detalle de la Reclamación</h2>
+
+                <div class="form-group">
+                    <label>Tipo <span class="required">*</span></label>
+                    <div class="radio-group">
+                        <label>
+                            <input type="radio" name="tipo" value="reclamo" required>
+                            <span><strong>Reclamo</strong> — Disconformidad con el servicio</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="tipo" value="queja">
+                            <span><strong>Queja</strong> — Malestar respecto a la atención</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Descripción de los Hechos <span class="required">*</span></label>
+                    <textarea name="descripcion" required placeholder="Describa detalladamente los hechos que motivan su reclamo o queja..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Pedido del Solicitante <span class="required">*</span></label>
+                    <textarea name="pedido" required placeholder="Indique qué espera como solución a su reclamo o queja..." style="min-height: 80px;"></textarea>
+                </div>
+
+                <div style="margin: 24px 0;">
+                    <label style="display: flex; align-items: flex-start; gap: 10px; font-weight: 400; cursor: pointer;">
+                        <input type="checkbox" required style="width: 20px; height: 20px; margin-top: 3px; accent-color: #dc2626;">
+                        <span>Declaro que la información proporcionada es verídica y autorizo el tratamiento de mis datos personales conforme a la <a href="/politica-privacidad.html" target="_blank">Política de Privacidad</a>. <span class="required">*</span></span>
+                    </label>
+                </div>
+
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    📨 Enviar Reclamación
+                </button>
+            </form>
+
+            <div class="success-msg" id="successMsg">
+                <h3>✅ Reclamación Registrada</h3>
+                <p>Su reclamación ha sido registrada exitosamente.</p>
+                <p>Recibirá una respuesta en el correo electrónico proporcionado dentro de los próximos <strong>30 días calendario</strong>.</p>
+                <p style="margin-top: 12px; font-size: 0.85rem;">Número de registro: <strong id="regNumber"></strong></p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Información de Contacto</h2>
+            <p>Para cualquier consulta adicional sobre su reclamación o el estado de su solicitud:</p>
+
+            <div class="contact-box">
+                <p><strong>📧 Correo electrónico:</strong> agebatp@ugel03.gob.pe</p>
+                <p><strong>📞 Teléfono:</strong> (01) 615-5800</p>
+                <p><strong>📍 Dirección:</strong> Av. Arequipa 4550, Miraflores, Lima - Perú</p>
+                <p><strong>🕐 Horario de atención:</strong> Lunes a Viernes de 8:00 a.m. a 4:30 p.m.</p>
+                <p><strong>🏛️ Entidad:</strong> UGEL 03 — Área de Gestión de la Educación Básica Alternativa y Técnico Productiva (AGEBATP)</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>© 2026 AGEBATP — UGEL 03. Todos los derechos reservados.</p>
+        <p><a href="/politica-privacidad.html">Política de Privacidad</a> | <a href="/">Volver al sistema</a></p>
+    </div>
+
+    <script>
+        document.getElementById('reclamacionForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Enviando...';
+
+            // Generar número de registro
+            const regNum = 'REC-' + Date.now().toString().slice(-8);
+
+            setTimeout(function() {
+                document.getElementById('reclamacionForm').style.display = 'none';
+                document.getElementById('regNumber').textContent = regNum;
+                document.getElementById('successMsg').style.display = 'block';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }, 1500);
+        });
+    </script>
+</body>
+</html>
