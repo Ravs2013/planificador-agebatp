@@ -6,38 +6,43 @@
 export function calcularSLA(fechaLimite) {
     if (!fechaLimite) return 'normal';
 
-    const end = new Date(fechaLimite + 'T18:00:00'); // Asumimos fin del dia laboral
-    const now = new Date();
+    try {
+        const end = new Date(fechaLimite + 'T18:00:00');
+        if (isNaN(end.getTime())) return 'normal';
+        const now = new Date();
 
-    if (now <= end) {
-        return 'normal';
-    }
+        if (now <= end) {
+            return 'normal';
+        }
 
-    // Pasó la fecha límite, calculamos horas hábiles de retraso
-    let delayHours = 0;
-    let current = new Date(end);
+        // Pasó la fecha límite, calculamos horas hábiles de retraso
+        // Safeguard: max 5000 iterations (~200 business days) to prevent browser freeze
+        let delayHours = 0;
+        let current = new Date(end);
+        let iterations = 0;
+        const MAX_ITERATIONS = 5000;
 
-    while (current < now) {
-        current.setHours(current.getHours() + 1);
+        while (current < now && iterations < MAX_ITERATIONS) {
+            current.setHours(current.getHours() + 1);
+            iterations++;
 
-        // Si la hora evaluada está dentro de horario laboral (8 a 18) y no es fin de semana
-        const day = current.getDay();
-        const isWeekend = day === 0 || day === 6; // 0: Sunday, 6: Saturday
-        const hour = current.getHours();
+            const day = current.getDay();
+            const isWeekend = day === 0 || day === 6;
+            const hour = current.getHours();
 
-        if (!isWeekend && hour >= 8 && hour < 18) {
-            if (current <= now) {
-                delayHours++;
+            if (!isWeekend && hour >= 8 && hour < 18) {
+                if (current <= now) {
+                    delayHours++;
+                }
             }
         }
-    }
 
-    // Reglas:
-    // - Retraso hasta 48 horas hábiles: warning (amarillo)
-    // - Retraso mayor a 48 horas hábiles: danger (rojo)
-    if (delayHours > 48) {
-        return 'danger';
-    } else {
-        return 'warning';
+        if (delayHours > 48) {
+            return 'danger';
+        } else {
+            return 'warning';
+        }
+    } catch {
+        return 'normal';
     }
 }

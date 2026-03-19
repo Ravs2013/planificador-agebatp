@@ -616,6 +616,7 @@ export default function App() {
                             </div>
                         )}
                         {expedientes.filter(e => e.categoria === viewExpedientes).map(e => {
+                            try {
                             const diasR = e.fechaVencimiento ? calcularDiasRestantes(e.fechaVencimiento) : null;
                             const isDRELM = e.origen === 'DRELM' || (e.asunto && e.asunto.toUpperCase().includes('DRELM'));
                             const expProgress = expEvidenceMap[e.id] ? 100 : 0;
@@ -629,6 +630,7 @@ export default function App() {
                                         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                                             {expProgress >= 100 && <span style={S.badge('#F0FDF4', '#15803D', '#BBF7D0')}>EVIDENCIA ✓</span>}
                                             {(() => {
+                                                try {
                                                 if (!e.fechaVencimiento) return null;
                                                 const sla = calcularSLA(e.fechaVencimiento);
                                                 const bg = sla === 'danger' ? '#FEF2F2' : sla === 'warning' ? '#FFFBEB' : '#F0FDF4';
@@ -636,6 +638,7 @@ export default function App() {
                                                 const border = sla === 'danger' ? '#FECACA' : sla === 'warning' ? '#FDE68A' : '#BBF7D0';
                                                 const text = sla === 'danger' ? 'RETRASO CRITICO' : sla === 'warning' ? 'VENCIDO' : (diasR !== null ? (diasR <= 3 && diasR > 0 ? `Vence en ${diasR} dias` : `${diasR} dias restantes`) : 'EN PLAZO');
                                                 return <span style={S.badge(bg, fg, border)}>{text}</span>;
+                                                } catch { return null; }
                                             })()}
                                         </div>
                                     </div>
@@ -648,6 +651,7 @@ export default function App() {
                                     </div>
                                 </div>
                             );
+                            } catch (err) { console.warn('Error rendering expediente:', e?.id, err); return null; }
                         })}
                         {expedientes.filter(ex => ex.categoria === viewExpedientes).length === 0 && (
                             <div style={{ textAlign: 'center', padding: 30, color: '#94A3B8', fontSize: 13 }}>No hay expedientes en esta categoria. Usa "+ Nuevo Expediente" para agregar o espera la sincronizacion desde Sheets.</div>
@@ -791,21 +795,53 @@ export default function App() {
                         </div>
                         {selectedActivity.description && <div style={{ fontSize: 13, color: '#475569', marginBottom: 20, lineHeight: 1.7, padding: 14, background: '#F8FAFC', borderRadius: 6, border: '1px solid #E8ECF3' }}>{selectedActivity.description}</div>}
                         <div style={{ marginBottom: 20 }}>
-                            <div style={S.label}>Avance de la Actividad (Automático vía Evidencia)</div>
+                            <div style={S.label}>Avance de la Actividad (Evidencia o Checklist)</div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                                 <div style={{ flex: 1, height: 10, background: '#F1F5F9', borderRadius: 5, overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 5, width: `${selectedActivity.progress}%`, background: selectedActivity.progress < 30 ? '#B91C1C' : selectedActivity.progress < 70 ? '#B45309' : '#15803D' }} /></div>
                                 <span style={{ fontFamily: "'JetBrains Mono'", fontWeight: 700, fontSize: 18 }}>{selectedActivity.progress}%</span>
                             </div>
-                            <div style={{ fontSize: 10, color: '#64748B', marginTop: 6 }}>* El progreso aumenta un {selectedActivity.actions?.length > 0 ? Math.round(100 / Math.max(1, selectedActivity.actions.length)) : 25}% por cada evidencia subida ({selectedActivity.actions?.length > 0 ? selectedActivity.actions.length : 4} evidencia(s) para 100%).</div>
+                            <div style={{ fontSize: 10, color: '#64748B', marginTop: 6 }}>* El progreso aumenta un {selectedActivity.actions?.length > 0 ? Math.round(100 / Math.max(1, selectedActivity.actions.length)) : 25}% por cada acción completada (checklist o evidencia). {selectedActivity.actions?.length > 0 ? selectedActivity.actions.length : 4} acción(es) para 100%.</div>
                         </div>
                         <div style={{ marginBottom: 20 }}>
                             <div style={S.label}>Personal Asignado</div>
                             {selectedActivity.assigned.map(id => { const s = STAFF.find(x => x.id === id); return s ? <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #E8ECF3' }}><div style={{ width: 32, height: 32, borderRadius: 6, background: '#1B3A5C', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 10 }}>{s.initials}</div><div><div style={{ fontSize: 13, fontWeight: 700, color: '#122240' }}>{s.name}</div><div style={{ fontSize: 11, color: '#64748B' }}>{s.role}</div></div></div> : null; })}
                         </div>
                         {selectedActivity.actions?.length > 0 && (
-                            <div>
-                                <div style={S.label}>Acciones Estrategicas</div>
-                                {selectedActivity.actions.map((action, idx) => <div key={idx} style={{ display: 'flex', gap: 10, padding: '8px 0', fontSize: 13, borderBottom: '1px solid #E8ECF3', color: '#334155' }}><span style={{ fontFamily: "'JetBrains Mono'", fontWeight: 700, color: '#1E4D7B', fontSize: 12, minWidth: 24 }}>{String(idx + 1).padStart(2, '0')}</span>{action}</div>)}
+                            <div style={{ marginBottom: 20 }}>
+                                <div style={{ ...S.label, display: 'flex', alignItems: 'center', gap: 6 }}>Acciones Estrategicas — Checklist <span style={{ fontSize: 9, background: '#1E4D7B', color: 'white', padding: '1px 6px', borderRadius: 3 }}>Click para completar</span></div>
+                                {selectedActivity.actions.map((action, idx) => {
+                                    const checkedActions = JSON.parse(localStorage.getItem(`agebatp_checklist_${selectedActivity.id}`) || '[]');
+                                    const isChecked = checkedActions.includes(idx);
+                                    return <div key={idx} onClick={(ev) => {
+                                        ev.stopPropagation();
+                                        const current = JSON.parse(localStorage.getItem(`agebatp_checklist_${selectedActivity.id}`) || '[]');
+                                        let updated;
+                                        if (current.includes(idx)) {
+                                            updated = current.filter(i => i !== idx);
+                                        } else {
+                                            updated = [...current, idx];
+                                        }
+                                        localStorage.setItem(`agebatp_checklist_${selectedActivity.id}`, JSON.stringify(updated));
+                                        // Recalculate progress: max(checklist%, evidence%)
+                                        const totalAcciones = selectedActivity.actions.length;
+                                        const checklistCount = updated.length;
+                                        const evidenceCount = existingEvidence.length;
+                                        const maxCompleted = Math.max(checklistCount, evidenceCount);
+                                        const nuevoProgreso = Math.min(100, Math.round((maxCompleted / totalAcciones) * 100));
+                                        // Update in activities state
+                                        setActivities(prev => prev.map(a => a.id === selectedActivity.id ? { ...a, progress: nuevoProgreso } : a));
+                                        // Also persist in localStorage override
+                                        const overrides = JSON.parse(localStorage.getItem('agebatp_progress_override') || '{}');
+                                        overrides[selectedActivity.id] = nuevoProgreso;
+                                        localStorage.setItem('agebatp_progress_override', JSON.stringify(overrides));
+                                        // Force re-render of the modal
+                                        setSelectedActivity(prev => ({...prev, progress: nuevoProgreso}));
+                                    }} style={{ display: 'flex', gap: 10, padding: '10px 8px', fontSize: 13, borderBottom: '1px solid #E8ECF3', color: isChecked ? '#15803D' : '#334155', cursor: 'pointer', background: isChecked ? '#F0FDF4' : 'transparent', borderRadius: 4, transition: 'all 0.15s', alignItems: 'center' }}>
+                                        <div style={{ width: 22, height: 22, borderRadius: 4, border: `2px solid ${isChecked ? '#15803D' : '#CBD5E1'}`, background: isChecked ? '#15803D' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>{isChecked && <span style={{ color: 'white', fontSize: 14, fontWeight: 700, lineHeight: 1 }}>✓</span>}</div>
+                                        <span style={{ fontFamily: "'JetBrains Mono'", fontWeight: 700, color: '#1E4D7B', fontSize: 12, minWidth: 24, flexShrink: 0 }}>{String(idx + 1).padStart(2, '0')}</span>
+                                        <span style={{ textDecoration: isChecked ? 'line-through' : 'none', opacity: isChecked ? 0.7 : 1 }}>{action}</span>
+                                    </div>;
+                                })}
                             </div>
                         )}
                         {/* Evidence Upload Section */}
@@ -813,7 +849,7 @@ export default function App() {
                             <div style={{ marginTop: 20, paddingTop: 16, borderTop: '2px solid #F1F5F9' }}>
                                 <div style={{ ...S.label, display: 'flex', alignItems: 'center', gap: 6 }}>
                                     <Icon name="upload" size={14} color="#1E4D7B" />
-                                    Subir Evidencia de Avance <span style={{ fontSize: 9, background: '#B91C1C', color: 'white', padding: '1px 5px', borderRadius: 3, marginLeft: 4 }}>OBLIGATORIO</span>
+                                    Subir Evidencia de Avance <span style={{ fontSize: 9, background: '#1E4D7B', color: 'white', padding: '1px 5px', borderRadius: 3, marginLeft: 4 }}>OPCIONAL</span>
                                 </div>
                                 <FileAttachment
                                     files={evidenceFiles}
