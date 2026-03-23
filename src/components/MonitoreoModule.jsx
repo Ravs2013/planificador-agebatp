@@ -18,7 +18,11 @@ const C = {
     bg: "#F5F6FA",
     red: "#B91C1C", amber: "#B45309", green: "#15803D",
     white: "#FFFFFF",
+    /* Produccion Real — colores de desglose */
+    realNavy: "#1E4D7B", indigo: "#4338CA", teal: "#0F766E", docAmber: "#B45309", slate: "#475569",
 };
+
+const DOC_COLORS = { informes: "#4338CA", oficios: "#0F766E", oficiosMultiples: "#B45309", memorandums: "#475569" };
 
 /* ═══════════════════════════════════════════════════════════
    ICONOS SVG
@@ -35,6 +39,7 @@ const I = {
     download: (sz, cl) => <SvgIcon size={sz} color={cl}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></SvgIcon>,
     plus: (sz, cl) => <SvgIcon size={sz} color={cl}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></SvgIcon>,
     edit: (sz, cl) => <SvgIcon size={sz} color={cl}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></SvgIcon>,
+    pen: (sz, cl) => <SvgIcon size={sz} color={cl}><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" /></SvgIcon>,
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -136,12 +141,9 @@ export default function MonitoreoModule() {
     const [formWeek, setFormWeek] = useState(getCurrentWeek());
     const [weeklyData, setWeeklyData] = useState(loadSemanal());
     const [acumuladoData, setAcumuladoData] = useState(loadAcumulado());
-    const [formEntries, setFormEntries] = useState(
-        PERSONAL.map(p => ({ personId: p.id, procesados: "", pendientes: "" }))
-    );
-    const [editEntries, setEditEntries] = useState(
-        PERSONAL.map(p => ({ personId: p.id, procesados: "", pendientes: "" }))
-    );
+    const emptyEntry = (id) => ({ personId: id, procesados: "", pendientes: "", informes: "", oficios: "", oficiosMultiples: "", memorandums: "" });
+    const [formEntries, setFormEntries] = useState(PERSONAL.map(p => emptyEntry(p.id)));
+    const [editEntries, setEditEntries] = useState(PERSONAL.map(p => emptyEntry(p.id)));
     const [toast, setToast] = useState(null);
     const [exporting, setExporting] = useState(false);
     const chartRef = useRef(null);
@@ -153,47 +155,47 @@ export default function MonitoreoModule() {
 
     /* ── Guardar avance semanal ── */
     const handleSaveWeekly = () => {
-        const entries = formEntries.filter(e => e.procesados !== "" || e.pendientes !== "");
+        const entries = formEntries.filter(e => e.procesados !== "" || e.pendientes !== "" || e.informes !== "" || e.oficios !== "" || e.oficiosMultiples !== "" || e.memorandums !== "");
         if (entries.length === 0) { showToast("Ingrese al menos un dato", "error"); return; }
 
-        const newData = [...weeklyData];
-        // Remove existing entries for this week
-        const filtered = newData.filter(d => d.semana !== formWeek);
+        const filtered = weeklyData.filter(d => d.semana !== formWeek);
 
         entries.forEach(e => {
             const person = PERSONAL.find(p => p.id === e.personId);
+            const inf = parseInt(e.informes) || 0;
+            const ofi = parseInt(e.oficios) || 0;
+            const ofm = parseInt(e.oficiosMultiples) || 0;
+            const mem = parseInt(e.memorandums) || 0;
             filtered.push({
-                semana: formWeek,
-                personId: e.personId,
-                nombre: person.nombre,
-                shortName: person.shortName,
-                rol: person.rol,
-                tipo: person.tipo,
-                procesados: parseInt(e.procesados) || 0,
-                pendientes: parseInt(e.pendientes) || 0,
+                semana: formWeek, personId: e.personId, nombre: person.nombre,
+                shortName: person.shortName, rol: person.rol, tipo: person.tipo,
+                procesados: parseInt(e.procesados) || 0, pendientes: parseInt(e.pendientes) || 0,
+                informes: inf, oficios: ofi, oficiosMultiples: ofm, memorandums: mem,
+                totalReal: inf + ofi + ofm + mem,
             });
         });
 
         saveSemanal(filtered);
         setWeeklyData(filtered);
-
-        // Recalculate cumulative
         recalcAcumulado(filtered);
-
         setShowForm(false);
-        setFormEntries(PERSONAL.map(p => ({ personId: p.id, procesados: "", pendientes: "" })));
+        setFormEntries(PERSONAL.map(p => emptyEntry(p.id)));
         showToast(`Avance de ${formatWeek(formWeek)} guardado correctamente`);
     };
 
     /* ── Recalcular acumulado ── */
     const recalcAcumulado = useCallback((data) => {
         const acc = {};
-        PERSONAL.forEach(p => { acc[p.id] = { procesados: 0, pendientes: 0 }; });
+        PERSONAL.forEach(p => { acc[p.id] = { procesados: 0, pendientes: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 }; });
         data.forEach(d => {
-            if (!acc[d.personId]) acc[d.personId] = { procesados: 0, pendientes: 0 };
+            if (!acc[d.personId]) acc[d.personId] = { procesados: 0, pendientes: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 };
             acc[d.personId].procesados += d.procesados;
+            acc[d.personId].informes += (d.informes || 0);
+            acc[d.personId].oficios += (d.oficios || 0);
+            acc[d.personId].oficiosMultiples += (d.oficiosMultiples || 0);
+            acc[d.personId].memorandums += (d.memorandums || 0);
+            acc[d.personId].totalReal += (d.totalReal || 0);
         });
-        // For pendientes, use the latest week's pending value
         const weeksSorted = [...new Set(data.map(d => d.semana))].sort();
         if (weeksSorted.length > 0) {
             const latestWeek = weeksSorted[weeksSorted.length - 1];
@@ -201,7 +203,6 @@ export default function MonitoreoModule() {
                 if (acc[d.personId]) acc[d.personId].pendientes = d.pendientes;
             });
         }
-        // Merge with existing acumulado (keep manual overrides)
         const existing = loadAcumulado();
         Object.keys(acc).forEach(id => {
             if (existing[id]?.pendientesManual !== undefined) {
@@ -218,12 +219,14 @@ export default function MonitoreoModule() {
         const updated = { ...acumuladoData };
         editEntries.forEach(e => {
             const id = e.personId;
-            if (!updated[id]) updated[id] = { procesados: 0, pendientes: 0 };
+            if (!updated[id]) updated[id] = { procesados: 0, pendientes: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 };
             if (e.procesados !== "") updated[id].procesados = parseInt(e.procesados) || 0;
-            if (e.pendientes !== "") {
-                updated[id].pendientes = parseInt(e.pendientes) || 0;
-                updated[id].pendientesManual = parseInt(e.pendientes) || 0;
-            }
+            if (e.pendientes !== "") { updated[id].pendientes = parseInt(e.pendientes) || 0; updated[id].pendientesManual = parseInt(e.pendientes) || 0; }
+            if (e.informes !== "") updated[id].informes = parseInt(e.informes) || 0;
+            if (e.oficios !== "") updated[id].oficios = parseInt(e.oficios) || 0;
+            if (e.oficiosMultiples !== "") updated[id].oficiosMultiples = parseInt(e.oficiosMultiples) || 0;
+            if (e.memorandums !== "") updated[id].memorandums = parseInt(e.memorandums) || 0;
+            updated[id].totalReal = (updated[id].informes || 0) + (updated[id].oficios || 0) + (updated[id].oficiosMultiples || 0) + (updated[id].memorandums || 0);
         });
         saveAcumulado(updated);
         setAcumuladoData(updated);
@@ -264,17 +267,19 @@ export default function MonitoreoModule() {
     const kpis = useMemo(() => {
         const totalProcSemana = weekData.reduce((s, d) => s + d.procesados, 0);
         const totalPendSemana = weekData.reduce((s, d) => s + d.pendientes, 0);
+        const totalRealSemana = weekData.reduce((s, d) => s + (d.totalReal || 0), 0);
         const totalProcAcum = Object.values(acumuladoData).reduce((s, d) => s + (d.procesados || 0), 0);
         const totalPendAcum = Object.values(acumuladoData).reduce((s, d) => s + (d.pendientes || 0), 0);
-        return { totalProcSemana, totalPendSemana, totalProcAcum, totalPendAcum, semanasRegistradas: allWeeks.length };
+        const totalRealAcum = Object.values(acumuladoData).reduce((s, d) => s + (d.totalReal || 0), 0);
+        return { totalProcSemana, totalPendSemana, totalRealSemana, totalProcAcum, totalPendAcum, totalRealAcum, semanasRegistradas: allWeeks.length };
     }, [weekData, acumuladoData, allWeeks]);
 
     /* ── Chart data para la vista semanal ── */
     const barDataSemanal = useMemo(() => {
         return weekData.map(d => ({
-            nombre: d.shortName + (d.rol === "oficinista" ? " ✦" : ""),
-            Procesados: d.procesados,
-            Pendientes: d.pendientes,
+            nombre: d.shortName + (d.rol === "oficinista" ? " *" : ""),
+            "E-SINAD": d.procesados, "Prod. Real": d.totalReal || 0, Pendientes: d.pendientes,
+            Informes: d.informes || 0, Oficios: d.oficios || 0, "Of. Multiples": d.oficiosMultiples || 0, Memorandums: d.memorandums || 0,
         }));
     }, [weekData]);
 
@@ -283,9 +288,16 @@ export default function MonitoreoModule() {
         return allWeeks.map(w => {
             const wd = weeklyData.filter(d => d.semana === w);
             const entry = { semana: `S${parseInt(w.split("-W")[1])}` };
-            wd.forEach(d => {
-                entry[d.shortName + (d.rol === "oficinista" ? " ✦" : "")] = d.procesados;
-            });
+            wd.forEach(d => { entry[d.shortName + (d.rol === "oficinista" ? " *" : "")] = d.procesados; });
+            return entry;
+        });
+    }, [allWeeks, weeklyData]);
+
+    const trendDataReal = useMemo(() => {
+        return allWeeks.map(w => {
+            const wd = weeklyData.filter(d => d.semana === w);
+            const entry = { semana: `S${parseInt(w.split("-W")[1])}` };
+            wd.forEach(d => { entry[d.shortName + (d.rol === "oficinista" ? " *" : "")] = d.totalReal || 0; });
             return entry;
         });
     }, [allWeeks, weeklyData]);
@@ -293,11 +305,11 @@ export default function MonitoreoModule() {
     /* ── Chart data para acumulado ── */
     const barDataAcumulado = useMemo(() => {
         return PERSONAL.map(p => {
-            const data = acumuladoData[p.id] || { procesados: 0, pendientes: 0 };
+            const d = acumuladoData[p.id] || { procesados: 0, pendientes: 0, totalReal: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0 };
             return {
-                nombre: p.shortName + (p.rol === "oficinista" ? " ✦" : ""),
-                Procesados: data.procesados,
-                Pendientes: data.pendientes,
+                nombre: p.shortName + (p.rol === "oficinista" ? " *" : ""),
+                "E-SINAD": d.procesados, "Prod. Real": d.totalReal || 0, Pendientes: d.pendientes,
+                Informes: d.informes || 0, Oficios: d.oficios || 0, "Of. Multiples": d.oficiosMultiples || 0, Memorandums: d.memorandums || 0,
             };
         });
     }, [acumuladoData]);
@@ -310,9 +322,19 @@ export default function MonitoreoModule() {
             const wd = weeklyData.filter(d => d.semana === w);
             wd.forEach(d => { cumulative[d.personId] = (cumulative[d.personId] || 0) + d.procesados; });
             const entry = { semana: `S${parseInt(w.split("-W")[1])}` };
-            PERSONAL.forEach(p => {
-                entry[p.shortName + (p.rol === "oficinista" ? " ✦" : "")] = cumulative[p.id] || 0;
-            });
+            PERSONAL.forEach(p => { entry[p.shortName + (p.rol === "oficinista" ? " *" : "")] = cumulative[p.id] || 0; });
+            return entry;
+        });
+    }, [allWeeks, weeklyData]);
+
+    const cumulativeTrendDataReal = useMemo(() => {
+        const cumulative = {};
+        PERSONAL.forEach(p => { cumulative[p.id] = 0; });
+        return allWeeks.map(w => {
+            const wd = weeklyData.filter(d => d.semana === w);
+            wd.forEach(d => { cumulative[d.personId] = (cumulative[d.personId] || 0) + (d.totalReal || 0); });
+            const entry = { semana: `S${parseInt(w.split("-W")[1])}` };
+            PERSONAL.forEach(p => { entry[p.shortName + (p.rol === "oficinista" ? " *" : "")] = cumulative[p.id] || 0; });
             return entry;
         });
     }, [allWeeks, weeklyData]);
@@ -327,19 +349,19 @@ export default function MonitoreoModule() {
         const existing = weeklyData.filter(d => d.semana === formWeek);
         if (existing.length > 0) {
             setFormEntries(PERSONAL.map(p => {
-                const found = existing.find(e => e.personId === p.id);
-                return { personId: p.id, procesados: found ? String(found.procesados) : "", pendientes: found ? String(found.pendientes) : "" };
+                const f = existing.find(e => e.personId === p.id);
+                return f ? { personId: p.id, procesados: String(f.procesados), pendientes: String(f.pendientes), informes: String(f.informes || 0), oficios: String(f.oficios || 0), oficiosMultiples: String(f.oficiosMultiples || 0), memorandums: String(f.memorandums || 0) } : emptyEntry(p.id);
             }));
         } else {
-            setFormEntries(PERSONAL.map(p => ({ personId: p.id, procesados: "", pendientes: "" })));
+            setFormEntries(PERSONAL.map(p => emptyEntry(p.id)));
         }
         setShowForm(true);
     };
 
     const openEditAcumulado = () => {
         setEditEntries(PERSONAL.map(p => {
-            const data = acumuladoData[p.id] || { procesados: 0, pendientes: 0 };
-            return { personId: p.id, procesados: String(data.procesados), pendientes: String(data.pendientes) };
+            const d = acumuladoData[p.id] || { procesados: 0, pendientes: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0 };
+            return { personId: p.id, procesados: String(d.procesados), pendientes: String(d.pendientes), informes: String(d.informes || 0), oficios: String(d.oficios || 0), oficiosMultiples: String(d.oficiosMultiples || 0), memorandums: String(d.memorandums || 0) };
         }));
         setShowEditAcumulado(true);
     };
@@ -385,10 +407,12 @@ export default function MonitoreoModule() {
             </div>
 
             {/* KPIs */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14, marginBottom: 24 }}>
-                <StatCard icon={I.file(20, C.navy4)} label="Procesados (Semana)" value={kpis.totalProcSemana.toLocaleString()} sub={weekData.length > 0 ? formatWeek(selectedWeek) : "Sin datos"} border={C.navy4} />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 24 }}>
+                <StatCard icon={I.file(20, C.navy4)} label="E-SINAD (Semana)" value={kpis.totalProcSemana.toLocaleString()} sub={weekData.length > 0 ? formatWeek(selectedWeek) : "Sin datos"} border={C.navy4} />
+                <StatCard icon={I.pen(20, C.realNavy)} label="Prod. Real (Semana)" value={kpis.totalRealSemana.toLocaleString()} sub="Documentos redactados" border={C.realNavy} />
                 <StatCard icon={I.clock(20, C.amber)} label="Pendientes (Semana)" value={kpis.totalPendSemana.toLocaleString()} sub="En la semana seleccionada" border={C.amber} />
-                <StatCard icon={I.check(20, C.green)} label="Procesados (Acumulado)" value={kpis.totalProcAcum.toLocaleString()} sub="Desde inicio del año" border={C.green} />
+                <StatCard icon={I.check(20, C.green)} label="E-SINAD (Acumulado)" value={kpis.totalProcAcum.toLocaleString()} sub="Desde inicio del año" border={C.green} />
+                <StatCard icon={I.pen(20, C.indigo)} label="Prod. Real (Acumulado)" value={kpis.totalRealAcum.toLocaleString()} sub="Total documentos redactados" border={C.indigo} />
                 <StatCard icon={I.trend(20, C.red)} label="Pendientes (Acumulado)" value={kpis.totalPendAcum.toLocaleString()} sub="Total actual pendiente" border={C.red} />
             </div>
 
@@ -409,48 +433,67 @@ export default function MonitoreoModule() {
 
                         {weekData.length === 0 ? (
                             <div style={{ ...card, textAlign: "center", padding: 60 }}>
-                                <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
-                                <h3 style={{ color: C.navy1, fontSize: "1.2rem", margin: "0 0 8px", fontFamily: "'DM Serif Display',serif" }}>Sin datos para esta semana</h3>
-                                <p style={{ color: C.g500, fontSize: "0.85rem", fontFamily: "'DM Sans'" }}>Usa el botón <strong>"Registrar Avance Semanal"</strong> para ingresar los datos de procesados y pendientes.</p>
+                                {I.file(48, C.g300)}
+                                <h3 style={{ color: C.navy1, fontSize: "1.2rem", margin: "16px 0 8px", fontFamily: "'DM Serif Display',serif" }}>Sin datos para esta semana</h3>
+                                <p style={{ color: C.g500, fontSize: "0.85rem", fontFamily: "'DM Sans'" }}>Usa el boton <strong>"Registrar Avance Semanal"</strong> para ingresar los datos.</p>
                             </div>
                         ) : (
-                            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
-                                <div style={card}>
-                                    <h3 style={h3s}>Procesados vs Pendientes — {formatWeek(selectedWeek)}</h3>
-                                    <ResponsiveContainer width="100%" height={300}>
-                                        <BarChart data={barDataSemanal} barGap={4}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 11, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 12, fontFamily: "'DM Sans'" }} /><Bar dataKey="Procesados" fill={C.green} radius={[4, 4, 0, 0]} /><Bar dataKey="Pendientes" fill={C.red} radius={[4, 4, 0, 0]} /></BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-                                <div style={card}>
-                                    <h3 style={h3s}>Estado General — Semana</h3>
-                                    <ResponsiveContainer width="100%" height={220}>
-                                        <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value"><Cell fill={C.green} /><Cell fill={C.red} /></Pie><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 12, fontFamily: "'DM Sans'" }} /></PieChart>
-                                    </ResponsiveContainer>
-                                    <div style={{ display: "flex", justifyContent: "center", gap: 30, marginTop: 10 }}>
-                                        <div style={{ textAlign: "center" }}><p style={{ color: C.green, fontSize: "1.5rem", fontFamily: "'DM Serif Display'" }}>{kpis.totalProcSemana + kpis.totalPendSemana > 0 ? Math.round(kpis.totalProcSemana / (kpis.totalProcSemana + kpis.totalPendSemana) * 100) : 0}%</p><p style={{ color: C.g500, fontSize: "0.72rem", fontFamily: "'DM Sans'" }}>Resolución</p></div>
-                                        <div style={{ textAlign: "center" }}><p style={{ color: C.navy4, fontSize: "1.5rem", fontFamily: "'DM Serif Display'" }}>{weekData.length}</p><p style={{ color: C.g500, fontSize: "0.72rem", fontFamily: "'DM Sans'" }}>Personas</p></div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
+                                {/* Fila 1: Barras principales + Pie */}
+                                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
+                                    <div style={card}>
+                                        <h3 style={h3s}>E-SINAD vs Prod. Real vs Pendientes — {formatWeek(selectedWeek)}</h3>
+                                        <ResponsiveContainer width="100%" height={300}>
+                                            <BarChart data={barDataSemanal} barGap={4}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="E-SINAD" fill={C.green} radius={[4, 4, 0, 0]} /><Bar dataKey="Prod. Real" fill={C.realNavy} radius={[4, 4, 0, 0]} /><Bar dataKey="Pendientes" fill={C.red} radius={[4, 4, 0, 0]} /></BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                    <div style={card}>
+                                        <h3 style={h3s}>Estado General — Semana</h3>
+                                        <ResponsiveContainer width="100%" height={200}>
+                                            <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value"><Cell fill={C.green} /><Cell fill={C.red} /></Pie><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /></PieChart>
+                                        </ResponsiveContainer>
+                                        <div style={{ display: "flex", justifyContent: "center", gap: 20, marginTop: 8 }}>
+                                            <div style={{ textAlign: "center" }}><p style={{ color: C.green, fontSize: "1.3rem", fontFamily: "'DM Serif Display'", margin: 0 }}>{kpis.totalProcSemana + kpis.totalPendSemana > 0 ? Math.round(kpis.totalProcSemana / (kpis.totalProcSemana + kpis.totalPendSemana) * 100) : 0}%</p><p style={{ color: C.g500, fontSize: "0.68rem", fontFamily: "'DM Sans'", margin: 0 }}>Resolucion</p></div>
+                                            <div style={{ textAlign: "center" }}><p style={{ color: C.realNavy, fontSize: "1.3rem", fontFamily: "'DM Serif Display'", margin: 0 }}>{kpis.totalProcSemana > 0 ? Math.round(kpis.totalRealSemana / kpis.totalProcSemana * 100) : 0}%</p><p style={{ color: C.g500, fontSize: "0.68rem", fontFamily: "'DM Sans'", margin: 0 }}>Eficiencia Real</p></div>
+                                            <div style={{ textAlign: "center" }}><p style={{ color: C.navy4, fontSize: "1.3rem", fontFamily: "'DM Serif Display'", margin: 0 }}>{weekData.length}</p><p style={{ color: C.g500, fontSize: "0.68rem", fontFamily: "'DM Sans'", margin: 0 }}>Personas</p></div>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Tabla detallada de la semana */}
-                                <div style={{ gridColumn: "1 / -1", ...card, padding: 0, overflow: "hidden" }}>
+                                {/* Fila 2: Desglose de Produccion Real */}
+                                <div style={card}>
+                                    <h3 style={h3s}>Desglose Produccion Real — {formatWeek(selectedWeek)}</h3>
+                                    <ResponsiveContainer width="100%" height={280}>
+                                        <BarChart data={barDataSemanal} barGap={2}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="Informes" stackId="real" fill={DOC_COLORS.informes} radius={[0, 0, 0, 0]} /><Bar dataKey="Oficios" stackId="real" fill={DOC_COLORS.oficios} /><Bar dataKey="Of. Multiples" stackId="real" fill={DOC_COLORS.oficiosMultiples} /><Bar dataKey="Memorandums" stackId="real" fill={DOC_COLORS.memorandums} radius={[4, 4, 0, 0]} /></BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+
+                                {/* Tabla detallada */}
+                                <div style={{ ...card, padding: 0, overflow: "auto" }}>
                                     <div style={{ padding: "14px 18px", background: `${C.navy5}08`, borderBottom: `2px solid ${C.navy5}25` }}>
                                         <h3 style={{ color: C.navy1, fontSize: "1rem", margin: 0, fontFamily: "'DM Serif Display',serif" }}>Detalle {formatWeek(selectedWeek)}</h3>
                                     </div>
-                                    <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 80px 100px 100px 60px", padding: "12px 18px", gap: 10, borderBottom: `2px solid ${C.g200}`, background: C.g50 }}>
-                                        {["#", "Nombre", "Rol", "Procesados", "Pendientes", "Tipo"].map(h => <p key={h} style={{ color: C.g500, fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", margin: 0, fontFamily: "'DM Sans'", textAlign: h === "#" || h === "Nombre" ? "left" : "center" }}>{h}</p>)}
-                                    </div>
-                                    {weekData.map((d, i) => (
-                                        <div key={d.personId} style={{ display: "grid", gridTemplateColumns: "36px 1fr 80px 100px 100px 60px", alignItems: "center", padding: "14px 18px", gap: 10, borderBottom: `1px solid ${C.g100}`, transition: "background 0.15s" }}
-                                            onMouseEnter={e => e.currentTarget.style.background = C.g50} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                            <div style={{ width: 30, height: 30, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: `${C.gold2}18`, color: C.gold1, fontWeight: 700, fontSize: "0.82rem", fontFamily: "'JetBrains Mono'" }}>{i + 1}</div>
-                                            <div><p style={{ color: C.navy1, fontWeight: 600, fontSize: "0.87rem", margin: 0, fontFamily: "'DM Sans'" }}>{d.nombre}</p></div>
-                                            <p style={{ textAlign: "center", color: C.g600, fontSize: "0.75rem", margin: 0, fontFamily: "'DM Sans'", textTransform: "capitalize" }}>{d.rol}</p>
-                                            <p style={{ textAlign: "center", color: C.green, fontWeight: 700, fontSize: "0.95rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{d.procesados}</p>
-                                            <p style={{ textAlign: "center", color: d.pendientes > 20 ? C.red : C.amber, fontWeight: 700, fontSize: "0.95rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{d.pendientes}</p>
-                                            <p style={{ textAlign: "center", fontSize: "0.7rem", margin: 0, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: d.tipo === "EBA" ? C.navy5 : d.tipo === "ETP" ? C.gold1 : C.g500 }}>{d.tipo}</p>
+                                    <div style={{ overflowX: "auto" }}>
+                                        <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 70px 85px 85px 65px 65px 65px 65px 75px 50px", padding: "10px 14px", gap: 6, borderBottom: `2px solid ${C.g200}`, background: C.g50, minWidth: 820 }}>
+                                            {["#", "Nombre", "Rol", "E-SINAD", "Pendientes", "Inf.", "Ofi.", "Of.M.", "Memo.", "Total Real", "Tipo"].map(h => <p key={h} style={{ color: C.g500, fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, fontFamily: "'DM Sans'", textAlign: h === "#" || h === "Nombre" ? "left" : "center" }}>{h}</p>)}
                                         </div>
-                                    ))}
+                                        {weekData.map((d, i) => (
+                                            <div key={d.personId} style={{ display: "grid", gridTemplateColumns: "32px 1fr 70px 85px 85px 65px 65px 65px 65px 75px 50px", alignItems: "center", padding: "12px 14px", gap: 6, borderBottom: `1px solid ${C.g100}`, transition: "background 0.15s", minWidth: 820 }}
+                                                onMouseEnter={e => e.currentTarget.style.background = C.g50} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                                                <div style={{ width: 26, height: 26, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: `${C.gold2}18`, color: C.gold1, fontWeight: 700, fontSize: "0.75rem", fontFamily: "'JetBrains Mono'" }}>{i + 1}</div>
+                                                <div><p style={{ color: C.navy1, fontWeight: 600, fontSize: "0.82rem", margin: 0, fontFamily: "'DM Sans'" }}>{d.nombre}</p></div>
+                                                <p style={{ textAlign: "center", color: C.g600, fontSize: "0.7rem", margin: 0, fontFamily: "'DM Sans'", textTransform: "capitalize" }}>{d.rol}</p>
+                                                <p style={{ textAlign: "center", color: C.green, fontWeight: 700, fontSize: "0.88rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{d.procesados}</p>
+                                                <p style={{ textAlign: "center", color: d.pendientes > 20 ? C.red : C.amber, fontWeight: 700, fontSize: "0.88rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{d.pendientes}</p>
+                                                <p style={{ textAlign: "center", color: DOC_COLORS.informes, fontWeight: 600, fontSize: "0.82rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{d.informes || 0}</p>
+                                                <p style={{ textAlign: "center", color: DOC_COLORS.oficios, fontWeight: 600, fontSize: "0.82rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{d.oficios || 0}</p>
+                                                <p style={{ textAlign: "center", color: DOC_COLORS.oficiosMultiples, fontWeight: 600, fontSize: "0.82rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{d.oficiosMultiples || 0}</p>
+                                                <p style={{ textAlign: "center", color: DOC_COLORS.memorandums, fontWeight: 600, fontSize: "0.82rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{d.memorandums || 0}</p>
+                                                <p style={{ textAlign: "center", color: C.realNavy, fontWeight: 700, fontSize: "0.88rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{d.totalReal || 0}</p>
+                                                <p style={{ textAlign: "center", fontSize: "0.65rem", margin: 0, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: d.tipo === "EBA" ? C.navy5 : d.tipo === "ETP" ? C.gold1 : C.g500 }}>{d.tipo}</p>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -472,51 +515,68 @@ export default function MonitoreoModule() {
 
                         {Object.keys(acumuladoData).length === 0 ? (
                             <div style={{ ...card, textAlign: "center", padding: 60 }}>
-                                <div style={{ fontSize: 48, marginBottom: 16 }}>📈</div>
-                                <h3 style={{ color: C.navy1, fontSize: "1.2rem", margin: "0 0 8px", fontFamily: "'DM Serif Display',serif" }}>Sin datos acumulados</h3>
-                                <p style={{ color: C.g500, fontSize: "0.85rem", fontFamily: "'DM Sans'" }}>Registra avances semanales para ver el acumulado aquí.</p>
+                                {I.trend(48, C.g300)}
+                                <h3 style={{ color: C.navy1, fontSize: "1.2rem", margin: "16px 0 8px", fontFamily: "'DM Serif Display',serif" }}>Sin datos acumulados</h3>
+                                <p style={{ color: C.g500, fontSize: "0.85rem", fontFamily: "'DM Sans'" }}>Registra avances semanales para ver el acumulado aqui.</p>
                             </div>
                         ) : (
-                            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
-                                <div style={card}>
-                                    <h3 style={h3s}>Procesados vs Pendientes — Acumulado {new Date().getFullYear()}</h3>
-                                    <ResponsiveContainer width="100%" height={300}>
-                                        <BarChart data={barDataAcumulado} barGap={4}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 11, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 12, fontFamily: "'DM Sans'" }} /><Bar dataKey="Procesados" fill={C.green} radius={[4, 4, 0, 0]} /><Bar dataKey="Pendientes" fill={C.red} radius={[4, 4, 0, 0]} /></BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-                                <div style={card}>
-                                    <h3 style={h3s}>Estado General — Acumulado</h3>
-                                    <ResponsiveContainer width="100%" height={220}>
-                                        <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value"><Cell fill={C.green} /><Cell fill={C.red} /></Pie><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 12, fontFamily: "'DM Sans'" }} /></PieChart>
-                                    </ResponsiveContainer>
-                                    <div style={{ display: "flex", justifyContent: "center", gap: 30, marginTop: 10 }}>
-                                        <div style={{ textAlign: "center" }}><p style={{ color: C.green, fontSize: "1.5rem", fontFamily: "'DM Serif Display'" }}>{kpis.totalProcAcum + kpis.totalPendAcum > 0 ? Math.round(kpis.totalProcAcum / (kpis.totalProcAcum + kpis.totalPendAcum) * 100) : 0}%</p><p style={{ color: C.g500, fontSize: "0.72rem", fontFamily: "'DM Sans'" }}>Resolución</p></div>
-                                        <div style={{ textAlign: "center" }}><p style={{ color: C.navy4, fontSize: "1.5rem", fontFamily: "'DM Serif Display'" }}>{PERSONAL.length}</p><p style={{ color: C.g500, fontSize: "0.72rem", fontFamily: "'DM Sans'" }}>Personal</p></div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
+                                    <div style={card}>
+                                        <h3 style={h3s}>E-SINAD vs Prod. Real vs Pendientes — Acumulado {new Date().getFullYear()}</h3>
+                                        <ResponsiveContainer width="100%" height={300}>
+                                            <BarChart data={barDataAcumulado} barGap={4}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="E-SINAD" fill={C.green} radius={[4, 4, 0, 0]} /><Bar dataKey="Prod. Real" fill={C.realNavy} radius={[4, 4, 0, 0]} /><Bar dataKey="Pendientes" fill={C.red} radius={[4, 4, 0, 0]} /></BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                    <div style={card}>
+                                        <h3 style={h3s}>Estado General — Acumulado</h3>
+                                        <ResponsiveContainer width="100%" height={200}>
+                                            <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value"><Cell fill={C.green} /><Cell fill={C.red} /></Pie><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /></PieChart>
+                                        </ResponsiveContainer>
+                                        <div style={{ display: "flex", justifyContent: "center", gap: 20, marginTop: 8 }}>
+                                            <div style={{ textAlign: "center" }}><p style={{ color: C.green, fontSize: "1.3rem", fontFamily: "'DM Serif Display'", margin: 0 }}>{kpis.totalProcAcum + kpis.totalPendAcum > 0 ? Math.round(kpis.totalProcAcum / (kpis.totalProcAcum + kpis.totalPendAcum) * 100) : 0}%</p><p style={{ color: C.g500, fontSize: "0.68rem", fontFamily: "'DM Sans'", margin: 0 }}>Resolucion</p></div>
+                                            <div style={{ textAlign: "center" }}><p style={{ color: C.realNavy, fontSize: "1.3rem", fontFamily: "'DM Serif Display'", margin: 0 }}>{kpis.totalProcAcum > 0 ? Math.round(kpis.totalRealAcum / kpis.totalProcAcum * 100) : 0}%</p><p style={{ color: C.g500, fontSize: "0.68rem", fontFamily: "'DM Sans'", margin: 0 }}>Eficiencia Real</p></div>
+                                            <div style={{ textAlign: "center" }}><p style={{ color: C.navy4, fontSize: "1.3rem", fontFamily: "'DM Serif Display'", margin: 0 }}>{PERSONAL.length}</p><p style={{ color: C.g500, fontSize: "0.68rem", fontFamily: "'DM Sans'", margin: 0 }}>Personal</p></div>
+                                        </div>
                                     </div>
                                 </div>
 
+                                <div style={card}>
+                                    <h3 style={h3s}>Desglose Produccion Real — Acumulado {new Date().getFullYear()}</h3>
+                                    <ResponsiveContainer width="100%" height={280}>
+                                        <BarChart data={barDataAcumulado} barGap={2}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="Informes" stackId="real" fill={DOC_COLORS.informes} /><Bar dataKey="Oficios" stackId="real" fill={DOC_COLORS.oficios} /><Bar dataKey="Of. Multiples" stackId="real" fill={DOC_COLORS.oficiosMultiples} /><Bar dataKey="Memorandums" stackId="real" fill={DOC_COLORS.memorandums} radius={[4, 4, 0, 0]} /></BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+
                                 {/* Tabla acumulado */}
-                                <div style={{ gridColumn: "1 / -1", ...card, padding: 0, overflow: "hidden" }}>
+                                <div style={{ ...card, padding: 0, overflow: "auto" }}>
                                     <div style={{ padding: "14px 18px", background: `${C.green}08`, borderBottom: `2px solid ${C.green}25` }}>
                                         <h3 style={{ color: C.navy1, fontSize: "1rem", margin: 0, fontFamily: "'DM Serif Display',serif" }}>Detalle Acumulado — Año {new Date().getFullYear()}</h3>
                                     </div>
-                                    <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 80px 110px 110px 60px", padding: "12px 18px", gap: 10, borderBottom: `2px solid ${C.g200}`, background: C.g50 }}>
-                                        {["#", "Nombre", "Rol", "Total Procesados", "Total Pendientes", "Tipo"].map(h => <p key={h} style={{ color: C.g500, fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", margin: 0, fontFamily: "'DM Sans'", textAlign: h === "#" || h === "Nombre" ? "left" : "center" }}>{h}</p>)}
+                                    <div style={{ overflowX: "auto" }}>
+                                        <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 70px 85px 85px 65px 65px 65px 65px 75px 50px", padding: "10px 14px", gap: 6, borderBottom: `2px solid ${C.g200}`, background: C.g50, minWidth: 820 }}>
+                                            {["#", "Nombre", "Rol", "E-SINAD", "Pendientes", "Inf.", "Ofi.", "Of.M.", "Memo.", "Total Real", "Tipo"].map(h => <p key={h} style={{ color: C.g500, fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, fontFamily: "'DM Sans'", textAlign: h === "#" || h === "Nombre" ? "left" : "center" }}>{h}</p>)}
+                                        </div>
+                                        {PERSONAL.map((p, i) => {
+                                            const ad = acumuladoData[p.id] || { procesados: 0, pendientes: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 };
+                                            return (
+                                                <div key={p.id} style={{ display: "grid", gridTemplateColumns: "32px 1fr 70px 85px 85px 65px 65px 65px 65px 75px 50px", alignItems: "center", padding: "12px 14px", gap: 6, borderBottom: `1px solid ${C.g100}`, transition: "background 0.15s", minWidth: 820 }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = C.g50} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                                                    <div style={{ width: 26, height: 26, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: `${C.gold2}18`, color: C.gold1, fontWeight: 700, fontSize: "0.75rem", fontFamily: "'JetBrains Mono'" }}>{i + 1}</div>
+                                                    <div><p style={{ color: C.navy1, fontWeight: 600, fontSize: "0.82rem", margin: 0, fontFamily: "'DM Sans'" }}>{p.nombre}</p></div>
+                                                    <p style={{ textAlign: "center", color: C.g600, fontSize: "0.7rem", margin: 0, fontFamily: "'DM Sans'", textTransform: "capitalize" }}>{p.rol}</p>
+                                                    <p style={{ textAlign: "center", color: C.green, fontWeight: 700, fontSize: "0.88rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{ad.procesados}</p>
+                                                    <p style={{ textAlign: "center", color: ad.pendientes > 20 ? C.red : C.amber, fontWeight: 700, fontSize: "0.88rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{ad.pendientes}</p>
+                                                    <p style={{ textAlign: "center", color: DOC_COLORS.informes, fontWeight: 600, fontSize: "0.82rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{ad.informes || 0}</p>
+                                                    <p style={{ textAlign: "center", color: DOC_COLORS.oficios, fontWeight: 600, fontSize: "0.82rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{ad.oficios || 0}</p>
+                                                    <p style={{ textAlign: "center", color: DOC_COLORS.oficiosMultiples, fontWeight: 600, fontSize: "0.82rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{ad.oficiosMultiples || 0}</p>
+                                                    <p style={{ textAlign: "center", color: DOC_COLORS.memorandums, fontWeight: 600, fontSize: "0.82rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{ad.memorandums || 0}</p>
+                                                    <p style={{ textAlign: "center", color: C.realNavy, fontWeight: 700, fontSize: "0.88rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{ad.totalReal || 0}</p>
+                                                    <p style={{ textAlign: "center", fontSize: "0.65rem", margin: 0, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: p.tipo === "EBA" ? C.navy5 : p.tipo === "ETP" ? C.gold1 : C.g500 }}>{p.tipo}</p>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
-                                    {PERSONAL.map((p, i) => {
-                                        const data = acumuladoData[p.id] || { procesados: 0, pendientes: 0 };
-                                        return (
-                                            <div key={p.id} style={{ display: "grid", gridTemplateColumns: "36px 1fr 80px 110px 110px 60px", alignItems: "center", padding: "14px 18px", gap: 10, borderBottom: `1px solid ${C.g100}`, transition: "background 0.15s" }}
-                                                onMouseEnter={e => e.currentTarget.style.background = C.g50} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                                <div style={{ width: 30, height: 30, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: `${C.gold2}18`, color: C.gold1, fontWeight: 700, fontSize: "0.82rem", fontFamily: "'JetBrains Mono'" }}>{i + 1}</div>
-                                                <div><p style={{ color: C.navy1, fontWeight: 600, fontSize: "0.87rem", margin: 0, fontFamily: "'DM Sans'" }}>{p.nombre}</p></div>
-                                                <p style={{ textAlign: "center", color: C.g600, fontSize: "0.75rem", margin: 0, fontFamily: "'DM Sans'", textTransform: "capitalize" }}>{p.rol}</p>
-                                                <p style={{ textAlign: "center", color: C.green, fontWeight: 700, fontSize: "1rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{data.procesados}</p>
-                                                <p style={{ textAlign: "center", color: data.pendientes > 20 ? C.red : C.amber, fontWeight: 700, fontSize: "1rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{data.pendientes}</p>
-                                                <p style={{ textAlign: "center", fontSize: "0.7rem", margin: 0, fontWeight: 700, fontFamily: "'JetBrains Mono'", color: p.tipo === "EBA" ? C.navy5 : p.tipo === "ETP" ? C.gold1 : C.g500 }}>{p.tipo}</p>
-                                            </div>
-                                        );
-                                    })}
                                 </div>
                             </div>
                         )}
@@ -525,38 +585,68 @@ export default function MonitoreoModule() {
 
                 {/* ──── VISTA TENDENCIA SEMANAL ──── */}
                 {view === "tendencia" && (
-                    <div style={card}>
-                        <h3 style={h3s}>Tendencia Semanal de Procesamiento</h3>
-                        <p style={{ color: C.g500, fontSize: "0.78rem", margin: "0 0 6px", fontFamily: "'DM Sans'" }}>Expedientes procesados por semana ({allWeeks.length} semanas registradas)</p>
-                        <p style={{ color: C.g400, fontSize: "0.7rem", margin: "0 0 18px", fontFamily: "'DM Sans'" }}>✦ = Oficinista (asignación/revisión)</p>
-                        {allWeeks.length === 0 ? (
-                            <div style={{ textAlign: "center", padding: 40, color: C.g400, fontSize: "0.9rem" }}>Sin datos. Registra avances semanales para ver la tendencia.</div>
-                        ) : (
-                            <>
-                            <ResponsiveContainer width="100%" height={380}>
-                                <AreaChart data={trendData}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="semana" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'JetBrains Mono'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} />
-                                    {PERSONAL.map((p, idx) => {
-                                        const key = p.shortName + (p.rol === "oficinista" ? " ✦" : "");
-                                        const isOfic = p.rol === "oficinista";
-                                        return <Area key={key} type="monotone" dataKey={key} stroke={SPEC_COLORS[idx % SPEC_COLORS.length]} fill={`${SPEC_COLORS[idx % SPEC_COLORS.length]}15`} strokeWidth={isOfic ? 1.5 : 2} strokeDasharray={isOfic ? "5 3" : undefined} />;
-                                    })}
-                                </AreaChart>
-                            </ResponsiveContainer>
-                            {/* Cumulative trend */}
-                            <div style={{ marginTop: 30 }}>
-                                <h3 style={h3s}>Tendencia Acumulativa Semanal</h3>
-                                <p style={{ color: C.g500, fontSize: "0.78rem", margin: "0 0 18px", fontFamily: "'DM Sans'" }}>Total acumulado de procesados semana a semana</p>
-                                <ResponsiveContainer width="100%" height={380}>
-                                    <AreaChart data={cumulativeTrendData}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="semana" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'JetBrains Mono'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} />
+                    <div style={{ display: "grid", gap: 20 }}>
+                        <div style={card}>
+                            <h3 style={h3s}>Tendencia Semanal — E-SINAD (Procesados)</h3>
+                            <p style={{ color: C.g500, fontSize: "0.78rem", margin: "0 0 6px", fontFamily: "'DM Sans'" }}>Expedientes procesados por semana ({allWeeks.length} semanas registradas)</p>
+                            <p style={{ color: C.g400, fontSize: "0.7rem", margin: "0 0 18px", fontFamily: "'DM Sans'" }}>* = Oficinista</p>
+                            {allWeeks.length === 0 ? (
+                                <div style={{ textAlign: "center", padding: 40, color: C.g400, fontSize: "0.9rem" }}>Sin datos. Registra avances semanales para ver la tendencia.</div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height={340}>
+                                    <AreaChart data={trendData}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="semana" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'JetBrains Mono'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} />
                                         {PERSONAL.map((p, idx) => {
-                                            const key = p.shortName + (p.rol === "oficinista" ? " ✦" : "");
-                                            const isOfic = p.rol === "oficinista";
-                                            return <Area key={key} type="monotone" dataKey={key} stroke={SPEC_COLORS[idx % SPEC_COLORS.length]} fill={`${SPEC_COLORS[idx % SPEC_COLORS.length]}15`} strokeWidth={isOfic ? 1.5 : 2} strokeDasharray={isOfic ? "5 3" : undefined} />;
+                                            const key = p.shortName + (p.rol === "oficinista" ? " *" : "");
+                                            return <Area key={key} type="monotone" dataKey={key} stroke={SPEC_COLORS[idx % SPEC_COLORS.length]} fill={`${SPEC_COLORS[idx % SPEC_COLORS.length]}15`} strokeWidth={p.rol === "oficinista" ? 1.5 : 2} strokeDasharray={p.rol === "oficinista" ? "5 3" : undefined} />;
+                                        })}
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            )}
+                        </div>
+
+                        {allWeeks.length > 0 && (
+                            <div style={card}>
+                                <h3 style={h3s}>Tendencia Semanal — Produccion Real</h3>
+                                <p style={{ color: C.g500, fontSize: "0.78rem", margin: "0 0 18px", fontFamily: "'DM Sans'" }}>Documentos efectivamente redactados por semana</p>
+                                <ResponsiveContainer width="100%" height={340}>
+                                    <AreaChart data={trendDataReal}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="semana" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'JetBrains Mono'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} />
+                                        {PERSONAL.map((p, idx) => {
+                                            const key = p.shortName + (p.rol === "oficinista" ? " *" : "");
+                                            return <Area key={key} type="monotone" dataKey={key} stroke={SPEC_COLORS[idx % SPEC_COLORS.length]} fill={`${SPEC_COLORS[idx % SPEC_COLORS.length]}15`} strokeWidth={p.rol === "oficinista" ? 1.5 : 2} strokeDasharray={p.rol === "oficinista" ? "5 3" : undefined} />;
                                         })}
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
-                            </>
+                        )}
+
+                        {allWeeks.length > 0 && (
+                            <div style={card}>
+                                <h3 style={h3s}>Tendencia Acumulativa — E-SINAD</h3>
+                                <p style={{ color: C.g500, fontSize: "0.78rem", margin: "0 0 18px", fontFamily: "'DM Sans'" }}>Total acumulado de procesados semana a semana</p>
+                                <ResponsiveContainer width="100%" height={340}>
+                                    <AreaChart data={cumulativeTrendData}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="semana" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'JetBrains Mono'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} />
+                                        {PERSONAL.map((p, idx) => {
+                                            const key = p.shortName + (p.rol === "oficinista" ? " *" : "");
+                                            return <Area key={key} type="monotone" dataKey={key} stroke={SPEC_COLORS[idx % SPEC_COLORS.length]} fill={`${SPEC_COLORS[idx % SPEC_COLORS.length]}15`} strokeWidth={p.rol === "oficinista" ? 1.5 : 2} strokeDasharray={p.rol === "oficinista" ? "5 3" : undefined} />;
+                                        })}
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
+
+                        {allWeeks.length > 0 && (
+                            <div style={card}>
+                                <h3 style={h3s}>Tendencia Acumulativa — Produccion Real</h3>
+                                <p style={{ color: C.g500, fontSize: "0.78rem", margin: "0 0 18px", fontFamily: "'DM Sans'" }}>Total acumulado de documentos redactados semana a semana</p>
+                                <ResponsiveContainer width="100%" height={340}>
+                                    <AreaChart data={cumulativeTrendDataReal}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="semana" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'JetBrains Mono'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} />
+                                        {PERSONAL.map((p, idx) => {
+                                            const key = p.shortName + (p.rol === "oficinista" ? " *" : "");
+                                            return <Area key={key} type="monotone" dataKey={key} stroke={SPEC_COLORS[idx % SPEC_COLORS.length]} fill={`${SPEC_COLORS[idx % SPEC_COLORS.length]}15`} strokeWidth={p.rol === "oficinista" ? 1.5 : 2} strokeDasharray={p.rol === "oficinista" ? "5 3" : undefined} />;
+                                        })}
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
                         )}
                     </div>
                 )}
@@ -565,32 +655,41 @@ export default function MonitoreoModule() {
             {/* ──── MODAL: REGISTRAR AVANCE SEMANAL ──── */}
             {showForm && (
                 <div style={{ position: "fixed", inset: 0, background: "rgba(12,25,41,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(4px)" }} onClick={() => setShowForm(false)}>
-                    <div style={{ background: C.white, borderRadius: 12, padding: 28, width: "95%", maxWidth: 700, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.2)", animation: "fadeIn 0.2s ease" }} onClick={e => e.stopPropagation()}>
+                    <div style={{ background: C.white, borderRadius: 12, padding: 28, width: "95%", maxWidth: 900, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.2)", animation: "fadeIn 0.2s ease" }} onClick={e => e.stopPropagation()}>
                         <h3 style={{ color: C.navy1, fontSize: "1.25rem", margin: "0 0 6px", fontFamily: "'DM Serif Display',serif" }}>Registrar Avance Semanal</h3>
-                        <p style={{ color: C.g500, fontSize: "0.82rem", margin: "0 0 20px", fontFamily: "'DM Sans'" }}>Ingrese los procesados y pendientes de cada persona para la semana seleccionada.</p>
+                        <p style={{ color: C.g500, fontSize: "0.82rem", margin: "0 0 20px", fontFamily: "'DM Sans'" }}>Ingrese los datos E-SINAD y la produccion real (documentos redactados) para cada persona.</p>
 
                         <div style={{ marginBottom: 20 }}>
                             <label style={labelStyle}>Semana</label>
                             <input type="week" value={formWeek} onChange={e => { setFormWeek(e.target.value); }} style={{ ...inputStyle, maxWidth: 240 }} />
                         </div>
 
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 120px", gap: "8px 12px", marginBottom: 24 }}>
-                            <p style={{ ...labelStyle, margin: 0 }}>Personal</p>
-                            <p style={{ ...labelStyle, margin: 0, textAlign: "center" }}>Procesados</p>
-                            <p style={{ ...labelStyle, margin: 0, textAlign: "center" }}>Pendientes</p>
-                            {PERSONAL.map((p, idx) => (
-                                <>
-                                    <div key={`n-${p.id}`} style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 4 }}>
+                        {PERSONAL.map((p, idx) => {
+                            const e = formEntries[idx] || {};
+                            const totalR = (parseInt(e.informes) || 0) + (parseInt(e.oficios) || 0) + (parseInt(e.oficiosMultiples) || 0) + (parseInt(e.memorandums) || 0);
+                            const upd = (field, val) => { const ne = [...formEntries]; ne[idx] = { ...ne[idx], [field]: val }; setFormEntries(ne); };
+                            return (
+                                <div key={p.id} style={{ marginBottom: 16, border: `1px solid ${C.g200}`, borderRadius: 8, overflow: "hidden" }}>
+                                    <div style={{ padding: "8px 14px", background: C.g50, display: "flex", alignItems: "center", gap: 8 }}>
                                         <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.06em", fontFamily: "'JetBrains Mono'", background: p.tipo === "EBA" ? `${C.navy5}15` : p.tipo === "ETP" ? `${C.gold2}15` : `${C.g500}15`, color: p.tipo === "EBA" ? C.navy5 : p.tipo === "ETP" ? C.gold1 : C.g600 }}>{p.tipo === "-" ? "OFIC" : p.tipo}</span>
-                                        <span style={{ fontSize: "0.85rem", color: C.navy1, fontWeight: 500, fontFamily: "'DM Sans'" }}>{p.shortName}</span>
+                                        <span style={{ fontSize: "0.88rem", color: C.navy1, fontWeight: 600, fontFamily: "'DM Sans'" }}>{p.shortName}</span>
                                     </div>
-                                    <input key={`p-${p.id}`} type="number" min="0" placeholder="0" value={formEntries[idx]?.procesados ?? ""} onChange={e => { const ne = [...formEntries]; ne[idx] = { ...ne[idx], procesados: e.target.value }; setFormEntries(ne); }} style={{ ...inputStyle, textAlign: "center" }} />
-                                    <input key={`d-${p.id}`} type="number" min="0" placeholder="0" value={formEntries[idx]?.pendientes ?? ""} onChange={e => { const ne = [...formEntries]; ne[idx] = { ...ne[idx], pendientes: e.target.value }; setFormEntries(ne); }} style={{ ...inputStyle, textAlign: "center" }} />
-                                </>
-                            ))}
-                        </div>
+                                    <div style={{ padding: "10px 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px" }}>
+                                        <div style={{ gridColumn: "1 / -1", paddingBottom: 2 }}><span style={{ fontSize: "0.65rem", fontWeight: 700, color: C.green, textTransform: "uppercase", fontFamily: "'DM Sans'", letterSpacing: "0.06em" }}>E-SINAD</span></div>
+                                        <div><label style={{ ...labelStyle, fontSize: 10 }}>Procesados</label><input type="number" min="0" placeholder="0" value={e.procesados ?? ""} onChange={ev => upd("procesados", ev.target.value)} style={{ ...inputStyle, textAlign: "center" }} /></div>
+                                        <div><label style={{ ...labelStyle, fontSize: 10 }}>Pendientes</label><input type="number" min="0" placeholder="0" value={e.pendientes ?? ""} onChange={ev => upd("pendientes", ev.target.value)} style={{ ...inputStyle, textAlign: "center" }} /></div>
+                                        <div style={{ gridColumn: "1 / -1", paddingTop: 8, paddingBottom: 2, borderTop: `1px solid ${C.g100}` }}><span style={{ fontSize: "0.65rem", fontWeight: 700, color: C.realNavy, textTransform: "uppercase", fontFamily: "'DM Sans'", letterSpacing: "0.06em" }}>Produccion Real</span></div>
+                                        <div><label style={{ ...labelStyle, fontSize: 10, color: DOC_COLORS.informes }}>Informes</label><input type="number" min="0" placeholder="0" value={e.informes ?? ""} onChange={ev => upd("informes", ev.target.value)} style={{ ...inputStyle, textAlign: "center", borderColor: `${DOC_COLORS.informes}40` }} /></div>
+                                        <div><label style={{ ...labelStyle, fontSize: 10, color: DOC_COLORS.oficios }}>Oficios</label><input type="number" min="0" placeholder="0" value={e.oficios ?? ""} onChange={ev => upd("oficios", ev.target.value)} style={{ ...inputStyle, textAlign: "center", borderColor: `${DOC_COLORS.oficios}40` }} /></div>
+                                        <div><label style={{ ...labelStyle, fontSize: 10, color: DOC_COLORS.oficiosMultiples }}>Oficios Multiples</label><input type="number" min="0" placeholder="0" value={e.oficiosMultiples ?? ""} onChange={ev => upd("oficiosMultiples", ev.target.value)} style={{ ...inputStyle, textAlign: "center", borderColor: `${DOC_COLORS.oficiosMultiples}40` }} /></div>
+                                        <div><label style={{ ...labelStyle, fontSize: 10, color: DOC_COLORS.memorandums }}>Memorandums</label><input type="number" min="0" placeholder="0" value={e.memorandums ?? ""} onChange={ev => upd("memorandums", ev.target.value)} style={{ ...inputStyle, textAlign: "center", borderColor: `${DOC_COLORS.memorandums}40` }} /></div>
+                                        <div style={{ gridColumn: "1 / -1", textAlign: "right", paddingTop: 4 }}><span style={{ fontSize: "0.72rem", fontWeight: 700, color: C.realNavy, fontFamily: "'JetBrains Mono'" }}>Total Real: {totalR}</span></div>
+                                    </div>
+                                </div>
+                            );
+                        })}
 
-                        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
                             <button onClick={() => setShowForm(false)} style={{ padding: "8px 20px", borderRadius: 8, border: `1px solid ${C.g200}`, background: C.white, color: C.g600, cursor: "pointer", fontSize: "0.82rem", fontWeight: 600, fontFamily: "'DM Sans'" }}>Cancelar</button>
                             <button onClick={handleSaveWeekly} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: C.green, color: C.white, cursor: "pointer", fontSize: "0.82rem", fontWeight: 700, fontFamily: "'DM Sans'" }}>Guardar Avance</button>
                         </div>
@@ -601,27 +700,36 @@ export default function MonitoreoModule() {
             {/* ──── MODAL: EDITAR ACUMULADO ──── */}
             {showEditAcumulado && (
                 <div style={{ position: "fixed", inset: 0, background: "rgba(12,25,41,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(4px)" }} onClick={() => setShowEditAcumulado(false)}>
-                    <div style={{ background: C.white, borderRadius: 12, padding: 28, width: "95%", maxWidth: 700, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.2)", animation: "fadeIn 0.2s ease" }} onClick={e => e.stopPropagation()}>
+                    <div style={{ background: C.white, borderRadius: 12, padding: 28, width: "95%", maxWidth: 900, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.2)", animation: "fadeIn 0.2s ease" }} onClick={e => e.stopPropagation()}>
                         <h3 style={{ color: C.navy1, fontSize: "1.25rem", margin: "0 0 6px", fontFamily: "'DM Serif Display',serif" }}>Actualizar Acumulado Anual</h3>
-                        <p style={{ color: C.g500, fontSize: "0.82rem", margin: "0 0 20px", fontFamily: "'DM Sans'" }}>Aquí puede corregir/actualizar los totales acumulados de procesados y pendientes de todo el año.</p>
+                        <p style={{ color: C.g500, fontSize: "0.82rem", margin: "0 0 20px", fontFamily: "'DM Sans'" }}>Corrija o actualice los totales acumulados E-SINAD y produccion real de todo el año.</p>
 
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 130px 130px", gap: "8px 12px", marginBottom: 24 }}>
-                            <p style={{ ...labelStyle, margin: 0 }}>Personal</p>
-                            <p style={{ ...labelStyle, margin: 0, textAlign: "center" }}>Total Procesados</p>
-                            <p style={{ ...labelStyle, margin: 0, textAlign: "center" }}>Total Pendientes</p>
-                            {PERSONAL.map((p, idx) => (
-                                <>
-                                    <div key={`n-${p.id}`} style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 4 }}>
+                        {PERSONAL.map((p, idx) => {
+                            const e = editEntries[idx] || {};
+                            const totalR = (parseInt(e.informes) || 0) + (parseInt(e.oficios) || 0) + (parseInt(e.oficiosMultiples) || 0) + (parseInt(e.memorandums) || 0);
+                            const upd = (field, val) => { const ne = [...editEntries]; ne[idx] = { ...ne[idx], [field]: val }; setEditEntries(ne); };
+                            return (
+                                <div key={p.id} style={{ marginBottom: 16, border: `1px solid ${C.g200}`, borderRadius: 8, overflow: "hidden" }}>
+                                    <div style={{ padding: "8px 14px", background: C.g50, display: "flex", alignItems: "center", gap: 8 }}>
                                         <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.06em", fontFamily: "'JetBrains Mono'", background: p.tipo === "EBA" ? `${C.navy5}15` : p.tipo === "ETP" ? `${C.gold2}15` : `${C.g500}15`, color: p.tipo === "EBA" ? C.navy5 : p.tipo === "ETP" ? C.gold1 : C.g600 }}>{p.tipo === "-" ? "OFIC" : p.tipo}</span>
-                                        <span style={{ fontSize: "0.85rem", color: C.navy1, fontWeight: 500, fontFamily: "'DM Sans'" }}>{p.shortName}</span>
+                                        <span style={{ fontSize: "0.88rem", color: C.navy1, fontWeight: 600, fontFamily: "'DM Sans'" }}>{p.shortName}</span>
                                     </div>
-                                    <input key={`p-${p.id}`} type="number" min="0" value={editEntries[idx]?.procesados ?? ""} onChange={e => { const ne = [...editEntries]; ne[idx] = { ...ne[idx], procesados: e.target.value }; setEditEntries(ne); }} style={{ ...inputStyle, textAlign: "center" }} />
-                                    <input key={`d-${p.id}`} type="number" min="0" value={editEntries[idx]?.pendientes ?? ""} onChange={e => { const ne = [...editEntries]; ne[idx] = { ...ne[idx], pendientes: e.target.value }; setEditEntries(ne); }} style={{ ...inputStyle, textAlign: "center" }} />
-                                </>
-                            ))}
-                        </div>
+                                    <div style={{ padding: "10px 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px" }}>
+                                        <div style={{ gridColumn: "1 / -1", paddingBottom: 2 }}><span style={{ fontSize: "0.65rem", fontWeight: 700, color: C.green, textTransform: "uppercase", fontFamily: "'DM Sans'", letterSpacing: "0.06em" }}>E-SINAD</span></div>
+                                        <div><label style={{ ...labelStyle, fontSize: 10 }}>Total Procesados</label><input type="number" min="0" value={e.procesados ?? ""} onChange={ev => upd("procesados", ev.target.value)} style={{ ...inputStyle, textAlign: "center" }} /></div>
+                                        <div><label style={{ ...labelStyle, fontSize: 10 }}>Total Pendientes</label><input type="number" min="0" value={e.pendientes ?? ""} onChange={ev => upd("pendientes", ev.target.value)} style={{ ...inputStyle, textAlign: "center" }} /></div>
+                                        <div style={{ gridColumn: "1 / -1", paddingTop: 8, paddingBottom: 2, borderTop: `1px solid ${C.g100}` }}><span style={{ fontSize: "0.65rem", fontWeight: 700, color: C.realNavy, textTransform: "uppercase", fontFamily: "'DM Sans'", letterSpacing: "0.06em" }}>Produccion Real</span></div>
+                                        <div><label style={{ ...labelStyle, fontSize: 10, color: DOC_COLORS.informes }}>Informes</label><input type="number" min="0" value={e.informes ?? ""} onChange={ev => upd("informes", ev.target.value)} style={{ ...inputStyle, textAlign: "center", borderColor: `${DOC_COLORS.informes}40` }} /></div>
+                                        <div><label style={{ ...labelStyle, fontSize: 10, color: DOC_COLORS.oficios }}>Oficios</label><input type="number" min="0" value={e.oficios ?? ""} onChange={ev => upd("oficios", ev.target.value)} style={{ ...inputStyle, textAlign: "center", borderColor: `${DOC_COLORS.oficios}40` }} /></div>
+                                        <div><label style={{ ...labelStyle, fontSize: 10, color: DOC_COLORS.oficiosMultiples }}>Oficios Multiples</label><input type="number" min="0" value={e.oficiosMultiples ?? ""} onChange={ev => upd("oficiosMultiples", ev.target.value)} style={{ ...inputStyle, textAlign: "center", borderColor: `${DOC_COLORS.oficiosMultiples}40` }} /></div>
+                                        <div><label style={{ ...labelStyle, fontSize: 10, color: DOC_COLORS.memorandums }}>Memorandums</label><input type="number" min="0" value={e.memorandums ?? ""} onChange={ev => upd("memorandums", ev.target.value)} style={{ ...inputStyle, textAlign: "center", borderColor: `${DOC_COLORS.memorandums}40` }} /></div>
+                                        <div style={{ gridColumn: "1 / -1", textAlign: "right", paddingTop: 4 }}><span style={{ fontSize: "0.72rem", fontWeight: 700, color: C.realNavy, fontFamily: "'JetBrains Mono'" }}>Total Real: {totalR}</span></div>
+                                    </div>
+                                </div>
+                            );
+                        })}
 
-                        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
                             <button onClick={() => setShowEditAcumulado(false)} style={{ padding: "8px 20px", borderRadius: 8, border: `1px solid ${C.g200}`, background: C.white, color: C.g600, cursor: "pointer", fontSize: "0.82rem", fontWeight: 600, fontFamily: "'DM Sans'" }}>Cancelar</button>
                             <button onClick={handleSaveAcumulado} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: C.navy4, color: C.white, cursor: "pointer", fontSize: "0.82rem", fontWeight: 700, fontFamily: "'DM Sans'" }}>Guardar Acumulado</button>
                         </div>
