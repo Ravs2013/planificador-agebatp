@@ -7,6 +7,7 @@ import LoginScreen from './components/LoginScreen';
 import MeetingRequest from './components/MeetingRequest';
 import MonitoreoModule from './components/MonitoreoModule';
 import FileAttachment from './components/FileAttachment';
+import EsinadExpedientes from './components/EsinadExpedientes';
 import { STAFF, calcularDiasRestantes, formatDateDMY, priorityConfig, statusConfig, typeConfig, monthNames, dayNames, getDaysInMonth, getFirstDayOfMonth, fmtDate, todayStr } from './data/constants';
 import { calcularSLA } from './utils/slaCalculator';
 
@@ -583,6 +584,7 @@ export default function App() {
                             {[{ key: 'vencer', label: 'Por Vencer', count: expedientes.filter(e => e.categoria === 'vencer').length }, { key: 'plazo', label: 'Dentro del Plazo', count: expedientes.filter(e => e.categoria === 'plazo').length }, { key: 'elaboracion', label: 'En Elaboracion', count: expedientes.filter(e => e.categoria === 'elaboracion').length }].map(t => (
                                 <button key={t.key} onClick={() => setViewExpedientes(t.key)} style={{ ...S.btn(viewExpedientes === t.key ? '#1B3A5C' : '#FFFFFF', viewExpedientes === t.key ? '#FFFFFF' : '#475569', viewExpedientes === t.key ? '#1B3A5C' : '#D6DCE8') }}>{t.label} <span style={{ minWidth: 22, height: 22, borderRadius: 4, background: viewExpedientes === t.key ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{t.count}</span></button>
                             ))}
+                            <button onClick={() => setViewExpedientes('esinad')} style={{ ...S.btn(viewExpedientes === 'esinad' ? '#1E4D7B' : '#FFFFFF', viewExpedientes === 'esinad' ? '#FFFFFF' : '#1E4D7B', viewExpedientes === 'esinad' ? '#1E4D7B' : '#D6DCE8') }}>E-SINAD Procesados</button>
                             {canCreate && <button onClick={() => setShowAddExpediente(!showAddExpediente)} style={{ ...S.btn('#1B3A5C', '#FFF'), marginLeft: 'auto' }}>{showAddExpediente ? 'Cancelar' : '+ Nuevo Expediente'}</button>}
                         </div>
                         {canCreate && showAddExpediente && (
@@ -615,46 +617,52 @@ export default function App() {
                                 </button>
                             </div>
                         )}
-                        {expedientes.filter(e => e.categoria === viewExpedientes).map(e => {
-                            try {
-                            const diasR = e.fechaVencimiento ? calcularDiasRestantes(e.fechaVencimiento) : null;
-                            const isDRELM = e.origen === 'DRELM' || (e.asunto && e.asunto.toUpperCase().includes('DRELM'));
-                            const expProgress = expEvidenceMap[e.id] ? 100 : 0;
-                            return (
-                                <div key={e.id} onClick={() => setSelectedExpediente(e)} style={{ ...S.card, borderLeft: `4px solid ${isDRELM ? '#7C3AED' : viewExpedientes === 'vencer' ? '#B91C1C' : viewExpedientes === 'plazo' ? '#B45309' : '#1E4D7B'}`, padding: 14, marginBottom: 10, background: isDRELM ? '#F5F3FF' : '#FFFFFF', boxShadow: isDRELM ? '0 0 0 1px #C4B5FD, 0 2px 8px rgba(124,58,237,0.08)' : undefined, cursor: 'pointer' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', flexWrap: 'wrap', gap: 8 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                                            <span style={{ fontFamily: "'JetBrains Mono'", fontSize: 11, color: '#1E4D7B', fontWeight: 600 }}>{e.id}</span>
-                                            {isDRELM && <span style={{ fontSize: 9, fontWeight: 800, color: '#7C3AED', background: '#EDE9FE', border: '1px solid #C4B5FD', padding: '2px 8px', borderRadius: 4, letterSpacing: 0.8 }}>DRELM</span>}
+                        {viewExpedientes === 'esinad' ? (
+                            <EsinadExpedientes />
+                        ) : (
+                            <>
+                            {expedientes.filter(e => e.categoria === viewExpedientes).map(e => {
+                                try {
+                                const diasR = e.fechaVencimiento ? calcularDiasRestantes(e.fechaVencimiento) : null;
+                                const isDRELM = e.origen === 'DRELM' || (e.asunto && e.asunto.toUpperCase().includes('DRELM'));
+                                const expProgress = expEvidenceMap[e.id] ? 100 : 0;
+                                return (
+                                    <div key={e.id} onClick={() => setSelectedExpediente(e)} style={{ ...S.card, borderLeft: `4px solid ${isDRELM ? '#7C3AED' : viewExpedientes === 'vencer' ? '#B91C1C' : viewExpedientes === 'plazo' ? '#B45309' : '#1E4D7B'}`, padding: 14, marginBottom: 10, background: isDRELM ? '#F5F3FF' : '#FFFFFF', boxShadow: isDRELM ? '0 0 0 1px #C4B5FD, 0 2px 8px rgba(124,58,237,0.08)' : undefined, cursor: 'pointer' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', flexWrap: 'wrap', gap: 8 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                                                <span style={{ fontFamily: "'JetBrains Mono'", fontSize: 11, color: '#1E4D7B', fontWeight: 600 }}>{e.id}</span>
+                                                {isDRELM && <span style={{ fontSize: 9, fontWeight: 800, color: '#7C3AED', background: '#EDE9FE', border: '1px solid #C4B5FD', padding: '2px 8px', borderRadius: 4, letterSpacing: 0.8 }}>DRELM</span>}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                                                {expProgress >= 100 && <span style={S.badge('#F0FDF4', '#15803D', '#BBF7D0')}>EVIDENCIA ✓</span>}
+                                                {(() => {
+                                                    try {
+                                                    if (!e.fechaVencimiento) return null;
+                                                    const sla = calcularSLA(e.fechaVencimiento);
+                                                    const bg = sla === 'danger' ? '#FEF2F2' : sla === 'warning' ? '#FFFBEB' : '#F0FDF4';
+                                                    const fg = sla === 'danger' ? '#B91C1C' : sla === 'warning' ? '#B45309' : '#15803D';
+                                                    const border = sla === 'danger' ? '#FECACA' : sla === 'warning' ? '#FDE68A' : '#BBF7D0';
+                                                    const text = sla === 'danger' ? 'RETRASO CRITICO' : sla === 'warning' ? 'VENCIDO' : (diasR !== null ? (diasR <= 3 && diasR > 0 ? `Vence en ${diasR} dias` : `${diasR} dias restantes`) : 'EN PLAZO');
+                                                    return <span style={S.badge(bg, fg, border)}>{text}</span>;
+                                                    } catch { return null; }
+                                                })()}
+                                            </div>
                                         </div>
-                                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                                            {expProgress >= 100 && <span style={S.badge('#F0FDF4', '#15803D', '#BBF7D0')}>EVIDENCIA ✓</span>}
-                                            {(() => {
-                                                try {
-                                                if (!e.fechaVencimiento) return null;
-                                                const sla = calcularSLA(e.fechaVencimiento);
-                                                const bg = sla === 'danger' ? '#FEF2F2' : sla === 'warning' ? '#FFFBEB' : '#F0FDF4';
-                                                const fg = sla === 'danger' ? '#B91C1C' : sla === 'warning' ? '#B45309' : '#15803D';
-                                                const border = sla === 'danger' ? '#FECACA' : sla === 'warning' ? '#FDE68A' : '#BBF7D0';
-                                                const text = sla === 'danger' ? 'RETRASO CRITICO' : sla === 'warning' ? 'VENCIDO' : (diasR !== null ? (diasR <= 3 && diasR > 0 ? `Vence en ${diasR} dias` : `${diasR} dias restantes`) : 'EN PLAZO');
-                                                return <span style={S.badge(bg, fg, border)}>{text}</span>;
-                                                } catch { return null; }
-                                            })()}
+                                        <div style={{ fontSize: 13, fontWeight: 600, color: isDRELM ? '#5B21B6' : '#1E293B', margin: '4px 0' }}>{e.asunto}</div>
+                                        <div style={{ display: 'flex', gap: 16, color: '#64748B', fontSize: 11, flexWrap: 'wrap' }}><span>Especialista: {e.especialista}</span><span>Oficina: {e.oficina}</span>{e.fechaVencimiento && <span>Vencimiento: {formatDateDMY(e.fechaVencimiento)}</span>}</div>
+                                        {/* Progress bar */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                                            <div style={{ flex: 1, height: 6, background: '#F1F5F9', borderRadius: 3, overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 3, width: `${expProgress}%`, background: expProgress >= 100 ? '#15803D' : '#B91C1C', transition: 'width 0.3s' }} /></div>
+                                            <span style={{ fontFamily: "'JetBrains Mono'", fontSize: 12, fontWeight: 600, minWidth: 40, textAlign: 'right', color: expProgress >= 100 ? '#15803D' : '#B91C1C' }}>{expProgress}%</span>
                                         </div>
                                     </div>
-                                    <div style={{ fontSize: 13, fontWeight: 600, color: isDRELM ? '#5B21B6' : '#1E293B', margin: '4px 0' }}>{e.asunto}</div>
-                                    <div style={{ display: 'flex', gap: 16, color: '#64748B', fontSize: 11, flexWrap: 'wrap' }}><span>Especialista: {e.especialista}</span><span>Oficina: {e.oficina}</span>{e.fechaVencimiento && <span>Vencimiento: {formatDateDMY(e.fechaVencimiento)}</span>}</div>
-                                    {/* Progress bar */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
-                                        <div style={{ flex: 1, height: 6, background: '#F1F5F9', borderRadius: 3, overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 3, width: `${expProgress}%`, background: expProgress >= 100 ? '#15803D' : '#B91C1C', transition: 'width 0.3s' }} /></div>
-                                        <span style={{ fontFamily: "'JetBrains Mono'", fontSize: 12, fontWeight: 600, minWidth: 40, textAlign: 'right', color: expProgress >= 100 ? '#15803D' : '#B91C1C' }}>{expProgress}%</span>
-                                    </div>
-                                </div>
-                            );
-                            } catch (err) { console.warn('Error rendering expediente:', e?.id, err); return null; }
-                        })}
-                        {expedientes.filter(ex => ex.categoria === viewExpedientes).length === 0 && (
-                            <div style={{ textAlign: 'center', padding: 30, color: '#94A3B8', fontSize: 13 }}>No hay expedientes en esta categoria. Usa "+ Nuevo Expediente" para agregar o espera la sincronizacion desde Sheets.</div>
+                                );
+                                } catch (err) { console.warn('Error rendering expediente:', e?.id, err); return null; }
+                            })}
+                            {expedientes.filter(ex => ex.categoria === viewExpedientes).length === 0 && (
+                                <div style={{ textAlign: 'center', padding: 30, color: '#94A3B8', fontSize: 13 }}>No hay expedientes en esta categoria. Usa "+ Nuevo Expediente" para agregar o espera la sincronizacion desde Sheets.</div>
+                            )}
+                            </>
                         )}
                     </div>
                 )}
