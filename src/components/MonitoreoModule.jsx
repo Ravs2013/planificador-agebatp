@@ -4,6 +4,7 @@ import {
     PieChart, Pie, Cell, AreaChart, Area
 } from "recharts";
 import html2canvas from "html2canvas";
+import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 
 /* ═══════════════════════════════════════════════════════════
@@ -20,6 +21,7 @@ const C = {
     white: "#FFFFFF",
     /* Produccion Real — colores de desglose */
     realNavy: "#1E4D7B", indigo: "#4338CA", teal: "#0F766E", docAmber: "#B45309", slate: "#475569",
+    purple: "#7C3AED",
 };
 
 const DOC_COLORS = { informes: "#4338CA", oficios: "#0F766E", oficiosMultiples: "#B45309", memorandums: "#475569" };
@@ -40,6 +42,68 @@ const I = {
     plus: (sz, cl) => <SvgIcon size={sz} color={cl}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></SvgIcon>,
     edit: (sz, cl) => <SvgIcon size={sz} color={cl}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></SvgIcon>,
     pen: (sz, cl) => <SvgIcon size={sz} color={cl}><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" /></SvgIcon>,
+};
+
+/* ═══════════════════════════════════════════════════════════
+   E-SINAD HELPERS
+   ═══════════════════════════════════════════════════════════ */
+const ESINAD_LS_SEMANAL = "agebatp_esinad_semanal";
+const ESINAD_LS_ACUMULADO = "agebatp_esinad_acumulado";
+
+const PERSONAL_ESINAD = [
+    { id: 1, fullNames: ["GUTIERREZ SILVA"], shortName: "Gutierrez S.", nombre: "Gutierrez Silva, Liz M.", rol: "oficinista", tipo: "-" },
+    { id: 2, fullNames: ["QUISPE SOLANO"], shortName: "Quispe S.", nombre: "Quispe Solano, Juan A.", rol: "especialista", tipo: "ETP" },
+    { id: 3, fullNames: ["ALBINO IGREDA"], shortName: "Albino I.", nombre: "Albino Igreda, Nelida", rol: "especialista", tipo: "EBA" },
+    { id: 4, fullNames: ["VILLALOBOS GONZALES"], shortName: "Villalobos G.", nombre: "Villalobos Gonzales, Francisco", rol: "especialista", tipo: "ETP" },
+    { id: 5, fullNames: ["VASQUEZ ALIAGA"], shortName: "Vasquez A.", nombre: "Vasquez Aliaga, Lucy A.", rol: "oficinista", tipo: "-" },
+    { id: 6, fullNames: ["CUELLAR CORNELIO"], shortName: "Cuellar C.", nombre: "Cuellar Cornelio, Beronica O.", rol: "oficinista", tipo: "-" },
+];
+
+const SKIP_NAMES = ["NINAMANGO", "FBRC UGEL", "FBRC"];
+
+function matchPerson(excelName) {
+    if (!excelName) return null;
+    const upper = excelName.toUpperCase().trim();
+    if (SKIP_NAMES.some(s => upper.includes(s))) return null;
+    for (const p of PERSONAL_ESINAD) {
+        if (p.fullNames.some(fn => upper.includes(fn))) return p;
+    }
+    return null;
+}
+
+function classifyDoc(tipoDoc) {
+    if (!tipoDoc || typeof tipoDoc !== "string") return null;
+    const t = tipoDoc.trim().toUpperCase();
+    if (t.startsWith("EXPEDIENTE")) return null;
+    if (t.startsWith("INFORME")) return "informes";
+    if (t.startsWith("OFICIO MULT") || t.startsWith("OFICIO MÚLT")) return "oficiosMultiples";
+    if (t.startsWith("OFICIO")) return "oficios";
+    if (t.startsWith("MEMORANDUM") || t.startsWith("MEMORÁNDUM")) return "memorandums";
+    return null;
+}
+
+function catLabel(cat) {
+    if (cat === "informes") return "Informes";
+    if (cat === "oficios") return "Oficios";
+    if (cat === "oficiosMultiples") return "Of. Multiples";
+    if (cat === "memorandums") return "Memorandums";
+    return cat;
+}
+
+function formatExcelDate(val) {
+    if (!val) return "";
+    if (typeof val === "number") {
+        const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+        if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
+    }
+    return String(val).trim();
+}
+
+const IEsinad = {
+    upload: (s = 20, c = C.g500) => <SvgIcon size={s} color={c}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></SvgIcon>,
+    trash: (s = 20, c = C.g500) => <SvgIcon size={s} color={c}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></SvgIcon>,
+    chevDown: (s = 16, c = C.g500) => <SvgIcon size={s} color={c}><polyline points="6 9 12 15 18 9"/></SvgIcon>,
+    chevUp: (s = 16, c = C.g500) => <SvgIcon size={s} color={c}><polyline points="18 15 12 9 6 15"/></SvgIcon>,
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -147,6 +211,17 @@ export default function MonitoreoModule() {
     const [toast, setToast] = useState(null);
     const [exporting, setExporting] = useState(false);
     const chartRef = useRef(null);
+
+    /* ── E-SINAD state ── */
+    const loadEsinadWeeks = () => { try { return JSON.parse(localStorage.getItem(ESINAD_LS_SEMANAL) || "[]"); } catch { return []; } };
+    const [esinadWeeks, setEsinadWeeks] = useState(loadEsinadWeeks);
+    const [esinadSelectedWeek, setEsinadSelectedWeek] = useState(() => { const now = new Date(); const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())); d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7)); const ys = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); const wn = Math.ceil(((d - ys) / 86400000 + 1) / 7); return `${d.getUTCFullYear()}-W${String(wn).padStart(2, "0")}`; });
+    const [esinadViewMode, setEsinadViewMode] = useState("semana");
+    const [esinadExpandedPerson, setEsinadExpandedPerson] = useState(null);
+    const [esinadDragOver, setEsinadDragOver] = useState(false);
+    const [esinadProcessing, setEsinadProcessing] = useState(false);
+    const [esinadError, setEsinadError] = useState("");
+    const esinadFileRef = useRef(null);
 
     const showToast = (msg, type = "success") => {
         setToast({ msg, type });
@@ -396,7 +471,7 @@ export default function MonitoreoModule() {
 
                     {/* Vistas */}
                     <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: `1px solid ${C.g200}` }}>
-                        {[["semanal", "Semanal"], ["acumulado", "Acumulado"], ["tendencia", "Tendencia"]].map(([v, l]) => <button key={v} onClick={() => setView(v)} style={btn(view === v, C.navy3, C.white)}>{l}</button>)}
+                        {[["semanal", "Semanal"], ["acumulado", "Acumulado"], ["tendencia", "Tendencia"], ["esinad", "E-SINAD"]].map(([v, l]) => <button key={v} onClick={() => setView(v)} style={btn(view === v, C.navy3, C.white)}>{l}</button>)}
                     </div>
 
                     {/* Exportar PDF */}
@@ -650,6 +725,289 @@ export default function MonitoreoModule() {
                         )}
                     </div>
                 )}
+
+                {/* ──── VISTA E-SINAD ──── */}
+                {view === "esinad" && (() => {
+                    /* ── E-SINAD persist ── */
+                    const persistEsinad = (weeks) => {
+                        localStorage.setItem(ESINAD_LS_SEMANAL, JSON.stringify(weeks));
+                        const acum = {};
+                        PERSONAL_ESINAD.forEach(p => { acum[p.id] = { procesadosSinad: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 }; });
+                        weeks.forEach(w => { w.personas.forEach(pe => { if (acum[pe.personId]) { acum[pe.personId].procesadosSinad += pe.procesadosSinad || 0; acum[pe.personId].informes += pe.informes || 0; acum[pe.personId].oficios += pe.oficios || 0; acum[pe.personId].oficiosMultiples += pe.oficiosMultiples || 0; acum[pe.personId].memorandums += pe.memorandums || 0; acum[pe.personId].totalReal += pe.totalReal || 0; } }); });
+                        localStorage.setItem(ESINAD_LS_ACUMULADO, JSON.stringify(acum));
+                    };
+
+                    /* ── Process Excel ── */
+                    const processExcel = (file) => {
+                        setEsinadProcessing(true); setEsinadError("");
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                            try {
+                                const data = new Uint8Array(ev.target.result);
+                                const wb = XLSX.read(data, { type: "array" });
+                                const ws = wb.Sheets[wb.SheetNames[0]];
+                                const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+                                let headerIdx = -1;
+                                for (let i = 0; i < Math.min(rows.length, 15); i++) {
+                                    const row = rows[i];
+                                    if (row && row.some(c => String(c).toUpperCase().includes("ESPECIALISTA")) && row.some(c => String(c).toUpperCase().includes("EXPEDIENTE"))) { headerIdx = i; break; }
+                                }
+                                if (headerIdx === -1) { setEsinadError('No se encontro la fila de encabezados (debe contener "Especialista" y "Expediente").'); setEsinadProcessing(false); return; }
+                                const dataRows = rows.slice(headerIdx + 1).filter(r => r && r.length > 2 && String(r[1] || "").trim());
+                                const personStats = {};
+                                PERSONAL_ESINAD.forEach(p => { personStats[p.id] = { procesadosSinad: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 }; });
+                                const allDocs = [];
+                                const seenDocs = new Set();
+                                dataRows.forEach(r => {
+                                    const especialista = String(r[1] || "").trim();
+                                    const expediente = String(r[2] || "").trim();
+                                    const fechaIngreso = formatExcelDate(r[5]);
+                                    const asuntoExpediente = String(r[6] || "").trim();
+                                    const remiteOficina = String(r[9] || "").trim();
+                                    const asuntoResp = String(r[13] || "").trim();
+                                    const tipoDoc = String(r[14] || "").trim();
+                                    const fechaDeriv = formatExcelDate(r[20]);
+                                    const destino = String(r[21] || "").trim();
+                                    const person = matchPerson(especialista);
+                                    if (!person) return;
+                                    personStats[person.id].procesadosSinad++;
+                                    if (tipoDoc && !seenDocs.has(tipoDoc)) {
+                                        const cat = classifyDoc(tipoDoc);
+                                        if (cat) {
+                                            seenDocs.add(tipoDoc);
+                                            personStats[person.id][cat]++;
+                                            personStats[person.id].totalReal++;
+                                            allDocs.push({
+                                                tipoDocumento: tipoDoc,
+                                                categoria: catLabel(cat),
+                                                especialista: person.nombre,
+                                                personId: person.id,
+                                                shortName: person.shortName,
+                                                rol: person.rol,
+                                                tipo: person.tipo,
+                                                expediente,
+                                                asuntoExpediente,
+                                                asuntoRespuesta: asuntoResp,
+                                                remiteOficina,
+                                                fechaIngreso,
+                                                fechaDerivacion: fechaDeriv,
+                                                destino,
+                                            });
+                                        }
+                                    }
+                                });
+                                const weekRecord = {
+                                    semana: esinadSelectedWeek,
+                                    fechaCarga: new Date().toISOString(),
+                                    nombreArchivo: file.name,
+                                    totalFilas: dataRows.length,
+                                    personas: PERSONAL_ESINAD.map(p => ({ personId: p.id, nombreExcel: "", shortName: p.shortName, rol: p.rol, tipo: p.tipo, ...personStats[p.id] })),
+                                    documentos: allDocs,
+                                };
+                                const updated = esinadWeeks.filter(w => w.semana !== esinadSelectedWeek);
+                                updated.push(weekRecord);
+                                updated.sort((a, b) => a.semana.localeCompare(b.semana));
+                                setEsinadWeeks(updated);
+                                persistEsinad(updated);
+                                setEsinadError("");
+                                showToast("Excel E-SINAD procesado correctamente");
+                            } catch (err) { setEsinadError(`Error procesando el archivo: ${err.message}`); }
+                            setEsinadProcessing(false);
+                        };
+                        reader.onerror = () => { setEsinadError("Error leyendo el archivo."); setEsinadProcessing(false); };
+                        reader.readAsArrayBuffer(file);
+                    };
+
+                    const handleFile = (file) => { if (!file) return; if (!file.name.match(/\.xlsx?$/i)) { setEsinadError("Solo archivos .xlsx o .xls"); return; } processExcel(file); };
+                    const handleDrop = (e) => { e.preventDefault(); setEsinadDragOver(false); handleFile(e.dataTransfer.files[0]); };
+                    const deleteWeek = (sem) => { const updated = esinadWeeks.filter(w => w.semana !== sem); setEsinadWeeks(updated); persistEsinad(updated); showToast("Semana eliminada"); };
+
+                    const currentWeekData = esinadWeeks.find(w => w.semana === esinadSelectedWeek);
+                    const esinadAcumulado = (() => { const acum = {}; PERSONAL_ESINAD.forEach(p => { acum[p.id] = { procesadosSinad: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 }; }); esinadWeeks.forEach(w => { w.personas.forEach(pe => { if (acum[pe.personId]) { acum[pe.personId].procesadosSinad += pe.procesadosSinad || 0; acum[pe.personId].informes += pe.informes || 0; acum[pe.personId].oficios += pe.oficios || 0; acum[pe.personId].oficiosMultiples += pe.oficiosMultiples || 0; acum[pe.personId].memorandums += pe.memorandums || 0; acum[pe.personId].totalReal += pe.totalReal || 0; } }); }); return acum; })();
+
+                    const activeData = esinadViewMode === "semana" && currentWeekData ? currentWeekData.personas : esinadViewMode === "acumulado" ? PERSONAL_ESINAD.map(p => ({ personId: p.id, shortName: p.shortName, rol: p.rol, tipo: p.tipo, ...esinadAcumulado[p.id] })) : [];
+                    const activeDocs = esinadViewMode === "semana" && currentWeekData ? (currentWeekData.documentos || []) : esinadViewMode === "acumulado" ? esinadWeeks.flatMap(w => w.documentos || []) : [];
+
+                    const ekpis = (() => { const ts = activeData.reduce((s, d) => s + (d.procesadosSinad || 0), 0); const tr = activeData.reduce((s, d) => s + (d.totalReal || 0), 0); return { totalSinad: ts, totalReal: tr, eficiencia: ts > 0 ? Math.round(tr / ts * 100) : 0, semanasCount: esinadWeeks.length }; })();
+
+                    const eBarData = activeData.map(d => ({ nombre: d.shortName, "E-SINAD": d.procesadosSinad || 0, "Prod. Real": d.totalReal || 0 }));
+                    const eBarDesglose = activeData.map(d => ({ nombre: d.shortName, Informes: d.informes || 0, Oficios: d.oficios || 0, "Of. Multiples": d.oficiosMultiples || 0, Memorandums: d.memorandums || 0 }));
+                    const hasEData = activeData.length > 0 && activeData.some(d => d.procesadosSinad > 0);
+                    const fmtEWeek = (w) => { if (!w) return ""; const [y, wk] = w.split("-W"); return `Semana ${parseInt(wk)}, ${y}`; };
+
+                    return (
+                        <div>
+                            {/* Upload Panel */}
+                            <div style={{ ...card, marginBottom: 20 }}>
+                                <h3 style={h3s}>Carga Semanal E-SINAD</h3>
+                                <div style={{ display: "flex", gap: 14, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 16 }}>
+                                    <div style={{ flex: "0 0 auto" }}>
+                                        <label style={labelStyle}>Semana</label>
+                                        <input type="week" value={esinadSelectedWeek} onChange={e => setEsinadSelectedWeek(e.target.value)} style={{ ...inputStyle, width: 210 }} />
+                                    </div>
+                                    <div style={{ display: "flex", gap: 8 }}>
+                                        <button onClick={() => setEsinadViewMode("semana")} style={{ padding: "8px 16px", borderRadius: 6, border: `1px solid ${esinadViewMode === "semana" ? C.navy4 : C.g200}`, background: esinadViewMode === "semana" ? C.navy4 : C.white, color: esinadViewMode === "semana" ? C.white : C.g600, cursor: "pointer", fontFamily: "'DM Sans'", fontSize: 12, fontWeight: 600 }}>Semana</button>
+                                        <button onClick={() => setEsinadViewMode("acumulado")} style={{ padding: "8px 16px", borderRadius: 6, border: `1px solid ${esinadViewMode === "acumulado" ? C.navy4 : C.g200}`, background: esinadViewMode === "acumulado" ? C.navy4 : C.white, color: esinadViewMode === "acumulado" ? C.white : C.g600, cursor: "pointer", fontFamily: "'DM Sans'", fontSize: 12, fontWeight: 600 }}>Acumulado</button>
+                                    </div>
+                                    {esinadWeeks.length > 0 && (
+                                        <div style={{ flex: "0 0 auto" }}>
+                                            <label style={labelStyle}>Semanas cargadas</label>
+                                            <select value={esinadSelectedWeek} onChange={e => setEsinadSelectedWeek(e.target.value)} style={{ ...inputStyle, width: 200 }}>
+                                                {esinadWeeks.map(w => <option key={w.semana} value={w.semana}>{fmtEWeek(w.semana)}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {currentWeekData && (
+                                    <div style={{ padding: "10px 14px", background: `${C.green}08`, border: `1px solid ${C.green}25`, borderRadius: 6, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            {I.check(16, C.green)}
+                                            <span style={{ fontSize: 12, color: C.green, fontWeight: 600, fontFamily: "'DM Sans'" }}>Datos cargados: {new Date(currentWeekData.fechaCarga).toLocaleDateString()} -- {currentWeekData.nombreArchivo} ({currentWeekData.totalFilas} filas)</span>
+                                        </div>
+                                        <div style={{ display: "flex", gap: 6 }}>
+                                            <button onClick={() => esinadFileRef.current?.click()} style={{ padding: "5px 12px", borderRadius: 5, border: `1px solid ${C.amber}`, background: C.white, color: C.amber, cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "'DM Sans'" }}>Reemplazar</button>
+                                            <button onClick={() => deleteWeek(esinadSelectedWeek)} style={{ padding: "5px 12px", borderRadius: 5, border: `1px solid ${C.red}`, background: C.white, color: C.red, cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "'DM Sans'", display: "flex", alignItems: "center", gap: 4 }}>{IEsinad.trash(13, C.red)} Eliminar</button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div
+                                    onDrop={handleDrop} onDragOver={e => { e.preventDefault(); setEsinadDragOver(true); }} onDragLeave={() => setEsinadDragOver(false)}
+                                    onClick={() => esinadFileRef.current?.click()}
+                                    style={{ border: `2px dashed ${esinadDragOver ? C.navy4 : C.g300}`, borderRadius: 8, padding: "36px 20px", textAlign: "center", cursor: "pointer", background: esinadDragOver ? `${C.navy4}08` : C.g50, transition: "all 0.2s" }}
+                                >
+                                    <input ref={esinadFileRef} type="file" accept=".xlsx,.xls" onChange={e => handleFile(e.target.files[0])} style={{ display: "none" }} />
+                                    {esinadProcessing ? (
+                                        <div style={{ color: C.navy4, fontFamily: "'DM Sans'", fontSize: 13, fontWeight: 600 }}>Procesando archivo...</div>
+                                    ) : (
+                                        <>
+                                            <div style={{ marginBottom: 8 }}>{IEsinad.upload(32, esinadDragOver ? C.navy4 : C.g400)}</div>
+                                            <div style={{ color: C.navy1, fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans'", marginBottom: 4 }}>Arrastra el Excel del E-SINAD aqui</div>
+                                            <div style={{ color: C.g400, fontSize: 11, fontFamily: "'DM Sans'" }}>o haz click para seleccionar (.xlsx)</div>
+                                        </>
+                                    )}
+                                </div>
+                                {esinadError && <div style={{ marginTop: 10, padding: "8px 14px", borderRadius: 6, background: "#FEF2F2", border: "1px solid #FECACA", color: C.red, fontSize: 12, fontFamily: "'DM Sans'" }}>{esinadError}</div>}
+                            </div>
+
+                            {/* E-SINAD KPIs */}
+                            {hasEData && (
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 20 }}>
+                                    <StatCard icon={I.file(18, C.green)} label="Total E-SINAD" value={ekpis.totalSinad.toLocaleString()} sub={esinadViewMode === "semana" ? fmtEWeek(esinadSelectedWeek) : "Acumulado total"} border={C.green} />
+                                    <StatCard icon={I.file(18, C.realNavy)} label="Prod. Real" value={ekpis.totalReal.toLocaleString()} sub="Documentos unicos" border={C.realNavy} />
+                                    <StatCard icon={I.check(18, ekpis.eficiencia >= 30 ? C.green : ekpis.eficiencia >= 15 ? C.amber : C.red)} label="Eficiencia" value={`${ekpis.eficiencia}%`} sub="Real / E-SINAD" border={ekpis.eficiencia >= 30 ? C.green : ekpis.eficiencia >= 15 ? C.amber : C.red} />
+                                    <StatCard icon={I.file(18, C.navy4)} label="Semanas Cargadas" value={ekpis.semanasCount} sub="Total de semanas" border={C.navy4} />
+                                </div>
+                            )}
+
+                            {/* E-SINAD Charts */}
+                            {hasEData && (
+                                <div style={{ display: "grid", gap: 16, marginBottom: 20 }}>
+                                    <div style={card}>
+                                        <h3 style={h3s}>E-SINAD vs Produccion Real -- {esinadViewMode === "semana" ? fmtEWeek(esinadSelectedWeek) : "Acumulado"}</h3>
+                                        <ResponsiveContainer width="100%" height={300}>
+                                            <BarChart data={eBarData} barGap={4}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="E-SINAD" fill={C.green} radius={[4, 4, 0, 0]} /><Bar dataKey="Prod. Real" fill={C.realNavy} radius={[4, 4, 0, 0]} /></BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                    <div style={card}>
+                                        <h3 style={h3s}>Desglose Produccion Real -- {esinadViewMode === "semana" ? fmtEWeek(esinadSelectedWeek) : "Acumulado"}</h3>
+                                        <ResponsiveContainer width="100%" height={280}>
+                                            <BarChart data={eBarDesglose} barGap={2}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="Informes" stackId="real" fill={DOC_COLORS.informes} /><Bar dataKey="Oficios" stackId="real" fill={DOC_COLORS.oficios} /><Bar dataKey="Of. Multiples" stackId="real" fill={DOC_COLORS.oficiosMultiples} /><Bar dataKey="Memorandums" stackId="real" fill={DOC_COLORS.memorandums} radius={[4, 4, 0, 0]} /></BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* E-SINAD Detail Table */}
+                            {hasEData && (
+                                <div style={{ ...card, padding: 0, overflow: "auto", marginBottom: 20 }}>
+                                    <div style={{ padding: "14px 18px", background: `${C.navy4}08`, borderBottom: `2px solid ${C.navy4}25` }}>
+                                        <h3 style={{ color: C.navy1, fontSize: "1rem", margin: 0, fontFamily: "'DM Serif Display',serif" }}>Detalle por Especialista -- {esinadViewMode === "semana" ? fmtEWeek(esinadSelectedWeek) : "Acumulado"}</h3>
+                                    </div>
+                                    <div style={{ overflowX: "auto" }}>
+                                        <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 70px 80px 60px 60px 60px 65px 70px 70px", padding: "10px 14px", gap: 6, borderBottom: `2px solid ${C.g200}`, background: C.g50, minWidth: 750 }}>
+                                            {["#", "Especialista", "Rol", "E-SINAD", "Inf.", "Ofi.", "Of.M.", "Memo.", "Total Real", "Eficiencia"].map(h => <p key={h} style={{ color: C.g500, fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, fontFamily: "'DM Sans'", textAlign: h === "#" || h === "Especialista" ? "left" : "center" }}>{h}</p>)}
+                                        </div>
+                                        {activeData.map((d, i) => {
+                                            const eff = d.procesadosSinad > 0 ? Math.round(d.totalReal / d.procesadosSinad * 100) : 0;
+                                            const effColor = eff >= 30 ? C.green : eff >= 15 ? C.amber : C.red;
+                                            return (
+                                                <div key={d.personId || i} style={{ display: "grid", gridTemplateColumns: "32px 1fr 70px 80px 60px 60px 60px 65px 70px 70px", alignItems: "center", padding: "12px 14px", gap: 6, borderBottom: `1px solid ${C.g100}`, transition: "background 0.15s", minWidth: 750 }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = C.g50} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                                                    <div style={{ width: 26, height: 26, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: `${C.gold2}18`, color: C.gold1, fontWeight: 700, fontSize: "0.75rem", fontFamily: "'JetBrains Mono'" }}>{i + 1}</div>
+                                                    <div><p style={{ color: C.navy1, fontWeight: 600, fontSize: "0.82rem", margin: 0, fontFamily: "'DM Sans'" }}>{d.shortName}</p></div>
+                                                    <p style={{ textAlign: "center", color: C.g600, fontSize: "0.7rem", margin: 0, fontFamily: "'DM Sans'", textTransform: "capitalize" }}>{d.rol}</p>
+                                                    <p style={{ textAlign: "center", color: C.green, fontWeight: 700, fontSize: "0.88rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{d.procesadosSinad || 0}</p>
+                                                    <p style={{ textAlign: "center", color: DOC_COLORS.informes, fontWeight: 600, fontSize: "0.82rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{d.informes || 0}</p>
+                                                    <p style={{ textAlign: "center", color: DOC_COLORS.oficios, fontWeight: 600, fontSize: "0.82rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{d.oficios || 0}</p>
+                                                    <p style={{ textAlign: "center", color: DOC_COLORS.oficiosMultiples, fontWeight: 600, fontSize: "0.82rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{d.oficiosMultiples || 0}</p>
+                                                    <p style={{ textAlign: "center", color: DOC_COLORS.memorandums, fontWeight: 600, fontSize: "0.82rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{d.memorandums || 0}</p>
+                                                    <p style={{ textAlign: "center", color: C.realNavy, fontWeight: 700, fontSize: "0.88rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{d.totalReal || 0}</p>
+                                                    <p style={{ textAlign: "center", color: effColor, fontWeight: 700, fontSize: "0.82rem", margin: 0, fontFamily: "'JetBrains Mono'" }}>{eff}%</p>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* E-SINAD Documents List */}
+                            {hasEData && activeDocs.length > 0 && (
+                                <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+                                    <div style={{ padding: "14px 18px", background: `${C.indigo}08`, borderBottom: `2px solid ${C.indigo}25` }}>
+                                        <h3 style={{ color: C.navy1, fontSize: "1rem", margin: 0, fontFamily: "'DM Serif Display',serif" }}>Documentos Generados ({activeDocs.length})</h3>
+                                    </div>
+                                    {PERSONAL_ESINAD.map(p => {
+                                        const docs = activeDocs.filter(d => d.personId === p.id);
+                                        if (docs.length === 0) return null;
+                                        const isExp = esinadExpandedPerson === p.id;
+                                        return (
+                                            <div key={p.id}>
+                                                <div onClick={() => setEsinadExpandedPerson(isExp ? null : p.id)}
+                                                    style={{ padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", borderBottom: `1px solid ${C.g100}`, background: isExp ? C.g50 : "transparent", transition: "background 0.15s" }}
+                                                    onMouseEnter={e => { if (!isExp) e.currentTarget.style.background = C.g50; }} onMouseLeave={e => { if (!isExp) e.currentTarget.style.background = "transparent"; }}>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                                        <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.06em", fontFamily: "'JetBrains Mono'", background: p.tipo === "EBA" ? `${C.navy5}15` : p.tipo === "ETP" ? `${C.gold2}15` : `${C.g500}15`, color: p.tipo === "EBA" ? C.navy5 : p.tipo === "ETP" ? C.gold1 : C.g600 }}>{p.tipo === "-" ? "OFIC" : p.tipo}</span>
+                                                        <span style={{ fontSize: "0.85rem", color: C.navy1, fontWeight: 600, fontFamily: "'DM Sans'" }}>{p.shortName}</span>
+                                                        <span style={{ fontSize: "0.72rem", color: C.g400, fontFamily: "'JetBrains Mono'", fontWeight: 600 }}>({docs.length} doc{docs.length !== 1 ? "s" : ""})</span>
+                                                    </div>
+                                                    {isExp ? IEsinad.chevUp(16, C.g500) : IEsinad.chevDown(16, C.g500)}
+                                                </div>
+                                                {isExp && (
+                                                    <div style={{ padding: "0 18px 12px" }}>
+                                                        {docs.map((doc, di) => (
+                                                            <div key={di} style={{ padding: "10px 14px", borderRadius: 6, background: C.g50, marginTop: 8, border: `1px solid ${C.g100}` }}>
+                                                                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
+                                                                    <span style={{ fontSize: "0.62rem", fontWeight: 700, padding: "2px 7px", borderRadius: 3, background: DOC_COLORS[doc.categoria === "Informes" ? "informes" : doc.categoria === "Oficios" ? "oficios" : doc.categoria === "Of. Multiples" ? "oficiosMultiples" : "memorandums"] + "18", color: DOC_COLORS[doc.categoria === "Informes" ? "informes" : doc.categoria === "Oficios" ? "oficios" : doc.categoria === "Of. Multiples" ? "oficiosMultiples" : "memorandums"], fontFamily: "'JetBrains Mono'", letterSpacing: "0.04em" }}>{doc.categoria.toUpperCase()}</span>
+                                                                </div>
+                                                                <div style={{ fontSize: "0.78rem", color: C.navy1, fontWeight: 600, fontFamily: "'JetBrains Mono'", marginBottom: 4, wordBreak: "break-all" }}>{doc.tipoDocumento}</div>
+                                                                {doc.expediente && <div style={{ fontSize: "0.72rem", color: C.g500, fontFamily: "'DM Sans'" }}>Expediente: {doc.expediente}</div>}
+                                                                {doc.asuntoRespuesta && <div style={{ fontSize: "0.72rem", color: C.g500, fontFamily: "'DM Sans'", marginTop: 2 }}>{doc.asuntoRespuesta.substring(0, 120)}{doc.asuntoRespuesta.length > 120 ? "..." : ""}</div>}
+                                                                {doc.fechaDerivacion && <div style={{ fontSize: "0.68rem", color: C.g400, fontFamily: "'JetBrains Mono'", marginTop: 2 }}>Derivado: {doc.fechaDerivacion}</div>}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {/* Empty State */}
+                            {!hasEData && (
+                                <div style={{ ...card, textAlign: "center", padding: 60 }}>
+                                    {I.file(48, C.g300)}
+                                    <h3 style={{ color: C.navy1, fontSize: "1.2rem", margin: "16px 0 8px", fontFamily: "'DM Serif Display',serif" }}>
+                                        {esinadViewMode === "semana" ? `Sin datos para ${fmtEWeek(esinadSelectedWeek)}` : "Sin datos acumulados"}
+                                    </h3>
+                                    <p style={{ color: C.g500, fontSize: "0.85rem", fontFamily: "'DM Sans'" }}>Sube un archivo Excel del E-SINAD usando el panel de carga superior.</p>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* ──── MODAL: REGISTRAR AVANCE SEMANAL ──── */}
