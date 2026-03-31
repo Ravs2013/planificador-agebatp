@@ -8,6 +8,7 @@ import MeetingRequest from './components/MeetingRequest';
 import MonitoreoModule from './components/MonitoreoModule';
 import FileAttachment from './components/FileAttachment';
 import EsinadExpedientes from './components/EsinadExpedientes';
+import RequerimientosModule from './components/RequerimientosModule';
 import { STAFF, priorityConfig, statusConfig, typeConfig, monthNames, dayNames, getDaysInMonth, getFirstDayOfMonth, fmtDate, todayStr } from './data/constants';
 import { calcularSLA } from './utils/slaCalculator';
 
@@ -225,8 +226,8 @@ export default function App() {
     const isPublic = user && isRole('publico');
 
     const ROLE_PERMS = {
-        admin: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo"],
-        jefatura: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo"],
+        admin: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos"],
+        jefatura: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos"],
         personal: ["calendario", "actividades", "expedientes", "reuniones"],
         publico: ["calendario", "reuniones"]
     };
@@ -238,7 +239,8 @@ export default function App() {
         { id: 'personal', label: 'Personal', icon: 'users' },
         { id: 'expedientes', label: 'Expedientes', icon: 'folder' },
         { id: 'reuniones', label: 'Reuniones', icon: 'calendar' },
-        { id: 'monitoreo', label: 'Monitoreo', icon: 'barChart' }
+        { id: 'monitoreo', label: 'Monitoreo', icon: 'barChart' },
+        { id: 'requerimientos', label: 'Requerimientos', icon: 'fileText' }
     ];
     const tabs = allTabs.filter(t => perms.includes(t.id));
 
@@ -593,6 +595,11 @@ export default function App() {
                 {/* MONITOREO */}
                 {activeTab === 'monitoreo' && (
                     <MonitoreoModule />
+                )}
+
+                {/* REQUERIMIENTOS */}
+                {activeTab === 'requerimientos' && (
+                    <RequerimientosModule />
                 )}
             </main>
 
