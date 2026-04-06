@@ -9,6 +9,7 @@ import MonitoreoModule from './components/MonitoreoModule';
 import FileAttachment from './components/FileAttachment';
 import EsinadExpedientes from './components/EsinadExpedientes';
 import RequerimientosModule from './components/RequerimientosModule';
+import DirectorioModule from './components/DirectorioModule';
 import { STAFF, priorityConfig, statusConfig, typeConfig, monthNames, dayNames, getDaysInMonth, getFirstDayOfMonth, fmtDate, todayStr } from './data/constants';
 import { calcularSLA } from './utils/slaCalculator';
 
@@ -226,9 +227,9 @@ export default function App() {
     const isPublic = user && isRole('publico');
 
     const ROLE_PERMS = {
-        admin: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos"],
-        jefatura: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos"],
-        personal: ["calendario", "actividades", "expedientes", "reuniones"],
+        admin: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio"],
+        jefatura: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio"],
+        personal: ["calendario", "actividades", "expedientes", "reuniones", "directorio"],
         publico: ["calendario", "reuniones"]
     };
     const perms = user ? (ROLE_PERMS[user.rol] || []) : [];
@@ -240,7 +241,8 @@ export default function App() {
         { id: 'expedientes', label: 'Expedientes', icon: 'folder' },
         { id: 'reuniones', label: 'Reuniones', icon: 'calendar' },
         { id: 'monitoreo', label: 'Monitoreo', icon: 'barChart' },
-        { id: 'requerimientos', label: 'Requerimientos', icon: 'fileText' }
+        { id: 'requerimientos', label: 'Requerimientos', icon: 'fileText' },
+        { id: 'directorio', label: 'Directorio', icon: 'users' }
     ];
     const tabs = allTabs.filter(t => perms.includes(t.id));
 
@@ -600,6 +602,11 @@ export default function App() {
                 {/* REQUERIMIENTOS */}
                 {activeTab === 'requerimientos' && (
                     <RequerimientosModule />
+                )}
+
+                {/* DIRECTORIO */}
+                {activeTab === 'directorio' && (
+                    <DirectorioModule />
                 )}
             </main>
 
