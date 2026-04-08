@@ -281,7 +281,7 @@ export default function App() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                         <img src="/logo-agebatp.jpeg" alt="AGEBATP" style={{ width: 46, height: 46, borderRadius: 8, objectFit: 'cover', boxShadow: '0 2px 8px rgba(202,138,4,0.3)' }} />
                         <div>
-                            <div style={{ fontFamily: "'DM Serif Display',Georgia,serif", fontSize: 19, color: '#FFFFFF', letterSpacing: 0.2 }}>Planificador Mensual AGEBATP</div>
+                            <div style={{ fontFamily: "'DM Serif Display',Georgia,serif", fontSize: 19, color: '#FFFFFF', letterSpacing: 0.2 }}>Sistema de Planificacion en Tiempo Real con IA AGEBATP 2026</div>
                             <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 500, letterSpacing: 1.2, textTransform: 'uppercase', marginTop: 2 }}>UGEL 03 - Unidad de Gestion Educativa Local</div>
                         </div>
                     </div>
@@ -781,7 +781,7 @@ export default function App() {
 
             {/* FOOTER */}
             <footer style={{ borderTop: '3px solid #CA8A04', background: '#0C1929', padding: '16px 28px', textAlign: 'center' }}>
-                <div style={{ fontSize: 11, color: '#94A3B8', letterSpacing: 0.5 }}>Planificador Mensual AGEBATP - UGEL 03 - Unidad de Gestion Educativa Local</div>
+                <div style={{ fontSize: 11, color: '#94A3B8', letterSpacing: 0.5 }}>Sistema de Planificacion en Tiempo Real con IA AGEBATP 2026 - UGEL 03</div>
                 <div style={{ fontSize: 10, color: '#64748B', marginTop: 4 }}>Area de Gestion de la Educacion Basica y Tecnico Productiva - {monthNames[currentMonth]} {currentYear}</div>
             </footer>
         </div>

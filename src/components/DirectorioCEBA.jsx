@@ -3,7 +3,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     PieChart, Pie, Cell
 } from "recharts";
-import html2canvas from "html2canvas";
+
 import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
 
@@ -214,7 +214,7 @@ export default function DirectorioCEBA() {
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
     const fileRef = useRef(null);
-    const contentRef = useRef(null);
+
 
     // Persist to localStorage
     useEffect(() => {
@@ -288,26 +288,87 @@ export default function DirectorioCEBA() {
         if (fileRef.current) fileRef.current.value = "";
     }, []);
 
-    // Export PDF
-    const handleExportPDF = useCallback(async () => {
-        if (!contentRef.current) return;
+    // Export PDF — multi-page A4
+    const handleExportPDF = useCallback(() => {
         setExporting(true);
         try {
-            const canvas = await html2canvas(contentRef.current, { scale: 2, backgroundColor: "#FFFFFF", useCORS: true });
-            const imgData = canvas.toDataURL("image/png");
-            const pdf = new jsPDF("landscape", "mm", "a4");
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const ratio = Math.min(pdfWidth / canvas.width, pdfHeight / canvas.height) * 0.9;
-            const w = canvas.width * ratio;
-            const h = canvas.height * ratio;
-            pdf.addImage(imgData, "PNG", (pdfWidth - w) / 2, 10, w, h);
-            pdf.save("Directorio_CEBA_UGEL03.pdf");
-        } catch (err) {
-            console.error("Error exporting PDF:", err);
-        }
+            const pdf = new jsPDF("portrait", "mm", "a4");
+            const W = 210, H = 297, MX = 14, MY = 14, pw = W - 2 * MX;
+            let y = MY;
+            let pageNum = 1;
+            const checkPage = (need) => { if (y + need > H - MY - 8) { pdf.addPage(); pageNum++; y = MY; } };
+
+            // Header
+            pdf.setFontSize(16); pdf.setFont("helvetica", "bold"); pdf.setTextColor(12, 25, 41);
+            pdf.text("Directorio CEBA - UGEL 03", MX, y + 6); y += 10;
+            pdf.setFontSize(9); pdf.setFont("helvetica", "normal"); pdf.setTextColor(100, 116, 139);
+            pdf.text(`Centros de Educacion Basica Alternativa | Generado: ${new Date().toLocaleDateString("es-PE")}`, MX, y + 4); y += 10;
+
+            // KPI row
+            pdf.setFillColor(241, 245, 249); pdf.roundedRect(MX, y, pw, 14, 2, 2, "F");
+            pdf.setFontSize(8); pdf.setFont("helvetica", "bold"); pdf.setTextColor(30, 77, 123);
+            const kpiItems = [`CEBA: ${kpis.totalCEBA}`, `Estudiantes: ${kpis.totalEstudiantes.toLocaleString()}`, `Docentes: ${kpis.totalDocentes}`, `Aulas: ${kpis.totalAulas}`, `Admin: ${kpis.totalAdmin}`, `Distritos: ${kpis.distritosUnicos}`];
+            const kpiW = pw / kpiItems.length;
+            kpiItems.forEach((t, i) => { pdf.text(t, MX + i * kpiW + kpiW / 2, y + 9, { align: "center" }); });
+            y += 20;
+
+            // CEBAs
+            filtered.forEach((c, idx) => {
+                checkPage(45);
+                const isEstatal = (c.tipoGestion || "").toUpperCase().includes("ESTATAL");
+                const totalDoc = (c.docentesInicial || 0) + (c.docentesIntermedio || 0) + (c.docentesAvanzado || 0);
+                const totalAul = (c.aulasInicial || 0) + (c.aulasIntermedio || 0) + (c.aulasAvanzado || 0);
+
+                // Name bar
+                pdf.setFillColor(27, 58, 92); pdf.roundedRect(MX, y, pw, 8, 1, 1, "F");
+                pdf.setFontSize(10); pdf.setFont("helvetica", "bold"); pdf.setTextColor(255, 255, 255);
+                pdf.text(`${idx + 1}. ${c.nombre}`, MX + 3, y + 5.5);
+                pdf.setFontSize(7); pdf.text(`${isEstatal ? "ESTATAL" : "CONVENIO"} | ${c.distrito}`, MX + pw - 3, y + 5.5, { align: "right" });
+                y += 11;
+
+                // Director
+                pdf.setFontSize(8.5); pdf.setFont("helvetica", "bold"); pdf.setTextColor(12, 25, 41);
+                const fullName = [c.nombres, c.apellidoPaterno, c.apellidoMaterno].filter(Boolean).join(" ");
+                pdf.text(`${c.cargo || "Director"}: ${fullName}`, MX + 2, y + 3); y += 5;
+
+                // Contact
+                pdf.setFont("helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(71, 85, 105);
+                const contact = [c.correoInstitucional, c.celular, c.direccion].filter(Boolean).join(" | ");
+                if (contact) { const lines = pdf.splitTextToSize(contact, pw - 4); pdf.text(lines, MX + 2, y + 3); y += lines.length * 3.5 + 1; }
+
+                // Stats
+                pdf.setFontSize(8); pdf.setFont("helvetica", "bold"); pdf.setTextColor(21, 128, 61);
+                pdf.text(`Alumnos: ${c.alumnosCenso || 0}`, MX + 2, y + 3);
+                pdf.setTextColor(67, 56, 202); pdf.text(`Docentes: ${totalDoc}`, MX + 45, y + 3);
+                pdf.setTextColor(179, 69, 9); pdf.text(`Aulas: ${totalAul}`, MX + 85, y + 3);
+                pdf.setTextColor(15, 118, 110); pdf.text(`Perifericos: ${c.cantidadPerifericos || 0}`, MX + 115, y + 3);
+                y += 5;
+
+                // Sedes summary
+                if (c.sedes && c.sedes.length > 0) {
+                    checkPage(8);
+                    pdf.setFontSize(7.5); pdf.setFont("helvetica", "italic"); pdf.setTextColor(100, 116, 139);
+                    const sedeNames = c.sedes.map(s => s.sede).filter(Boolean).slice(0, 3).join(", ");
+                    const extra = c.sedes.length > 3 ? ` ...y ${c.sedes.length - 3} mas` : "";
+                    if (sedeNames) { pdf.text(`Sedes: ${sedeNames}${extra}`, MX + 2, y + 3); y += 4; }
+                }
+
+                pdf.setDrawColor(226, 232, 240); pdf.line(MX, y + 1, MX + pw, y + 1); y += 5;
+            });
+
+            // Page numbers
+            const total = pdf.getNumberOfPages();
+            for (let i = 1; i <= total; i++) {
+                pdf.setPage(i);
+                pdf.setFontSize(7); pdf.setFont("helvetica", "normal"); pdf.setTextColor(148, 163, 184);
+                pdf.text(`Pagina ${i} de ${total}`, W / 2, H - 6, { align: "center" });
+            }
+
+            const today = new Date().toISOString().split("T")[0];
+            pdf.save(`Directorio_CEBA_UGEL03_${today}.pdf`);
+        } catch (err) { console.error("Error exporting PDF:", err); }
         setExporting(false);
-    }, []);
+    }, [filtered, kpis]);
 
     // Full name of director
     const directorName = (c) => [c.nombres, c.apellidoPaterno, c.apellidoMaterno].filter(Boolean).join(" ");
@@ -377,7 +438,7 @@ export default function DirectorioCEBA() {
             </div>
 
             {/* CONTENT REF FOR PDF EXPORT */}
-            <div ref={contentRef}>
+            <div>
                 {/* KPIs */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 24 }}>
                     <StatCard icon={Icons.school(20, C.navy4)} label="Total CEBA" value={kpis.totalCEBA} sub="Instituciones registradas" border={C.navy4} />
