@@ -1,6 +1,28 @@
-node_modules
-dist
+# Dependencias
+node_modules/
+
+# Build de Vite
+dist/
+dist-ssr/
+
+# Variables de entorno y secretos — ¡NUNCA subir!
 .env
-.env.local
-*.log
+.env.*
+!.env.example
+serviceAccountKey.json
+*-service-account.json
+*.local
+
+# Firebase
+.firebase/
+firebase-debug.log
+*-debug.log
+
+# Scripts de datos sensibles
+scripts/data/
+
+# Editor / Sistema operativo
+.vscode/
+.idea/
 .DS_Store
+Thumbs.db

@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     PieChart, Pie, Cell, AreaChart, Area
@@ -6,6 +6,8 @@ import {
 import html2canvas from "html2canvas";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
+import { subscribeMonitoreoSemanal, setMonitoreoSemanal, subscribeMonitoreoAcumulado, setMonitoreoAcumulado, subscribeEsinadSemanas, addEsinadSemana, deleteEsinadSemana } from "../firebase/db";
+
 
 /* ═══════════════════════════════════════════════════════════
    PALETA GUBERNAMENTAL UGEL 03 — AGEBATP
@@ -47,8 +49,7 @@ const I = {
 /* ═══════════════════════════════════════════════════════════
    E-SINAD HELPERS
    ═══════════════════════════════════════════════════════════ */
-const ESINAD_LS_SEMANAL = "agebatp_esinad_semanal";
-const ESINAD_LS_ACUMULADO = "agebatp_esinad_acumulado";
+
 
 const PERSONAL_ESINAD = [
     { id: 1, fullNames: ["GUTIERREZ SILVA"], shortName: "Gutierrez S.", nombre: "Gutierrez Silva, Liz M.", rol: "oficinista", tipo: "-" },
@@ -121,19 +122,6 @@ const PERSONAL = [
 /* ═══════════════════════════════════════════════════════════
    LOCAL STORAGE HELPERS
    ═══════════════════════════════════════════════════════════ */
-const LS_KEY_SEMANAL = "agebatp_monitoreo_semanal";
-const LS_KEY_ACUMULADO = "agebatp_monitoreo_acumulado";
-
-const loadSemanal = () => {
-    try { return JSON.parse(localStorage.getItem(LS_KEY_SEMANAL) || "[]"); } catch { return []; }
-};
-const saveSemanal = (data) => localStorage.setItem(LS_KEY_SEMANAL, JSON.stringify(data));
-
-const loadAcumulado = () => {
-    try { return JSON.parse(localStorage.getItem(LS_KEY_ACUMULADO) || "{}"); } catch { return {}; }
-};
-const saveAcumulado = (data) => localStorage.setItem(LS_KEY_ACUMULADO, JSON.stringify(data));
-
 /* Obtener semana ISO actual */
 const getCurrentWeek = () => {
     const now = new Date();
@@ -203,8 +191,8 @@ export default function MonitoreoModule() {
     const [showEditAcumulado, setShowEditAcumulado] = useState(false);
     const [selectedWeek, setSelectedWeek] = useState(getCurrentWeek());
     const [formWeek, setFormWeek] = useState(getCurrentWeek());
-    const [weeklyData, setWeeklyData] = useState(loadSemanal());
-    const [acumuladoData, setAcumuladoData] = useState(loadAcumulado());
+    const [weeklyData, setWeeklyData] = useState([]);
+    const [acumuladoData, setAcumuladoData] = useState({});
     const emptyEntry = (id) => ({ personId: id, procesados: "", pendientes: "", informes: "", oficios: "", oficiosMultiples: "", memorandums: "" });
     const [formEntries, setFormEntries] = useState(PERSONAL.map(p => emptyEntry(p.id)));
     const [editEntries, setEditEntries] = useState(PERSONAL.map(p => emptyEntry(p.id)));
@@ -213,8 +201,7 @@ export default function MonitoreoModule() {
     const chartRef = useRef(null);
 
     /* ── E-SINAD state ── */
-    const loadEsinadWeeks = () => { try { return JSON.parse(localStorage.getItem(ESINAD_LS_SEMANAL) || "[]"); } catch { return []; } };
-    const [esinadWeeks, setEsinadWeeks] = useState(loadEsinadWeeks);
+    const [esinadWeeks, setEsinadWeeks] = useState([]);
     const [esinadSelectedWeek, setEsinadSelectedWeek] = useState(() => { const now = new Date(); const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())); d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7)); const ys = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); const wn = Math.ceil(((d - ys) / 86400000 + 1) / 7); return `${d.getUTCFullYear()}-W${String(wn).padStart(2, "0")}`; });
     const [esinadViewMode, setEsinadViewMode] = useState("semana");
     const [esinadExpandedPerson, setEsinadExpandedPerson] = useState(null);
@@ -228,38 +215,38 @@ export default function MonitoreoModule() {
         setTimeout(() => setToast(null), 3500);
     };
 
-    /* ── Guardar avance semanal ── */
-    const handleSaveWeekly = () => {
-        const entries = formEntries.filter(e => e.procesados !== "" || e.pendientes !== "" || e.informes !== "" || e.oficios !== "" || e.oficiosMultiples !== "" || e.memorandums !== "");
-        if (entries.length === 0) { showToast("Ingrese al menos un dato", "error"); return; }
-
-        const filtered = weeklyData.filter(d => d.semana !== formWeek);
-
-        entries.forEach(e => {
-            const person = PERSONAL.find(p => p.id === e.personId);
-            const inf = parseInt(e.informes) || 0;
-            const ofi = parseInt(e.oficios) || 0;
-            const ofm = parseInt(e.oficiosMultiples) || 0;
-            const mem = parseInt(e.memorandums) || 0;
-            filtered.push({
-                semana: formWeek, personId: e.personId, nombre: person.nombre,
-                shortName: person.shortName, rol: person.rol, tipo: person.tipo,
-                procesados: parseInt(e.procesados) || 0, pendientes: parseInt(e.pendientes) || 0,
-                informes: inf, oficios: ofi, oficiosMultiples: ofm, memorandums: mem,
-                totalReal: inf + ofi + ofm + mem,
-            });
+    // Subscribirse a Monitoreo Semanal desde Firestore
+    useEffect(() => {
+        const unsubscribe = subscribeMonitoreoSemanal((docs) => {
+            const flatList = docs.flatMap(d => (d.entries || []).map(e => ({ ...e, semana: d.semana })));
+            setWeeklyData(flatList);
         });
+        return () => unsubscribe();
+    }, []);
 
-        saveSemanal(filtered);
-        setWeeklyData(filtered);
-        recalcAcumulado(filtered);
-        setShowForm(false);
-        setFormEntries(PERSONAL.map(p => emptyEntry(p.id)));
-        showToast(`Avance de ${formatWeek(formWeek)} guardado correctamente`);
-    };
+    // Subscribirse a Monitoreo Acumulado desde Firestore
+    useEffect(() => {
+        const unsubscribe = subscribeMonitoreoAcumulado((docs) => {
+            const resumenDoc = docs.find(d => d.id === "resumen");
+            if (resumenDoc && resumenDoc.values) {
+                setAcumuladoData(resumenDoc.values);
+            } else {
+                setAcumuladoData({});
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Subscribirse a E-SINAD Semanas desde Firestore
+    useEffect(() => {
+        const unsubscribe = subscribeEsinadSemanas((list) => {
+            setEsinadWeeks(list || []);
+        });
+        return () => unsubscribe();
+    }, []);
 
     /* ── Recalcular acumulado ── */
-    const recalcAcumulado = useCallback((data) => {
+    const recalcAcumulado = useCallback(async (data) => {
         const acc = {};
         PERSONAL.forEach(p => { acc[p.id] = { procesados: 0, pendientes: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 }; });
         data.forEach(d => {
@@ -278,19 +265,56 @@ export default function MonitoreoModule() {
                 if (acc[d.personId]) acc[d.personId].pendientes = d.pendientes;
             });
         }
-        const existing = loadAcumulado();
+        
         Object.keys(acc).forEach(id => {
-            if (existing[id]?.pendientesManual !== undefined) {
-                acc[id].pendientes = existing[id].pendientesManual;
-                acc[id].pendientesManual = existing[id].pendientesManual;
+            if (acumuladoData[id]?.pendientesManual !== undefined) {
+                acc[id].pendientes = acumuladoData[id].pendientesManual;
+                acc[id].pendientesManual = acumuladoData[id].pendientesManual;
             }
         });
-        saveAcumulado(acc);
-        setAcumuladoData(acc);
-    }, []);
+        await setMonitoreoAcumulado("resumen", { values: acc });
+    }, [acumuladoData]);
+
+    /* ── Guardar avance semanal ── */
+    const handleSaveWeekly = async () => {
+        const entries = formEntries.filter(e => e.procesados !== "" || e.pendientes !== "" || e.informes !== "" || e.oficios !== "" || e.oficiosMultiples !== "" || e.memorandums !== "");
+        if (entries.length === 0) { showToast("Ingrese al menos un dato", "error"); return; }
+
+        const weekEntries = entries.map(e => {
+            const person = PERSONAL.find(p => p.id === e.personId);
+            const inf = parseInt(e.informes) || 0;
+            const ofi = parseInt(e.oficios) || 0;
+            const ofm = parseInt(e.oficiosMultiples) || 0;
+            const mem = parseInt(e.memorandums) || 0;
+            return {
+                personId: e.personId, nombre: person.nombre,
+                shortName: person.shortName, rol: person.rol, tipo: person.tipo,
+                procesados: parseInt(e.procesados) || 0, pendientes: parseInt(e.pendientes) || 0,
+                informes: inf, oficios: ofi, oficiosMultiples: ofm, memorandums: mem,
+                totalReal: inf + ofi + ofm + mem,
+            };
+        });
+
+        try {
+            await setMonitoreoSemanal(formWeek, { entries: weekEntries });
+            
+            // Recompute flat list
+            const filtered = weeklyData.filter(d => d.semana !== formWeek);
+            weekEntries.forEach(e => {
+                filtered.push({ ...e, semana: formWeek });
+            });
+            await recalcAcumulado(filtered);
+
+            setShowForm(false);
+            setFormEntries(PERSONAL.map(p => emptyEntry(p.id)));
+            showToast(`Avance de ${formatWeek(formWeek)} guardado correctamente`);
+        } catch (err) {
+            showToast("Error al guardar avance semanal: " + err.message, "error");
+        }
+    };
 
     /* ── Guardar acumulado editado manualmente ── */
-    const handleSaveAcumulado = () => {
+    const handleSaveAcumulado = async () => {
         const updated = { ...acumuladoData };
         editEntries.forEach(e => {
             const id = e.personId;
@@ -303,10 +327,14 @@ export default function MonitoreoModule() {
             if (e.memorandums !== "") updated[id].memorandums = parseInt(e.memorandums) || 0;
             updated[id].totalReal = (updated[id].informes || 0) + (updated[id].oficios || 0) + (updated[id].oficiosMultiples || 0) + (updated[id].memorandums || 0);
         });
-        saveAcumulado(updated);
-        setAcumuladoData(updated);
-        setShowEditAcumulado(false);
-        showToast("Acumulado actualizado correctamente");
+        
+        try {
+            await setMonitoreoAcumulado("resumen", { values: updated });
+            setShowEditAcumulado(false);
+            showToast("Acumulado actualizado correctamente");
+        } catch (err) {
+            showToast("Error al actualizar acumulado: " + err.message, "error");
+        }
     };
 
     /* ── Exportar PDF ── */
@@ -314,19 +342,19 @@ export default function MonitoreoModule() {
         if (!chartRef.current) return;
         setExporting(true);
         try {
-            const canvas = await html2canvas(chartRef.current, { scale: 2, backgroundColor: "#FFFFFF", useCORS: true });
+            const canvas = await html2canvas(chartRef.current, { scale: 3, backgroundColor: "#FFFFFF", useCORS: true });
             const imgData = canvas.toDataURL("image/png");
-            const pdf = new jsPDF("landscape", "mm", "a4");
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const pdf = new jsPDF("portrait", "mm", "a1");
+            const pdfWidth = 594;
+            const pdfHeight = 841;
             const imgWidth = canvas.width;
             const imgHeight = canvas.height;
-            const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight) * 0.9;
+            const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight) * 0.95;
             const w = imgWidth * ratio;
             const h = imgHeight * ratio;
-            pdf.addImage(imgData, "PNG", (pdfWidth - w) / 2, 10, w, h);
+            pdf.addImage(imgData, "PNG", (pdfWidth - w) / 2, 40, w, h);
             pdf.save(`Monitoreo_AGEBATP_${selectedWeek || "acumulado"}.pdf`);
-            showToast("PDF exportado correctamente");
+            showToast("PDF exportado correctamente en formato A1");
         } catch (err) {
             console.error("Error exporting PDF:", err);
             showToast("Error al exportar PDF", "error");
@@ -728,14 +756,7 @@ export default function MonitoreoModule() {
 
                 {/* ──── VISTA E-SINAD ──── */}
                 {view === "esinad" && (() => {
-                    /* ── E-SINAD persist ── */
-                    const persistEsinad = (weeks) => {
-                        localStorage.setItem(ESINAD_LS_SEMANAL, JSON.stringify(weeks));
-                        const acum = {};
-                        PERSONAL_ESINAD.forEach(p => { acum[p.id] = { procesadosSinad: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 }; });
-                        weeks.forEach(w => { w.personas.forEach(pe => { if (acum[pe.personId]) { acum[pe.personId].procesadosSinad += pe.procesadosSinad || 0; acum[pe.personId].informes += pe.informes || 0; acum[pe.personId].oficios += pe.oficios || 0; acum[pe.personId].oficiosMultiples += pe.oficiosMultiples || 0; acum[pe.personId].memorandums += pe.memorandums || 0; acum[pe.personId].totalReal += pe.totalReal || 0; } }); });
-                        localStorage.setItem(ESINAD_LS_ACUMULADO, JSON.stringify(acum));
-                    };
+
 
                     /* ── Process Excel ── */
                     const processExcel = (file) => {
@@ -797,6 +818,7 @@ export default function MonitoreoModule() {
                                     }
                                 });
                                 const weekRecord = {
+                                    id: esinadSelectedWeek,
                                     semana: esinadSelectedWeek,
                                     fechaCarga: new Date().toISOString(),
                                     nombreArchivo: file.name,
@@ -804,15 +826,21 @@ export default function MonitoreoModule() {
                                     personas: PERSONAL_ESINAD.map(p => ({ personId: p.id, nombreExcel: "", shortName: p.shortName, rol: p.rol, tipo: p.tipo, ...personStats[p.id] })),
                                     documentos: allDocs,
                                 };
-                                const updated = esinadWeeks.filter(w => w.semana !== esinadSelectedWeek);
-                                updated.push(weekRecord);
-                                updated.sort((a, b) => a.semana.localeCompare(b.semana));
-                                setEsinadWeeks(updated);
-                                persistEsinad(updated);
-                                setEsinadError("");
-                                showToast("Excel E-SINAD procesado correctamente");
-                            } catch (err) { setEsinadError(`Error procesando el archivo: ${err.message}`); }
-                            setEsinadProcessing(false);
+                                addEsinadSemana(weekRecord)
+                                    .then(() => {
+                                        setEsinadError("");
+                                        showToast("Excel E-SINAD guardado en Firestore");
+                                    })
+                                    .catch(err => {
+                                        setEsinadError(`Error al guardar en Firestore: ${err.message}`);
+                                    })
+                                    .finally(() => {
+                                        setEsinadProcessing(false);
+                                    });
+                            } catch (err) { 
+                                setEsinadError(`Error procesando el archivo: ${err.message}`); 
+                                setEsinadProcessing(false);
+                            }
                         };
                         reader.onerror = () => { setEsinadError("Error leyendo el archivo."); setEsinadProcessing(false); };
                         reader.readAsArrayBuffer(file);
@@ -820,7 +848,16 @@ export default function MonitoreoModule() {
 
                     const handleFile = (file) => { if (!file) return; if (!file.name.match(/\.xlsx?$/i)) { setEsinadError("Solo archivos .xlsx o .xls"); return; } processExcel(file); };
                     const handleDrop = (e) => { e.preventDefault(); setEsinadDragOver(false); handleFile(e.dataTransfer.files[0]); };
-                    const deleteWeek = (sem) => { const updated = esinadWeeks.filter(w => w.semana !== sem); setEsinadWeeks(updated); persistEsinad(updated); showToast("Semana eliminada"); };
+                    const deleteWeek = async (sem) => { 
+                        if (confirm(`¿Está seguro de eliminar la semana ${sem} de E-SINAD?`)) {
+                            try {
+                                await deleteEsinadSemana(sem);
+                                showToast("Semana eliminada de Firestore");
+                            } catch (err) {
+                                showToast("Error al eliminar: " + err.message, "error");
+                            }
+                        }
+                    };
 
                     const currentWeekData = esinadWeeks.find(w => w.semana === esinadSelectedWeek);
                     const esinadAcumulado = (() => { const acum = {}; PERSONAL_ESINAD.forEach(p => { acum[p.id] = { procesadosSinad: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 }; }); esinadWeeks.forEach(w => { w.personas.forEach(pe => { if (acum[pe.personId]) { acum[pe.personId].procesadosSinad += pe.procesadosSinad || 0; acum[pe.personId].informes += pe.informes || 0; acum[pe.personId].oficios += pe.oficios || 0; acum[pe.personId].oficiosMultiples += pe.oficiosMultiples || 0; acum[pe.personId].memorandums += pe.memorandums || 0; acum[pe.personId].totalReal += pe.totalReal || 0; } }); }); return acum; })();

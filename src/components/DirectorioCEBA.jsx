@@ -6,6 +6,8 @@ import {
 
 import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
+import { subscribeDirectorioCeba, addCeba, updateCeba, deleteCeba, batchSetCebas } from "../firebase/db";
+import { useAuth } from "../context/AuthContext";
 
 /* ═══════════════════════════════════════════════════════════
    PALETA GUBERNAMENTAL UGEL 03 — AGEBATP
@@ -23,8 +25,6 @@ const C = {
 };
 
 const PIE_COLORS = ["#1E4D7B", "#2563A0", "#CA8A04", "#15803D", "#B91C1C", "#4338CA", "#0F766E", "#7C3AED", "#B45309"];
-
-const LS_KEY = "agebatp_directorio_ceba";
 
 /* ═══════════════════════════════════════════════════════════
    SVG ICON HELPER
@@ -95,6 +95,33 @@ const S = {
 /* ═══════════════════════════════════════════════════════════
    EXCEL PARSER
    ═══════════════════════════════════════════════════════════ */
+function splitName(fullName) {
+    let apellidoPaterno = "";
+    let apellidoMaterno = "";
+    let nombres = "";
+    if (!fullName) return { apellidoPaterno, apellidoMaterno, nombres };
+    const parts = fullName.trim().split(",");
+    if (parts.length > 1) {
+        nombres = parts[1].trim();
+        const lastParts = parts[0].trim().split(/\s+/);
+        apellidoPaterno = lastParts[0] || "";
+        apellidoMaterno = lastParts.slice(1).join(" ") || "";
+    } else {
+        const wordParts = fullName.trim().split(/\s+/);
+        if (wordParts.length >= 3) {
+            apellidoPaterno = wordParts[0];
+            apellidoMaterno = wordParts[1];
+            nombres = wordParts.slice(2).join(" ");
+        } else if (wordParts.length === 2) {
+            apellidoPaterno = wordParts[0];
+            nombres = wordParts[1];
+        } else {
+            nombres = fullName;
+        }
+    }
+    return { apellidoPaterno, apellidoMaterno, nombres };
+}
+
 function parseDirectorioCEBA(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -102,96 +129,193 @@ function parseDirectorioCEBA(file) {
             try {
                 const data = new Uint8Array(ev.target.result);
                 const wb = XLSX.read(data, { type: "array" });
-                const ws = wb.Sheets[wb.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+                const isMega = wb.SheetNames.includes("PORTADA") || wb.SheetNames.some(name => /^\d+_/i.test(name));
 
-                // Data starts at row 5 (index 4)
-                const dataRows = rows.slice(4);
-                const cebas = [];
-                let current = null;
+                if (isMega) {
+                    const cebas = [];
+                    const sheetNames = wb.SheetNames.filter(name => 
+                        !["PORTADA", "RESUMEN GENERAL", "GUÍA EBA", "GUÍA GENERAL", "GUÍA DE INCLUSIÓN", "CATÁLOGO DE PROGRAMAS"].includes(name.toUpperCase().trim())
+                    );
 
-                for (let i = 0; i < dataRows.length; i++) {
-                    const r = dataRows[i];
-                    if (!r || r.length < 5) continue;
+                    sheetNames.forEach(sheetName => {
+                        const ws = wb.Sheets[sheetName];
+                        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+                        if (rows.length < 15) return;
 
-                    const nVal = r[0];
-                    const isMainRow = nVal !== "" && nVal !== null && nVal !== undefined && Number.isInteger(Number(nVal)) && Number(nVal) > 0;
-
-                    if (isMainRow) {
-                        // Save previous CEBA
-                        if (current) cebas.push(current);
-
-                        const toNum = (v) => parseInt(v) || 0;
-                        const toStr = (v) => (v != null ? String(v).trim() : "");
-                        const toBool = (v) => { const s = toStr(v).toUpperCase(); return s === "SI" || s === "SÍ" || s === "S" || s === "X"; };
-
-                        current = {
-                            n: toNum(nVal),
-                            codigoLocal: toStr(r[1]),
-                            codigoModularInicialIntermedio: toStr(r[2]),
-                            codigoModularAvanzado: toStr(r[3]),
-                            nombre: toStr(r[4]),
-                            tipoGestion: toStr(r[5]),
-                            distrito: toStr(r[6]),
-                            cargo: toStr(r[7]),
-                            apellidoPaterno: toStr(r[8]),
-                            apellidoMaterno: toStr(r[9]),
-                            nombres: toStr(r[10]),
-                            dni: toStr(r[11]),
-                            correoInstitucional: toStr(r[12]),
-                            correoPersonal: toStr(r[13]),
-                            celular: toStr(r[14]),
-                            direccion: toStr(r[15]),
-                            cantidadPerifericos: toNum(r[16]),
-                            presencial: toBool(r[22]),
-                            semipresencial: toBool(r[23]),
-                            aDistancia: toBool(r[24]),
-                            cicloInicial: toBool(r[25]),
-                            cicloIntermedio: toBool(r[26]),
-                            cicloAvanzado: toBool(r[27]),
-                            turnos: toStr(r[28]),
-                            alumnosCenso: toNum(r[29]),
-                            observaciones: toStr(r[30]),
-                            alumnosInicial: toNum(r[31]),
-                            alumnosIntermedio: toNum(r[32]),
-                            alumnosAvanzado: toNum(r[33]),
-                            docentesInicial: toNum(r[34]),
-                            docentesIntermedio: toNum(r[35]),
-                            docentesAvanzado: toNum(r[36]),
-                            aulasInicial: toNum(r[37]),
-                            aulasIntermedio: toNum(r[38]),
-                            aulasAvanzado: toNum(r[39]),
-                            adminNombrados: toNum(r[40]),
-                            adminContratados: toNum(r[41]),
-                            sedes: [],
+                        const val = (r, c) => (rows[r] && rows[r][c] !== undefined ? String(rows[r][c]).trim() : "");
+                        const valNum = (r, c) => parseInt(rows[r] && rows[r][c]) || 0;
+                        const valBool = (r, c) => {
+                            const s = val(r, c).toUpperCase();
+                            return s === "SI" || s === "SÍ" || s === "S" || s === "X";
                         };
 
-                        // Add main row sede data
-                        const sede = toStr(r[17]);
-                        const dirSede = toStr(r[18]);
-                        const formaAtencion = toStr(r[19]);
-                        const dias = toStr(r[20]);
-                        const horario = toStr(r[21]);
-                        if (sede || dirSede || formaAtencion || dias || horario) {
-                            current.sedes.push({ sede, direccion: dirSede, formaAtencion, dias, horario });
+                        const rawName = val(0, 0);
+                        const cleanName = rawName.split("·")[0].trim();
+                        const fullName = val(7, 3);
+                        const nameParts = splitName(fullName);
+
+                        const totalAlumnosGrados = valNum(34, 6) + 
+                                                   valNum(35, 6) + valNum(36, 6) + valNum(37, 6) +
+                                                   valNum(38, 6) + valNum(39, 6) + valNum(40, 6) + valNum(41, 6);
+
+                        const censoVal = valNum(15, 4);
+                        const finalAlumnosCenso = totalAlumnosGrados > 0 ? totalAlumnosGrados : censoVal;
+
+                        const sedes = [];
+                        for (let r = 64; r < 72; r++) {
+                            if (rows[r]) {
+                                const sede = val(r, 1);
+                                const direccion = val(r, 5);
+                                const formaAtencion = val(r, 11);
+                                const dias = val(r, 15);
+                                const horario = val(r, 18);
+                                if (sede || direccion || formaAtencion || dias || horario) {
+                                    sedes.push({ sede, direccion, formaAtencion, dias, horario });
+                                }
+                            }
                         }
-                    } else if (current) {
-                        // Sub-row: additional sede/schedule data
-                        const toStr = (v) => (v != null ? String(v).trim() : "");
-                        const sede = toStr(r[17]);
-                        const dirSede = toStr(r[18]);
-                        const formaAtencion = toStr(r[19]);
-                        const dias = toStr(r[20]);
-                        const horario = toStr(r[21]);
-                        if (sede || dirSede || formaAtencion || dias || horario) {
-                            current.sedes.push({ sede, direccion: dirSede, formaAtencion, dias, horario });
+
+                        cebas.push({
+                            nombre: cleanName,
+                            codigoLocal: val(4, 3),
+                            codigoModularInicialIntermedio: val(4, 14),
+                            codigoModularAvanzado: val(5, 3),
+                            tipoGestion: val(5, 14) || "Estatal",
+                            distrito: val(6, 3),
+                            cantidadPerifericos: valNum(6, 14),
+                            apellidoPaterno: nameParts.apellidoPaterno,
+                            apellidoMaterno: nameParts.apellidoMaterno,
+                            nombres: nameParts.nombres,
+                            cargo: val(8, 3) || "Director",
+                            dni: val(8, 14),
+                            correoInstitucional: val(9, 3),
+                            correoPersonal: val(9, 14),
+                            celular: val(10, 3),
+                            turnos: val(10, 14) || val(27, 4) || "",
+                            direccion: val(11, 3),
+                            presencial: valBool(21, 4),
+                            semipresencial: valBool(22, 4),
+                            aDistancia: valBool(23, 4),
+                            cicloInicial: valBool(24, 4),
+                            cicloIntermedio: valBool(25, 4),
+                            cicloAvanzado: valBool(26, 4),
+                            alumnosCenso: finalAlumnosCenso,
+                            alumnosInicial: valNum(34, 6),
+                            alumnosIntermedio: valNum(35, 6) + valNum(36, 6) + valNum(37, 6),
+                            alumnosAvanzado: valNum(38, 6) + valNum(39, 6) + valNum(40, 6) + valNum(41, 6),
+                            docentesInicial: 0,
+                            docentesIntermedio: 0,
+                            docentesAvanzado: 0,
+                            aulasInicial: 0,
+                            aulasIntermedio: 0,
+                            aulasAvanzado: 0,
+                            adminNombrados: 0,
+                            adminContratados: 0,
+                            totalInclusivos: valNum(17, 4),
+                            apoyoIntermitenteLeve: 0,
+                            apoyoContinuoModerado: 0,
+                            apoyoIntensoSevero: 0,
+                            porcentajeInclusion: finalAlumnosCenso > 0 ? Number(((valNum(17, 4) / finalAlumnosCenso) * 100).toFixed(1)) : 0,
+                            observaciones: val(73, 0),
+                            sedes: sedes
+                        });
+                    });
+                    resolve(cebas);
+                } else {
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+                    let startIdx = 4;
+                    if (rows.length > 3 && rows[3] && String(rows[3][0] || '').match(/^\d+$/)) {
+                        startIdx = 3;
+                    }
+                    const dataRows = rows.slice(startIdx);
+                    const cebas = [];
+                    let current = null;
+
+                    for (let i = 0; i < dataRows.length; i++) {
+                        const r = dataRows[i];
+                        if (!r || r.length < 5) continue;
+
+                        const nVal = r[0];
+                        const isMainRow = nVal !== "" && nVal !== null && nVal !== undefined && Number.isInteger(Number(nVal)) && Number(nVal) > 0;
+
+                        if (isMainRow) {
+                            if (current) cebas.push(current);
+
+                            const toNum = (v) => parseInt(v) || 0;
+                            const toStr = (v) => (v != null ? String(v).trim() : "");
+                            const toBool = (v) => { const s = toStr(v).toUpperCase(); return s === "SI" || s === "SÍ" || s === "S" || s === "X"; };
+                            const safeNum = (idx) => r.length > idx ? toNum(r[idx]) : 0;
+
+                            current = {
+                                n: toNum(nVal),
+                                codigoLocal: toStr(r[1]),
+                                codigoModularInicialIntermedio: toStr(r[2]),
+                                codigoModularAvanzado: toStr(r[3]),
+                                nombre: toStr(r[4]),
+                                tipoGestion: toStr(r[5]) || "Estatal",
+                                distrito: toStr(r[6]),
+                                cargo: toStr(r[7]) || "Director",
+                                apellidoPaterno: toStr(r[8]),
+                                apellidoMaterno: toStr(r[9]),
+                                nombres: toStr(r[10]),
+                                dni: toStr(r[11]),
+                                correoInstitucional: toStr(r[12]),
+                                correoPersonal: toStr(r[13]),
+                                celular: toStr(r[14]),
+                                direccion: toStr(r[15]),
+                                cantidadPerifericos: toNum(r[16]),
+                                presencial: r.length > 22 ? toBool(r[22]) : false,
+                                semipresencial: r.length > 23 ? toBool(r[23]) : false,
+                                aDistancia: r.length > 24 ? toBool(r[24]) : false,
+                                cicloInicial: r.length > 25 ? toBool(r[25]) : false,
+                                cicloIntermedio: r.length > 26 ? toBool(r[26]) : false,
+                                cicloAvanzado: r.length > 27 ? toBool(r[27]) : false,
+                                turnos: r.length > 28 ? toStr(r[28]) : "",
+                                alumnosCenso: r.length > 29 ? toNum(r[29]) : 0,
+                                observaciones: r.length > 30 ? toStr(r[30]) : "",
+                                alumnosInicial: safeNum(31),
+                                alumnosIntermedio: safeNum(32),
+                                alumnosAvanzado: safeNum(33),
+                                docentesInicial: safeNum(34),
+                                docentesIntermedio: safeNum(35),
+                                docentesAvanzado: safeNum(36),
+                                aulasInicial: safeNum(37),
+                                aulasIntermedio: safeNum(38),
+                                aulasAvanzado: safeNum(39),
+                                adminNombrados: safeNum(40),
+                                adminContratados: safeNum(41),
+                                totalInclusivos: 0,
+                                apoyoIntermitenteLeve: 0,
+                                apoyoContinuoModerado: 0,
+                                apoyoIntensoSevero: 0,
+                                porcentajeInclusion: 0,
+                                sedes: [],
+                            };
+
+                            const sede = toStr(r[17]);
+                            const dirSede = toStr(r[18]);
+                            const formaAtencion = toStr(r[19]);
+                            const dias = toStr(r[20]);
+                            const horario = toStr(r[21]);
+                            if (sede || dirSede || formaAtencion || dias || horario) {
+                                current.sedes.push({ sede, direccion: dirSede, formaAtencion, dias, horario });
+                            }
+                        } else if (current) {
+                            const toStr = (v) => (v != null ? String(v).trim() : "");
+                            const sede = toStr(r[17]);
+                            const dirSede = toStr(r[18]);
+                            const formaAtencion = toStr(r[19]);
+                            const dias = toStr(r[20]);
+                            const horario = toStr(r[21]);
+                            if (sede || dirSede || formaAtencion || dias || horario) {
+                                current.sedes.push({ sede, direccion: dirSede, formaAtencion, dias, horario });
+                            }
                         }
                     }
+                    if (current) cebas.push(current);
+                    resolve(cebas);
                 }
-                // Push last CEBA
-                if (current) cebas.push(current);
-
-                resolve(cebas);
             } catch (err) {
                 reject(err);
             }
@@ -205,9 +329,9 @@ function parseDirectorioCEBA(file) {
    COMPONENT
    ═══════════════════════════════════════════════════════════ */
 export default function DirectorioCEBA() {
-    const [data, setData] = useState(() => {
-        try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch { return []; }
-    });
+    const { user, isRole } = useAuth();
+    const [data, setData] = useState([]);
+    const [loadingData, setLoadingData] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [distritoFilter, setDistritoFilter] = useState("todos");
     const [selectedCEBA, setSelectedCEBA] = useState(null);
@@ -215,13 +339,295 @@ export default function DirectorioCEBA() {
     const [exporting, setExporting] = useState(false);
     const fileRef = useRef(null);
 
+    // CRUD & Form State
+    const [formOpen, setFormOpen] = useState(false);
+    const [formTab, setFormTab] = useState("inst"); // inst, director, ciclos, sedes
+    const [editingCEBA, setEditingCEBA] = useState(null);
+    const [formData, setFormData] = useState({
+        nombre: "",
+        codigoLocal: "",
+        codigoModularInicialIntermedio: "",
+        codigoModularAvanzado: "",
+        tipoGestion: "Estatal",
+        distrito: "",
+        direccion: "",
+        cargo: "Director",
+        apellidoPaterno: "",
+        apellidoMaterno: "",
+        nombres: "",
+        dni: "",
+        correoInstitucional: "",
+        correoPersonal: "",
+        celular: "",
+        cantidadPerifericos: 0,
+        presencial: false,
+        semipresencial: false,
+        aDistancia: false,
+        cicloInicial: false,
+        cicloIntermedio: false,
+        cicloAvanzado: false,
+        turnos: "",
+        alumnosCenso: 0,
+        observaciones: "",
+        alumnosInicial: 0,
+        alumnosIntermedio: 0,
+        alumnosAvanzado: 0,
+        docentesInicial: 0,
+        docentesIntermedio: 0,
+        docentesAvanzado: 0,
+        aulasInicial: 0,
+        aulasIntermedio: 0,
+        aulasAvanzado: 0,
+        adminNombrados: 0,
+        adminContratados: 0,
+        apoyoIntermitenteLeve: 0,
+        apoyoContinuoModerado: 0,
+        apoyoIntensoSevero: 0,
+        totalInclusivos: 0,
+        porcentajeInclusion: 0,
+        sedes: []
+    });
 
-    // Persist to localStorage
-    useEffect(() => {
-        if (data.length > 0) {
-            localStorage.setItem(LS_KEY, JSON.stringify(data));
+    const openAddCEBA = () => {
+        setEditingCEBA(null);
+        setFormData({
+            nombre: "",
+            codigoLocal: "",
+            codigoModularInicialIntermedio: "",
+            codigoModularAvanzado: "",
+            tipoGestion: "Estatal",
+            distrito: "",
+            direccion: "",
+            cargo: "Director",
+            apellidoPaterno: "",
+            apellidoMaterno: "",
+            nombres: "",
+            dni: "",
+            correoInstitucional: "",
+            correoPersonal: "",
+            celular: "",
+            cantidadPerifericos: 0,
+            presencial: false,
+            semipresencial: false,
+            aDistancia: false,
+            cicloInicial: false,
+            cicloIntermedio: false,
+            cicloAvanzado: false,
+            turnos: "",
+            alumnosCenso: 0,
+            observaciones: "",
+            alumnosInicial: 0,
+            alumnosIntermedio: 0,
+            alumnosAvanzado: 0,
+            docentesInicial: 0,
+            docentesIntermedio: 0,
+            docentesAvanzado: 0,
+            aulasInicial: 0,
+            aulasIntermedio: 0,
+            aulasAvanzado: 0,
+            adminNombrados: 0,
+            adminContratados: 0,
+            apoyoIntermitenteLeve: 0,
+            apoyoContinuoModerado: 0,
+            apoyoIntensoSevero: 0,
+            totalInclusivos: 0,
+            porcentajeInclusion: 0,
+            sedes: []
+        });
+        setFormTab("inst");
+        setFormOpen(true);
+    };
+
+    const openEditCEBA = (ceba) => {
+        setEditingCEBA(ceba);
+        setFormData({
+            ...ceba,
+            apoyoIntermitenteLeve: ceba.apoyoIntermitenteLeve || 0,
+            apoyoContinuoModerado: ceba.apoyoContinuoModerado || 0,
+            apoyoIntensoSevero: ceba.apoyoIntensoSevero || 0,
+            totalInclusivos: ceba.totalInclusivos || 0,
+            porcentajeInclusion: ceba.porcentajeInclusion || 0,
+            sedes: ceba.sedes || []
+        });
+        setFormTab("inst");
+        setFormOpen(true);
+        setSelectedCEBA(null);
+    };
+
+    const handleDeleteCEBA = async (id) => {
+        if (window.confirm("¿Está seguro de eliminar este CEBA del directorio?")) {
+            setLoading(true);
+            try {
+                await deleteCeba(id);
+                setSelectedCEBA(null);
+                alert("CEBA eliminado exitosamente.");
+            } catch (err) {
+                console.error("Error deleting CEBA:", err);
+                alert("Error al eliminar el CEBA.");
+            }
+            setLoading(false);
         }
-    }, [data]);
+    };
+
+    const handleSaveCEBA = async (e) => {
+        e.preventDefault();
+        if (!formData.nombre.trim() || !formData.distrito.trim()) {
+            alert("Nombre y Distrito son obligatorios.");
+            return;
+        }
+        setLoading(true);
+        const parsed = {
+            ...formData,
+            nombre: formData.nombre.trim(),
+            distrito: formData.distrito.trim(),
+            alumnosInicial: parseInt(formData.alumnosInicial) || 0,
+            alumnosIntermedio: parseInt(formData.alumnosIntermedio) || 0,
+            alumnosAvanzado: parseInt(formData.alumnosAvanzado) || 0,
+            docentesInicial: parseInt(formData.docentesInicial) || 0,
+            docentesIntermedio: parseInt(formData.docentesIntermedio) || 0,
+            docentesAvanzado: parseInt(formData.docentesAvanzado) || 0,
+            aulasInicial: parseInt(formData.aulasInicial) || 0,
+            aulasIntermedio: parseInt(formData.aulasIntermedio) || 0,
+            aulasAvanzado: parseInt(formData.aulasAvanzado) || 0,
+            adminNombrados: parseInt(formData.adminNombrados) || 0,
+            adminContratados: parseInt(formData.adminContratados) || 0,
+            cantidadPerifericos: parseInt(formData.cantidadPerifericos) || 0,
+            apoyoIntermitenteLeve: parseInt(formData.apoyoIntermitenteLeve) || 0,
+            apoyoContinuoModerado: parseInt(formData.apoyoContinuoModerado) || 0,
+            apoyoIntensoSevero: parseInt(formData.apoyoIntensoSevero) || 0,
+            actualizadoPor: user?.nombre || user?.email || 'sistema',
+            actualizadoEn: new Date().toISOString()
+        };
+        // Auto-calculate total students
+        parsed.alumnosCenso = parsed.alumnosInicial + parsed.alumnosIntermedio + parsed.alumnosAvanzado;
+
+        // Auto-calculate inclusion totals
+        parsed.totalInclusivos = parsed.apoyoIntermitenteLeve + parsed.apoyoContinuoModerado + parsed.apoyoIntensoSevero;
+        if (parsed.totalInclusivos === 0 && (parseInt(formData.totalInclusivos) || 0) > 0) {
+            parsed.totalInclusivos = parseInt(formData.totalInclusivos) || 0;
+        }
+        parsed.porcentajeInclusion = parsed.alumnosCenso > 0 ? Number(((parsed.totalInclusivos / parsed.alumnosCenso) * 100).toFixed(1)) : 0;
+
+        try {
+            if (editingCEBA) {
+                await updateCeba(editingCEBA.id, parsed);
+                alert("CEBA actualizado exitosamente.");
+            } else {
+                await addCeba(parsed);
+                alert("CEBA registrado exitosamente.");
+            }
+            setFormOpen(false);
+            setEditingCEBA(null);
+        } catch (err) {
+            console.error("Error saving CEBA:", err);
+            alert("Error al guardar el CEBA.");
+        }
+        setLoading(false);
+    };
+
+    const addSedeRow = () => {
+        setFormData(prev => ({
+            ...prev,
+            sedes: [...prev.sedes, { sede: "", direccion: "", formaAtencion: "", dias: "", horario: "" }]
+        }));
+    };
+
+    const removeSedeRow = (idx) => {
+        setFormData(prev => ({
+            ...prev,
+            sedes: prev.sedes.filter((_, i) => i !== idx)
+        }));
+    };
+
+    const updateSedeRow = (idx, field, val) => {
+        setFormData(prev => {
+            const copy = [...prev.sedes];
+            copy[idx] = { ...copy[idx], [field]: val };
+            return { ...prev, sedes: copy };
+        });
+    };
+
+    // ── Drag-and-drop / Upload state ──
+    const [dragOver, setDragOver] = useState(false);
+    const [uploadPreview, setUploadPreview] = useState(null); // { items: [], totalSedes: 0 }
+    const [uploadMode, setUploadMode] = useState("merge"); // "merge" or "replace"
+
+    const handleFileUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setLoading(true);
+        try {
+            const parsed = await parseDirectorioCEBA(file);
+            if (parsed.length === 0) {
+                alert("No se detectaron instituciones en el archivo. Verifique el formato.");
+                setLoading(false);
+                return;
+            }
+            const totalSedes = parsed.reduce((s, c) => s + (c.sedes?.length || 0), 0);
+            setUploadPreview({ items: parsed, totalSedes });
+        } catch (err) {
+            console.error("Error parsing file:", err);
+            alert("Error al procesar el archivo Excel: " + err.message);
+        }
+        setLoading(false);
+        // Reset file input
+        if (fileRef.current) fileRef.current.value = "";
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const file = e.dataTransfer?.files?.[0];
+        if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
+            handleFileUpload({ target: { files: [file] } });
+        } else {
+            alert("Solo se aceptan archivos Excel (.xlsx / .xls)");
+        }
+    };
+
+    const confirmUpload = async () => {
+        if (!uploadPreview) return;
+        setLoading(true);
+        try {
+            if (uploadMode === "replace") {
+                // Delete all existing before inserting
+                const { getDocs, collection: coll } = await import("firebase/firestore");
+                const { db: fireDb } = await import("../firebase/config");
+                const snap = await getDocs(coll(fireDb, "directorioCeba"));
+                const { writeBatch: wb, doc: docRef } = await import("firebase/firestore");
+                const delBatch = wb(fireDb);
+                snap.docs.forEach(d => delBatch.delete(d.ref));
+                await delBatch.commit();
+            }
+            await batchSetCebas(uploadPreview.items, user?.uid, user?.nombre);
+            alert(`${uploadPreview.items.length} instituciones CEBA ${uploadMode === "replace" ? "reemplazadas" : "actualizadas"} exitosamente.`);
+            setUploadPreview(null);
+        } catch (err) {
+            console.error("Error uploading CEBAs:", err);
+            alert("Error al guardar las instituciones: " + err.message);
+        }
+        setLoading(false);
+    };
+
+
+    // Subscribirse a los CEBAs desde Firestore
+    useEffect(() => {
+        const unsubscribe = subscribeDirectorioCeba((list) => {
+            setData(list || []);
+            setLoadingData(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Auto-select own school if director
+    useEffect(() => {
+        if (user && user.rol === "director" && data.length > 0) {
+            const mySchool = data.find(c => c.id === user.institucionId);
+            if (mySchool) {
+                setSelectedCEBA(mySchool);
+            }
+        }
+    }, [data, user]);
 
     // Unique districts
     const distritos = useMemo(() => {
@@ -232,20 +638,24 @@ export default function DirectorioCEBA() {
     // Filtered data
     const filtered = useMemo(() => {
         let f = [...data];
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
-            f = f.filter(c =>
-                (c.nombre || "").toLowerCase().includes(term) ||
-                (c.distrito || "").toLowerCase().includes(term) ||
-                (`${c.apellidoPaterno} ${c.apellidoMaterno} ${c.nombres}`).toLowerCase().includes(term) ||
-                (c.correoInstitucional || "").toLowerCase().includes(term)
-            );
-        }
-        if (distritoFilter !== "todos") {
-            f = f.filter(c => c.distrito === distritoFilter);
+        if (user && user.rol === "director") {
+            f = f.filter(c => c.id === user.institucionId);
+        } else {
+            if (searchTerm) {
+                const term = searchTerm.toLowerCase();
+                f = f.filter(c =>
+                    (c.nombre || "").toLowerCase().includes(term) ||
+                    (c.distrito || "").toLowerCase().includes(term) ||
+                    (`${c.apellidoPaterno} ${c.apellidoMaterno} ${c.nombres}`).toLowerCase().includes(term) ||
+                    (c.correoInstitucional || "").toLowerCase().includes(term)
+                );
+            }
+            if (distritoFilter !== "todos") {
+                f = f.filter(c => c.distrito === distritoFilter);
+            }
         }
         return f;
-    }, [data, searchTerm, distritoFilter]);
+    }, [data, searchTerm, distritoFilter, user]);
 
     // KPIs
     const kpis = useMemo(() => {
@@ -253,115 +663,93 @@ export default function DirectorioCEBA() {
         const totalEstudiantes = data.reduce((s, c) => s + (c.alumnosCenso || 0), 0);
         const totalDocentes = data.reduce((s, c) => s + (c.docentesInicial || 0) + (c.docentesIntermedio || 0) + (c.docentesAvanzado || 0), 0);
         const totalAulas = data.reduce((s, c) => s + (c.aulasInicial || 0) + (c.aulasIntermedio || 0) + (c.aulasAvanzado || 0), 0);
-        const totalAdmin = data.reduce((s, c) => s + (c.adminNombrados || 0) + (c.adminContratados || 0), 0);
+        const totalAdmin = data.reduce((s, c) => s + (parseInt(c.adminNombrados) || 0) + (parseInt(c.adminContratados) || 0), 0);
         const distritosUnicos = new Set(data.map(c => c.distrito).filter(Boolean)).size;
-        return { totalCEBA, totalEstudiantes, totalDocentes, totalAulas, totalAdmin, distritosUnicos };
+
+        return {
+            totalCEBA,
+            totalEstudiantes,
+            totalDocentes,
+            totalAulas,
+            totalAdmin,
+            distritosUnicos
+        };
     }, [data]);
 
-    // Chart data: students by CEBA (horizontal bar, descending)
-    const barData = useMemo(() => {
-        return [...data]
-            .sort((a, b) => (b.alumnosCenso || 0) - (a.alumnosCenso || 0))
-            .map(c => ({ nombre: c.nombre?.length > 25 ? c.nombre.substring(0, 25) + "..." : c.nombre, Estudiantes: c.alumnosCenso || 0 }));
-    }, [data]);
-
-    // Chart data: CEBAs by district (pie)
-    const pieData = useMemo(() => {
-        const map = {};
-        data.forEach(c => { const d = c.distrito || "Otro"; map[d] = (map[d] || 0) + 1; });
-        return Object.entries(map).map(([name, value]) => ({ name, value }));
-    }, [data]);
-
-    // Handle file upload
-    const handleFileUpload = useCallback(async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setLoading(true);
-        try {
-            const parsed = await parseDirectorioCEBA(file);
-            setData(parsed);
-        } catch (err) {
-            console.error("Error parsing Excel:", err);
-            alert("Error al parsear el archivo Excel. Verifique el formato.");
-        }
-        setLoading(false);
-        if (fileRef.current) fileRef.current.value = "";
-    }, []);
-
-    // Export PDF — multi-page A4
+    // Export PDF — scaled multi-page A1 vertical
     const handleExportPDF = useCallback(() => {
         setExporting(true);
         try {
-            const pdf = new jsPDF("portrait", "mm", "a4");
-            const W = 210, H = 297, MX = 14, MY = 14, pw = W - 2 * MX;
+            const pdf = new jsPDF("portrait", "mm", "a1");
+            const W = 594, H = 841, MX = 40, MY = 40, pw = W - 2 * MX;
             let y = MY;
             let pageNum = 1;
-            const checkPage = (need) => { if (y + need > H - MY - 8) { pdf.addPage(); pageNum++; y = MY; } };
+            const checkPage = (need) => { if (y + need > H - MY - 22) { pdf.addPage(); pageNum++; y = MY; } };
 
             // Header
-            pdf.setFontSize(16); pdf.setFont("helvetica", "bold"); pdf.setTextColor(12, 25, 41);
-            pdf.text("Directorio CEBA - UGEL 03", MX, y + 6); y += 10;
-            pdf.setFontSize(9); pdf.setFont("helvetica", "normal"); pdf.setTextColor(100, 116, 139);
-            pdf.text(`Centros de Educacion Basica Alternativa | Generado: ${new Date().toLocaleDateString("es-PE")}`, MX, y + 4); y += 10;
+            pdf.setFontSize(45); pdf.setFont("helvetica", "bold"); pdf.setTextColor(12, 25, 41);
+            pdf.text("Directorio CEBA - UGEL 03", MX, y + 17); y += 28;
+            pdf.setFontSize(25); pdf.setFont("helvetica", "normal"); pdf.setTextColor(100, 116, 139);
+            pdf.text(`Centros de Educacion Basica Alternativa | Generado: ${new Date().toLocaleDateString("es-PE")}`, MX, y + 11); y += 28;
 
             // KPI row
-            pdf.setFillColor(241, 245, 249); pdf.roundedRect(MX, y, pw, 14, 2, 2, "F");
-            pdf.setFontSize(8); pdf.setFont("helvetica", "bold"); pdf.setTextColor(30, 77, 123);
+            pdf.setFillColor(241, 245, 249); pdf.roundedRect(MX, y, pw, 40, 6, 6, "F");
+            pdf.setFontSize(22); pdf.setFont("helvetica", "bold"); pdf.setTextColor(30, 77, 123);
             const kpiItems = [`CEBA: ${kpis.totalCEBA}`, `Estudiantes: ${kpis.totalEstudiantes.toLocaleString()}`, `Docentes: ${kpis.totalDocentes}`, `Aulas: ${kpis.totalAulas}`, `Admin: ${kpis.totalAdmin}`, `Distritos: ${kpis.distritosUnicos}`];
             const kpiW = pw / kpiItems.length;
-            kpiItems.forEach((t, i) => { pdf.text(t, MX + i * kpiW + kpiW / 2, y + 9, { align: "center" }); });
-            y += 20;
+            kpiItems.forEach((t, i) => { pdf.text(t, MX + i * kpiW + kpiW / 2, y + 25, { align: "center" }); });
+            y += 56;
 
             // CEBAs
             filtered.forEach((c, idx) => {
-                checkPage(45);
+                checkPage(127);
                 const isEstatal = (c.tipoGestion || "").toUpperCase().includes("ESTATAL");
                 const totalDoc = (c.docentesInicial || 0) + (c.docentesIntermedio || 0) + (c.docentesAvanzado || 0);
                 const totalAul = (c.aulasInicial || 0) + (c.aulasIntermedio || 0) + (c.aulasAvanzado || 0);
 
                 // Name bar
-                pdf.setFillColor(27, 58, 92); pdf.roundedRect(MX, y, pw, 8, 1, 1, "F");
-                pdf.setFontSize(10); pdf.setFont("helvetica", "bold"); pdf.setTextColor(255, 255, 255);
-                pdf.text(`${idx + 1}. ${c.nombre}`, MX + 3, y + 5.5);
-                pdf.setFontSize(7); pdf.text(`${isEstatal ? "ESTATAL" : "CONVENIO"} | ${c.distrito}`, MX + pw - 3, y + 5.5, { align: "right" });
-                y += 11;
+                pdf.setFillColor(27, 58, 92); pdf.roundedRect(MX, y, pw, 22, 3, 3, "F");
+                pdf.setFontSize(28); pdf.setFont("helvetica", "bold"); pdf.setTextColor(255, 255, 255);
+                pdf.text(`${idx + 1}. ${c.nombre}`, MX + 8, y + 15);
+                pdf.setFontSize(20); pdf.text(`${isEstatal ? "ESTATAL" : "CONVENIO"} | ${c.distrito}`, MX + pw - 8, y + 15, { align: "right" });
+                y += 31;
 
                 // Director
-                pdf.setFontSize(8.5); pdf.setFont("helvetica", "bold"); pdf.setTextColor(12, 25, 41);
+                pdf.setFontSize(24); pdf.setFont("helvetica", "bold"); pdf.setTextColor(12, 25, 41);
                 const fullName = [c.nombres, c.apellidoPaterno, c.apellidoMaterno].filter(Boolean).join(" ");
-                pdf.text(`${c.cargo || "Director"}: ${fullName}`, MX + 2, y + 3); y += 5;
+                pdf.text(`${c.cargo || "Director"}: ${fullName}`, MX + 6, y + 8); y += 14;
 
                 // Contact
-                pdf.setFont("helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(71, 85, 105);
+                pdf.setFont("helvetica", "normal"); pdf.setFontSize(22); pdf.setTextColor(71, 85, 105);
                 const contact = [c.correoInstitucional, c.celular, c.direccion].filter(Boolean).join(" | ");
-                if (contact) { const lines = pdf.splitTextToSize(contact, pw - 4); pdf.text(lines, MX + 2, y + 3); y += lines.length * 3.5 + 1; }
+                if (contact) { const lines = pdf.splitTextToSize(contact, pw - 12); pdf.text(lines, MX + 6, y + 8); y += lines.length * 10 + 3; }
 
                 // Stats
-                pdf.setFontSize(8); pdf.setFont("helvetica", "bold"); pdf.setTextColor(21, 128, 61);
-                pdf.text(`Alumnos: ${c.alumnosCenso || 0}`, MX + 2, y + 3);
-                pdf.setTextColor(67, 56, 202); pdf.text(`Docentes: ${totalDoc}`, MX + 45, y + 3);
-                pdf.setTextColor(179, 69, 9); pdf.text(`Aulas: ${totalAul}`, MX + 85, y + 3);
-                pdf.setTextColor(15, 118, 110); pdf.text(`Perifericos: ${c.cantidadPerifericos || 0}`, MX + 115, y + 3);
-                y += 5;
+                pdf.setFontSize(22); pdf.setFont("helvetica", "bold"); pdf.setTextColor(21, 128, 61);
+                pdf.text(`Alumnos: ${c.alumnosCenso || 0}`, MX + 6, y + 8);
+                pdf.setTextColor(67, 56, 202); pdf.text(`Docentes: ${totalDoc}`, MX + 127, y + 8);
+                pdf.setTextColor(179, 69, 9); pdf.text(`Aulas: ${totalAul}`, MX + 240, y + 8);
+                pdf.setTextColor(15, 118, 110); pdf.text(`Perifericos: ${c.cantidadPerifericos || 0}`, MX + 325, y + 8);
+                y += 14;
 
                 // Sedes summary
                 if (c.sedes && c.sedes.length > 0) {
-                    checkPage(8);
-                    pdf.setFontSize(7.5); pdf.setFont("helvetica", "italic"); pdf.setTextColor(100, 116, 139);
-                    const sedeNames = c.sedes.map(s => s.sede).filter(Boolean).slice(0, 3).join(", ");
+                    checkPage(22);
+                    pdf.setFontSize(21); pdf.setFont("helvetica", "italic"); pdf.setTextColor(100, 116, 139);
+                    const SedeNames = c.sedes.map(s => s.sede).filter(Boolean).slice(0, 3).join(", ");
                     const extra = c.sedes.length > 3 ? ` ...y ${c.sedes.length - 3} mas` : "";
-                    if (sedeNames) { pdf.text(`Sedes: ${sedeNames}${extra}`, MX + 2, y + 3); y += 4; }
+                    if (SedeNames) { pdf.text(`Sedes: ${SedeNames}${extra}`, MX + 6, y + 8); y += 11; }
                 }
 
-                pdf.setDrawColor(226, 232, 240); pdf.line(MX, y + 1, MX + pw, y + 1); y += 5;
+                pdf.setDrawColor(226, 232, 240); pdf.line(MX, y + 3, MX + pw, y + 3); y += 14;
             });
 
             // Page numbers
             const total = pdf.getNumberOfPages();
             for (let i = 1; i <= total; i++) {
                 pdf.setPage(i);
-                pdf.setFontSize(7); pdf.setFont("helvetica", "normal"); pdf.setTextColor(148, 163, 184);
-                pdf.text(`Pagina ${i} de ${total}`, W / 2, H - 6, { align: "center" });
+                pdf.setFontSize(20); pdf.setFont("helvetica", "normal"); pdf.setTextColor(148, 163, 184);
+                pdf.text(`Pagina ${i} de ${total}`, W / 2, H - 17, { align: "center" });
             }
 
             const today = new Date().toISOString().split("T")[0];
@@ -376,20 +764,54 @@ export default function DirectorioCEBA() {
     /* ═══════════════════════════════════════════════════════
        EMPTY STATE
        ═══════════════════════════════════════════════════════ */
+    if (loadingData) {
+        return (
+            <div style={{ textAlign: "center", padding: 80, fontFamily: "'DM Sans'" }}>
+                <div style={{ display: 'inline-block', width: 24, height: 24, border: `3px solid ${C.g200}`, borderTopColor: C.navy4, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                <p style={{ color: C.g500, fontSize: '0.85rem', marginTop: 10 }}>Cargando directorio CEBA...</p>
+                <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+            </div>
+        );
+    }
+
     if (data.length === 0 && !loading) {
         return (
-            <div style={{ textAlign: "center", padding: 80 }}>
-                {Icons.school(56, C.g300)}
-                <h3 style={{ color: C.navy1, fontSize: "1.3rem", margin: "20px 0 10px", fontFamily: "'DM Serif Display',serif" }}>
-                    Directorio CEBA - UGEL 03
-                </h3>
-                <p style={{ color: C.g500, fontSize: "0.9rem", fontFamily: "'DM Sans'", maxWidth: 460, margin: "0 auto 24px" }}>
-                    No hay datos de CEBA cargados. Suba el archivo Excel del Directorio CEBA para visualizar toda la informacion.
-                </p>
-                <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFileUpload} />
-                <button onClick={() => fileRef.current?.click()} style={{ ...S.btn(C.navy4, C.white, C.navy5), padding: "12px 28px", fontSize: 14, margin: "0 auto" }}>
-                    {Icons.upload(16, C.white)} Cargar Excel del Directorio CEBA
-                </button>
+            <div style={{ padding: 40, maxWidth: 640, margin: "40px auto" }}>
+                <div 
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={handleDrop}
+                    style={{
+                        border: `2.5px dashed ${dragOver ? C.navy4 : C.g300}`,
+                        background: dragOver ? `${C.navy4}08` : C.white,
+                        borderRadius: 12,
+                        padding: "60px 40px",
+                        textAlign: "center",
+                        transition: "all 0.2s ease",
+                        boxShadow: "0 4px 12px rgba(15,23,42,0.03)"
+                    }}
+                >
+                    <div style={{ marginBottom: 20 }}>
+                        {Icons.school(56, dragOver ? C.navy4 : C.g400)}
+                    </div>
+                    <h3 style={{ color: C.navy1, fontSize: "1.3rem", margin: "0 0 10px", fontFamily: "'DM Serif Display',serif" }}>
+                        Directorio CEBA - UGEL 03
+                    </h3>
+                    <p style={{ color: C.g500, fontSize: "0.88rem", fontFamily: "'DM Sans'", maxWidth: 440, margin: "0 auto 28px", lineHeight: 1.5 }}>
+                        Arrastra y suelta tu archivo Excel del Directorio CEBA aquí, o haz click en el botón para explorar tus archivos locales.
+                    </p>
+                    <div style={{ display: "flex", gap: 12, justifyContent: "center", alignItems: "center" }}>
+                        <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFileUpload} />
+                        <button onClick={() => fileRef.current?.click()} style={{ ...S.btn(C.navy4, C.white, C.navy5), padding: "12px 28px", fontSize: 13 }}>
+                            {Icons.upload(15, C.white)} Seleccionar Archivo Excel
+                        </button>
+                        {(isRole('admin') || isRole('jefatura')) && (
+                            <button onClick={openAddCEBA} style={{ ...S.btn(C.gold2, C.white, C.gold1), padding: "12px 28px", fontSize: 13 }}>
+                                + Cargar Manualmente
+                            </button>
+                        )}
+                    </div>
+                </div>
             </div>
         );
     }
@@ -398,7 +820,20 @@ export default function DirectorioCEBA() {
        MAIN RENDER
        ═══════════════════════════════════════════════════════ */
     return (
-        <div>
+        <div onDragEnter={(e) => { e.preventDefault(); setDragOver(true); }}>
+            {dragOver && (
+                <div 
+                    onDragLeave={() => setDragOver(false)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={handleDrop}
+                    style={{ position: "fixed", inset: 0, background: "rgba(12,25,41,0.85)", zIndex: 120, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)", border: `4px dashed ${C.gold2}`, margin: 10, borderRadius: 12, animation: "fadeIn 0.15s ease" }}
+                >
+                    <div style={{ animation: "pulse 1.5s infinite" }}>{Icons.upload(64, C.white)}</div>
+                    <h3 style={{ color: C.white, fontSize: "1.6rem", margin: "20px 0 10px", fontFamily: "'DM Serif Display',serif" }}>Suelte el archivo del Directorio CEBA</h3>
+                    <p style={{ color: C.g300, fontSize: "0.95rem", fontFamily: "'DM Sans'" }}>Para actualizar o reemplazar los datos del directorio</p>
+                    <style>{`@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }`}</style>
+                </div>
+            )}
             {/* HEADER */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 14 }}>
                 <div>
@@ -410,6 +845,11 @@ export default function DirectorioCEBA() {
                     </p>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    {(isRole('admin') || isRole('jefatura')) && (
+                        <button onClick={openAddCEBA} style={S.btn(C.navy4, C.white, C.navy5)}>
+                            + Agregar CEBA
+                        </button>
+                    )}
                     <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFileUpload} />
                     <button onClick={() => fileRef.current?.click()} disabled={loading} style={{ ...S.btn(C.gold2, C.white, C.gold1), opacity: loading ? 0.7 : 1 }}>
                         {loading ? "Procesando..." : <>{Icons.upload(14, C.white)} Cargar Excel</>}
@@ -613,9 +1053,21 @@ export default function DirectorioCEBA() {
                                     {selectedCEBA.nombre}
                                 </h2>
                             </div>
-                            <button onClick={() => setSelectedCEBA(null)} style={{ background: "none", border: "none", cursor: "pointer", color: C.g400, padding: 4 }}>
-                                {Icons.x(22, C.g400)}
-                            </button>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                {(isRole('admin') || isRole('jefatura') || (isRole('director') && user?.institucionId === selectedCEBA.id)) && (
+                                    <button onClick={() => openEditCEBA(selectedCEBA)} style={{ ...S.btn(C.navy4, C.white, C.navy5), padding: "6px 12px", fontSize: 11 }}>
+                                        Editar
+                                    </button>
+                                )}
+                                {(isRole('admin') || isRole('jefatura')) && (
+                                    <button onClick={() => handleDeleteCEBA(selectedCEBA.id)} style={{ ...S.btn(C.red, C.white, C.red), padding: "6px 12px", fontSize: 11 }}>
+                                        Eliminar
+                                    </button>
+                                )}
+                                <button onClick={() => setSelectedCEBA(null)} style={{ background: "none", border: "none", cursor: "pointer", color: C.g400, padding: 4 }}>
+                                    {Icons.x(22, C.g400)}
+                                </button>
+                            </div>
                         </div>
 
                         <div style={{ padding: "20px 28px 28px" }}>
@@ -728,7 +1180,36 @@ export default function DirectorioCEBA() {
                                 </div>
                             </div>
 
-                            {/* Section 7: Observaciones */}
+                            {/* Section 7: Inclusión y Apoyos (NEE) */}
+                            <SectionTitle>Inclusión y Apoyos (NEE)</SectionTitle>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
+                                <div style={{ background: C.g50, border: `1px solid ${C.g100}`, borderRadius: 8, padding: "12px 14px", textAlign: "center" }}>
+                                    <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1.3rem", fontWeight: 700, color: C.navy4 }}>{selectedCEBA.apoyoIntermitenteLeve || 0}</div>
+                                    <div style={{ fontSize: "0.65rem", fontWeight: 600, color: C.g500, textTransform: "uppercase" }}>Intermitente / Leve</div>
+                                </div>
+                                <div style={{ background: C.g50, border: `1px solid ${C.g100}`, borderRadius: 8, padding: "12px 14px", textAlign: "center" }}>
+                                    <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1.3rem", fontWeight: 700, color: C.teal }}>{selectedCEBA.apoyoContinuoModerado || 0}</div>
+                                    <div style={{ fontSize: "0.65rem", fontWeight: 600, color: C.g500, textTransform: "uppercase" }}>Continuo / Moderado</div>
+                                </div>
+                                <div style={{ background: C.g50, border: `1px solid ${C.g100}`, borderRadius: 8, padding: "12px 14px", textAlign: "center" }}>
+                                    <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1.3rem", fontWeight: 700, color: C.amber }}>{selectedCEBA.apoyoIntensoSevero || 0}</div>
+                                    <div style={{ fontSize: "0.65rem", fontWeight: 600, color: C.g500, textTransform: "uppercase" }}>Intenso / Severo</div>
+                                </div>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+                                <FieldRow label="Total Inclusivos" value={selectedCEBA.totalInclusivos || 0} mono />
+                                <FieldRow label="Porcentaje de Inclusión" value={`${selectedCEBA.porcentajeInclusion || 0}%`} mono />
+                            </div>
+                            <div style={{ background: `${C.navy4}08`, border: `1px solid ${C.navy4}20`, borderRadius: 8, padding: "14px 18px", fontSize: "0.78rem", color: C.g700, marginBottom: 24, lineHeight: 1.5 }}>
+                                <h4 style={{ margin: "0 0 6px 0", color: C.navy3, fontSize: "0.8rem", fontWeight: 700 }}>Guía de Orientación de Inclusión (NEE):</h4>
+                                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                                    <li><strong>Apoyo Intermitente (Leve):</strong> Dificultades leves de aprendizaje o lenguaje.</li>
+                                    <li><strong>Apoyo Continuo (Moderado):</strong> Discapacidad intelectual leve/moderada, sensorial o física.</li>
+                                    <li><strong>Apoyo Intenso (Severo):</strong> Sordoceguera, multidiscapacidad o discapacidad intelectual severa.</li>
+                                </ul>
+                            </div>
+
+                            {/* Section 8: Observaciones */}
                             {selectedCEBA.observaciones && (
                                 <>
                                     <SectionTitle>Observaciones</SectionTitle>
@@ -737,6 +1218,370 @@ export default function DirectorioCEBA() {
                                     </div>
                                 </>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* FORM MODAL (ADD & EDIT) */}
+            {formOpen && (
+                <div style={{ position: "fixed", inset: 0, background: "rgba(12,25,41,0.6)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, backdropFilter: "blur(3px)" }}>
+                    <div style={{ ...S.card, padding: 0, width: "100%", maxWidth: 750, maxHeight: "90vh", overflowY: "auto", display: "flex", flexDirection: "column", animation: "fadeIn 0.2s ease" }}>
+                        
+                        {/* Header */}
+                        <div style={{ padding: "20px 24px", borderBottom: `2px solid ${C.g100}`, display: "flex", justifyContent: "space-between", alignItems: "center", background: C.white, borderRadius: "10px 10px 0 0" }}>
+                            <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Serif Display', serif" }}>
+                                {editingCEBA ? `Editar CEBA: ${editingCEBA.nombre}` : "Agregar Nuevo CEBA"}
+                            </h3>
+                            <button onClick={() => setFormOpen(false)} style={{ background: "none", border: "none", fontSize: "1.5rem", cursor: "pointer", color: C.g400 }}>&times;</button>
+                        </div>
+
+                        {/* Tabs */}
+                        <div style={{ display: "flex", borderBottom: `1px solid ${C.g200}`, background: C.g50 }}>
+                            {[
+                                { id: "inst", label: "Datos Institucionales" },
+                                { id: "director", label: "Director / Contacto" },
+                                { id: "ciclos", label: "Ciclos, Alumnos y Personal" },
+                                { id: "inclusion", label: "Inclusión (NEE)" },
+                                { id: "sedes", label: `Sedes (${formData.sedes.length})` }
+                            ].map(t => (
+                                <button
+                                    key={t.id}
+                                    type="button"
+                                    onClick={() => setFormTab(t.id)}
+                                    style={{
+                                        flex: 1,
+                                        padding: "12px 14px",
+                                        border: "none",
+                                        borderBottom: formTab === t.id ? `3px solid ${C.navy4}` : "none",
+                                        background: "transparent",
+                                        color: formTab === t.id ? C.navy1 : C.g500,
+                                        fontWeight: formTab === t.id ? 700 : 500,
+                                        fontSize: "0.8rem",
+                                        cursor: "pointer",
+                                        fontFamily: "'DM Sans', sans-serif",
+                                        transition: "all 0.15s"
+                                    }}
+                                >
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Form */}
+                        <form onSubmit={handleSaveCEBA} style={{ padding: 24, display: "flex", flexDirection: "column", flex: 1, gap: 20 }}>
+                            
+                            {/* Tab 1: Datos Institucionales */}
+                            {formTab === "inst" && (
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                                    <div style={{ gridColumn: "1 / -1" }}>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Nombre del CEBA *</label>
+                                        <input type="text" required value={formData.nombre} onChange={e => setFormData({ ...formData, nombre: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Código Local</label>
+                                        <input type="text" value={formData.codigoLocal} onChange={e => setFormData({ ...formData, codigoLocal: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Tipo de Gestión</label>
+                                        <select value={formData.tipoGestion} onChange={e => setFormData({ ...formData, tipoGestion: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }}>
+                                            <option value="Estatal">Estatal</option>
+                                            <option value="Convenio">Convenio</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Cod. Modular Inicial-Intermedio</label>
+                                        <input type="text" value={formData.codigoModularInicialIntermedio} onChange={e => setFormData({ ...formData, codigoModularInicialIntermedio: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Cod. Modular Avanzado</label>
+                                        <input type="text" value={formData.codigoModularAvanzado} onChange={e => setFormData({ ...formData, codigoModularAvanzado: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Distrito *</label>
+                                        <input type="text" required value={formData.distrito} onChange={e => setFormData({ ...formData, distrito: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Dirección</label>
+                                        <input type="text" value={formData.direccion} onChange={e => setFormData({ ...formData, direccion: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div style={{ gridColumn: "1 / -1" }}>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Observaciones</label>
+                                        <textarea value={formData.observaciones} onChange={e => setFormData({ ...formData, observaciones: e.target.value })} style={{ ...S.input, width: "100%", height: 80, boxSizing: "border-box", resize: "none" }} />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Tab 2: Director / Contacto */}
+                            {formTab === "director" && (
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Cargo</label>
+                                        <input type="text" value={formData.cargo} onChange={e => setFormData({ ...formData, cargo: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Nombres</label>
+                                        <input type="text" value={formData.nombres} onChange={e => setFormData({ ...formData, nombres: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Apellido Paterno</label>
+                                        <input type="text" value={formData.apellidoPaterno} onChange={e => setFormData({ ...formData, apellidoPaterno: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Apellido Materno</label>
+                                        <input type="text" value={formData.apellidoMaterno} onChange={e => setFormData({ ...formData, apellidoMaterno: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>DNI</label>
+                                        <input type="text" maxLength={8} value={formData.dni} onChange={e => setFormData({ ...formData, dni: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Celular</label>
+                                        <input type="text" value={formData.celular} onChange={e => setFormData({ ...formData, celular: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Correo Institucional</label>
+                                        <input type="email" value={formData.correoInstitucional} onChange={e => setFormData({ ...formData, correoInstitucional: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Correo Personal</label>
+                                        <input type="email" value={formData.correoPersonal} onChange={e => setFormData({ ...formData, correoPersonal: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Tab 3: Ciclos, Alumnos y Personal */}
+                            {formTab === "ciclos" && (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            <input type="checkbox" checked={formData.presencial} onChange={e => setFormData({ ...formData, presencial: e.target.checked })} />
+                                            <span style={{ fontSize: "0.8rem", color: C.g700 }}>Presencial</span>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            <input type="checkbox" checked={formData.semipresencial} onChange={e => setFormData({ ...formData, semipresencial: e.target.checked })} />
+                                            <span style={{ fontSize: "0.8rem", color: C.g700 }}>Semipresencial</span>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            <input type="checkbox" checked={formData.aDistancia} onChange={e => setFormData({ ...formData, aDistancia: e.target.checked })} />
+                                            <span style={{ fontSize: "0.8rem", color: C.g700 }}>A Distancia</span>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            <input type="checkbox" checked={formData.cicloInicial} onChange={e => setFormData({ ...formData, cicloInicial: e.target.checked })} />
+                                            <span style={{ fontSize: "0.8rem", color: C.g700 }}>Ciclo Inicial</span>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            <input type="checkbox" checked={formData.cicloIntermedio} onChange={e => setFormData({ ...formData, cicloIntermedio: e.target.checked })} />
+                                            <span style={{ fontSize: "0.8rem", color: C.g700 }}>Ciclo Intermedio</span>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            <input type="checkbox" checked={formData.cicloAvanzado} onChange={e => setFormData({ ...formData, cicloAvanzado: e.target.checked })} />
+                                            <span style={{ fontSize: "0.8rem", color: C.g700 }}>Ciclo Avanzado</span>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                                        <div>
+                                            <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Turnos</label>
+                                            <input type="text" placeholder="Mañana, Tarde, Noche" value={formData.turnos} onChange={e => setFormData({ ...formData, turnos: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Cantidad Periféricos</label>
+                                            <input type="number" min="0" value={formData.cantidadPerifericos} onChange={e => setFormData({ ...formData, cantidadPerifericos: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                        </div>
+                                    </div>
+
+                                    <div style={{ borderTop: `1px solid ${C.g100}`, paddingTop: 14 }}>
+                                        <h4 style={{ margin: "0 0 10px 0", fontSize: "0.82rem", color: C.navy1, fontWeight: 700 }}>Matrícula y Recursos por Ciclo</h4>
+                                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+                                            <div />
+                                            <div style={{ textAlign: "center", fontSize: "0.68rem", fontWeight: 700, color: C.g500 }}>Inicial</div>
+                                            <div style={{ textAlign: "center", fontSize: "0.68rem", fontWeight: 700, color: C.g500 }}>Intermedio</div>
+                                            <div style={{ textAlign: "center", fontSize: "0.68rem", fontWeight: 700, color: C.g500 }}>Avanzado</div>
+
+                                            <div style={{ fontSize: "0.75rem", alignSelf: "center", color: C.g700, fontWeight: 600 }}>Alumnos:</div>
+                                            <input type="number" min="0" value={formData.alumnosInicial} onChange={e => setFormData({ ...formData, alumnosInicial: e.target.value })} style={S.input} />
+                                            <input type="number" min="0" value={formData.alumnosIntermedio} onChange={e => setFormData({ ...formData, alumnosIntermedio: e.target.value })} style={S.input} />
+                                            <input type="number" min="0" value={formData.alumnosAvanzado} onChange={e => setFormData({ ...formData, alumnosAvanzado: e.target.value })} style={S.input} />
+
+                                            <div style={{ fontSize: "0.75rem", alignSelf: "center", color: C.g700, fontWeight: 600 }}>Docentes:</div>
+                                            <input type="number" min="0" value={formData.docentesInicial} onChange={e => setFormData({ ...formData, docentesInicial: e.target.value })} style={S.input} />
+                                            <input type="number" min="0" value={formData.docentesIntermedio} onChange={e => setFormData({ ...formData, docentesIntermedio: e.target.value })} style={S.input} />
+                                            <input type="number" min="0" value={formData.docentesAvanzado} onChange={e => setFormData({ ...formData, docentesAvanzado: e.target.value })} style={S.input} />
+
+                                            <div style={{ fontSize: "0.75rem", alignSelf: "center", color: C.g700, fontWeight: 600 }}>Aulas:</div>
+                                            <input type="number" min="0" value={formData.aulasInicial} onChange={e => setFormData({ ...formData, aulasInicial: e.target.value })} style={S.input} />
+                                            <input type="number" min="0" value={formData.aulasIntermedio} onChange={e => setFormData({ ...formData, aulasIntermedio: e.target.value })} style={S.input} />
+                                            <input type="number" min="0" value={formData.aulasAvanzado} onChange={e => setFormData({ ...formData, aulasAvanzado: e.target.value })} style={S.input} />
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, borderTop: `1px solid ${C.g100}`, paddingTop: 14 }}>
+                                        <div>
+                                            <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Admin. Nombrados</label>
+                                            <input type="number" min="0" value={formData.adminNombrados} onChange={e => setFormData({ ...formData, adminNombrados: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Admin. Contratados</label>
+                                            <input type="number" min="0" value={formData.adminContratados} onChange={e => setFormData({ ...formData, adminContratados: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Tab 3.5: Inclusión (NEE) */}
+                            {formTab === "inclusion" && (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                                    <h4 style={{ margin: 0, fontSize: "0.9rem", color: C.navy1, fontWeight: 700 }}>Estudiantes con Necesidades Educativas Especiales (NEE)</h4>
+                                    <p style={{ color: C.g500, fontSize: "0.78rem", margin: 0 }}>Registre el número de alumnos en cada nivel de apoyo requerido.</p>
+                                    
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                                        <div>
+                                            <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Apoyo Intermitente / Leve</label>
+                                            <input type="number" min="0" value={formData.apoyoIntermitenteLeve} onChange={e => setFormData({ ...formData, apoyoIntermitenteLeve: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Apoyo Continuo / Moderado</label>
+                                            <input type="number" min="0" value={formData.apoyoContinuoModerado} onChange={e => setFormData({ ...formData, apoyoContinuoModerado: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Apoyo Intenso / Severo</label>
+                                            <input type="number" min="0" value={formData.apoyoIntensoSevero} onChange={e => setFormData({ ...formData, apoyoIntensoSevero: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                        </div>
+                                    </div>
+
+                                    <div style={{ background: C.g50, borderRadius: 8, padding: 14, border: `1px solid ${C.g200}`, marginTop: 10 }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                                            <span style={{ fontSize: "0.82rem", fontWeight: 600, color: C.g700 }}>Total de Estudiantes Inclusivos:</span>
+                                            <span style={{ fontSize: "0.85rem", fontWeight: 700, color: C.navy4, fontFamily: "'JetBrains Mono'" }}>
+                                                {parseInt(formData.apoyoIntermitenteLeve || 0) + parseInt(formData.apoyoContinuoModerado || 0) + parseInt(formData.apoyoIntensoSevero || 0)}
+                                            </span>
+                                        </div>
+                                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                            <span style={{ fontSize: "0.82rem", fontWeight: 600, color: C.g700 }}>Porcentaje de Inclusión (auto):</span>
+                                            <span style={{ fontSize: "0.85rem", fontWeight: 700, color: C.green, fontFamily: "'JetBrains Mono'" }}>
+                                                {formData.alumnosCenso > 0 ? (((parseInt(formData.apoyoIntermitenteLeve || 0) + parseInt(formData.apoyoContinuoModerado || 0) + parseInt(formData.apoyoIntensoSevero || 0)) / formData.alumnosCenso) * 100).toFixed(1) : "0.0"}%
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ background: `${C.navy4}08`, border: `1px solid ${C.navy4}20`, borderRadius: 8, padding: "14px 18px", fontSize: "0.78rem", color: C.g700, lineHeight: 1.5 }}>
+                                        <h4 style={{ margin: "0 0 6px 0", color: C.navy3, fontSize: "0.8rem", fontWeight: 700 }}>Guía de Orientación:</h4>
+                                        <ul style={{ margin: 0, paddingLeft: 18 }}>
+                                            <li><strong>Apoyo Intermitente (Leve):</strong> Dificultades leves de aprendizaje o lenguaje.</li>
+                                            <li><strong>Apoyo Continuo (Moderado):</strong> Discapacidad intelectual leve/moderada, sensorial o física.</li>
+                                            <li><strong>Apoyo Intenso (Severo):</strong> Sordoceguera, multidiscapacidad o discapacidad intelectual severa.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Tab 4: Sedes y Horarios */}
+                            {formTab === "sedes" && (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <span style={{ fontSize: "0.82rem", color: C.g500 }}>Registre las sedes anexas y sus horarios.</span>
+                                        <button type="button" onClick={addSedeRow} style={{ ...S.btn(C.navy4, C.white, C.navy5), padding: "6px 12px", fontSize: 11 }}>
+                                            + Agregar Fila Sede
+                                        </button>
+                                    </div>
+
+                                    {formData.sedes.length === 0 ? (
+                                        <div style={{ textAlign: "center", padding: 24, border: `1px dashed ${C.g300}`, borderRadius: 8, color: C.g400, fontSize: "0.8rem" }}>
+                                            No hay sedes registradas.
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: "flex", flexDirection: "column", gap: 14, maxHeight: "40vh", overflowY: "auto", paddingRight: 4 }}>
+                                            {formData.sedes.map((s, idx) => (
+                                                <div key={idx} style={{ display: "grid", gridTemplateColumns: "1.2fr 1.5fr 1fr 1fr 1.2fr auto", gap: 10, background: C.g50, padding: 12, borderRadius: 6, border: `1px solid ${C.g200}`, alignItems: "center" }}>
+                                                    <input type="text" placeholder="Sede/Nombre" value={s.sede} onChange={e => updateSedeRow(idx, "sede", e.target.value)} style={{ ...S.input, padding: "6px 10px" }} />
+                                                    <input type="text" placeholder="Dirección" value={s.direccion} onChange={e => updateSedeRow(idx, "direccion", e.target.value)} style={{ ...S.input, padding: "6px 10px" }} />
+                                                    <input type="text" placeholder="Forma Atención" value={s.formaAtencion} onChange={e => updateSedeRow(idx, "formaAtencion", e.target.value)} style={{ ...S.input, padding: "6px 10px" }} />
+                                                    <input type="text" placeholder="Días" value={s.dias} onChange={e => updateSedeRow(idx, "dias", e.target.value)} style={{ ...S.input, padding: "6px 10px" }} />
+                                                    <input type="text" placeholder="Horario" value={s.horario} onChange={e => updateSedeRow(idx, "horario", e.target.value)} style={{ ...S.input, padding: "6px 10px" }} />
+                                                    <button type="button" onClick={() => removeSedeRow(idx)} style={{ background: "none", border: "none", color: C.red, fontSize: 16, cursor: "pointer" }}>&times;</button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Footer Actions */}
+                            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", borderTop: `1px solid ${C.g200}`, paddingTop: 18, marginTop: "auto" }}>
+                                <button type="button" onClick={() => setFormOpen(false)} style={{ background: "#FFFFFF", border: `1px solid ${C.g200}`, borderRadius: 6, padding: "8px 18px", fontSize: 12, fontWeight: 600, color: C.g600, cursor: "pointer" }}>
+                                    Cancelar
+                                </button>
+                                <button type="submit" disabled={loading} style={{ ...S.btn(C.navy3, C.white, C.navy4), padding: "8px 18px", fontSize: 12, opacity: loading ? 0.7 : 1 }}>
+                                    {loading ? "Guardando..." : "Guardar Institución"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* UPLOAD PREVIEW MODAL */}
+            {uploadPreview && (
+                <div style={{ position: "fixed", inset: 0, background: "rgba(12,25,41,0.6)", zIndex: 110, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, backdropFilter: "blur(3px)" }}>
+                    <div style={{ ...S.card, padding: 0, width: "100%", maxWidth: 560, animation: "fadeIn 0.2s ease" }}>
+                        <div style={{ padding: "20px 24px", borderBottom: `2px solid ${C.g100}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Serif Display', serif" }}>
+                                Vista Previa de Carga
+                            </h3>
+                            <button onClick={() => setUploadPreview(null)} style={{ background: "none", border: "none", fontSize: "1.5rem", cursor: "pointer", color: C.g400 }}>&times;</button>
+                        </div>
+                        <div style={{ padding: "20px 24px" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
+                                <div style={{ background: C.g50, border: `1px solid ${C.g200}`, borderRadius: 8, padding: "14px 16px", textAlign: "center" }}>
+                                    <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1.6rem", fontWeight: 700, color: C.navy4 }}>{uploadPreview.items.length}</div>
+                                    <div style={{ fontSize: "0.68rem", fontWeight: 600, color: C.g500, textTransform: "uppercase" }}>Instituciones</div>
+                                </div>
+                                <div style={{ background: C.g50, border: `1px solid ${C.g200}`, borderRadius: 8, padding: "14px 16px", textAlign: "center" }}>
+                                    <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1.6rem", fontWeight: 700, color: C.green }}>{uploadPreview.totalSedes}</div>
+                                    <div style={{ fontSize: "0.68rem", fontWeight: 600, color: C.g500, textTransform: "uppercase" }}>Sedes</div>
+                                </div>
+                                <div style={{ background: C.g50, border: `1px solid ${C.g200}`, borderRadius: 8, padding: "14px 16px", textAlign: "center" }}>
+                                    <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1.6rem", fontWeight: 700, color: C.amber }}>{new Set(uploadPreview.items.map(c => c.distrito).filter(Boolean)).size}</div>
+                                    <div style={{ fontSize: "0.68rem", fontWeight: 600, color: C.g500, textTransform: "uppercase" }}>Distritos</div>
+                                </div>
+                            </div>
+                            <div style={{ background: C.g50, border: `1px solid ${C.g200}`, borderRadius: 8, padding: 14, maxHeight: 180, overflowY: "auto", marginBottom: 20 }}>
+                                <div style={{ fontSize: "0.7rem", fontWeight: 700, color: C.g500, textTransform: "uppercase", marginBottom: 8 }}>Instituciones detectadas:</div>
+                                {uploadPreview.items.map((c, i) => (
+                                    <div key={i} style={{ fontSize: "0.78rem", color: C.g700, padding: "4px 0", borderBottom: `1px solid ${C.g100}`, display: "flex", justifyContent: "space-between" }}>
+                                        <span style={{ fontWeight: 600 }}>{c.n}. {c.nombre}</span>
+                                        <span style={{ color: C.g400, fontSize: "0.7rem" }}>{c.distrito} · {c.sedes?.length || 0} sedes</span>
+                                    </div>
+                                ))}
+                            </div>
+                            <div style={{ marginBottom: 20 }}>
+                                <div style={{ fontSize: "0.7rem", fontWeight: 700, color: C.g500, textTransform: "uppercase", marginBottom: 8 }}>Modo de carga:</div>
+                                <div style={{ display: "flex", gap: 10 }}>
+                                    <label style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 6, border: `2px solid ${uploadMode === "merge" ? C.navy4 : C.g200}`, background: uploadMode === "merge" ? `${C.navy4}08` : C.white, cursor: "pointer" }}>
+                                        <input type="radio" name="uploadMode" value="merge" checked={uploadMode === "merge"} onChange={() => setUploadMode("merge")} style={{ accentColor: C.navy4 }} />
+                                        <div>
+                                            <div style={{ fontSize: "0.82rem", fontWeight: 600, color: C.navy1 }}>Combinar (Upsert)</div>
+                                            <div style={{ fontSize: "0.7rem", color: C.g500 }}>Actualiza existentes y agrega nuevas</div>
+                                        </div>
+                                    </label>
+                                    <label style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 6, border: `2px solid ${uploadMode === "replace" ? C.red : C.g200}`, background: uploadMode === "replace" ? "#FEF2F208" : C.white, cursor: "pointer" }}>
+                                        <input type="radio" name="uploadMode" value="replace" checked={uploadMode === "replace"} onChange={() => setUploadMode("replace")} style={{ accentColor: C.red }} />
+                                        <div>
+                                            <div style={{ fontSize: "0.82rem", fontWeight: 600, color: C.navy1 }}>Reemplazar todo</div>
+                                            <div style={{ fontSize: "0.7rem", color: C.red }}>Borra todo y carga de nuevo</div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                                <button onClick={() => setUploadPreview(null)} style={{ background: C.white, border: `1px solid ${C.g200}`, borderRadius: 6, padding: "8px 18px", fontSize: 12, fontWeight: 600, color: C.g600, cursor: "pointer", fontFamily: "'DM Sans'" }}>
+                                    Cancelar
+                                </button>
+                                <button onClick={confirmUpload} disabled={loading} style={{ ...S.btn(C.navy3, C.white, C.navy4), padding: "8px 18px", fontSize: 12, opacity: loading ? 0.7 : 1 }}>
+                                    {loading ? "Subiendo..." : `Confirmar ${uploadMode === "merge" ? "Combinación" : "Reemplazo"} (${uploadPreview.items.length} CEBA)`}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

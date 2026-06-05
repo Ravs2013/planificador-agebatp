@@ -1,10 +1,11 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
     ScatterChart, Scatter, ZAxis
 } from "recharts";
 import * as XLSX from "xlsx";
+import { subscribeReqCeba, setReqCeba, deleteReqCeba, getMatriz, setMatriz } from "../firebase/db";
 
 /* ═══════════════════════════════════════════════════════════
    PALETA — Reutiliza los colores del planificador
@@ -29,15 +30,6 @@ const CAT_COLORS = {
 
 const PRIORITY_LABELS = { 1: "Alta", 2: "Media", 3: "Baja" };
 const PRIORITY_COLORS = { 1: C.red, 2: C.amber, 3: C.green };
-
-/* ═══════════════════════════════════════════════════════════
-   LOCAL STORAGE
-   ═══════════════════════════════════════════════════════════ */
-const LS_CEBA = "agebatp_requerimientos_ceba";
-const LS_MATRIZ = "agebatp_matriz_referencia";
-
-function loadLS(key) { try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; } }
-function saveLS(key, data) { localStorage.setItem(key, JSON.stringify(data)); }
 
 /* ═══════════════════════════════════════════════════════════
    ICON HELPER
@@ -302,8 +294,9 @@ function CTip({ active, payload, label }) {
    MAIN COMPONENT
    ═══════════════════════════════════════════════════════════ */
 export default function RequerimientosCEBA() {
-    const [cebas, setCebas] = useState(() => loadLS(LS_CEBA) || []);
-    const [matriz, setMatriz] = useState(() => loadLS(LS_MATRIZ) || []);
+    const [cebas, setCebas] = useState([]);
+    const [matriz, setMatriz] = useState([]);
+    const [loadingData, setLoadingData] = useState(true);
     const [view, setView] = useState("dashboard");
     const [selectedCeba, setSelectedCeba] = useState(null);
     const [searchText, setSearchText] = useState("");
@@ -323,15 +316,22 @@ export default function RequerimientosCEBA() {
         setTimeout(() => setToast(null), 4000);
     };
 
-    /* ── Persist ── */
-    const saveCebas = useCallback((data) => {
-        setCebas(data);
-        saveLS(LS_CEBA, data);
+    // Subscribirse a Requerimientos CEBA desde Firestore
+    useEffect(() => {
+        const unsubscribe = subscribeReqCeba((list) => {
+            setCebas(list || []);
+            setLoadingData(false);
+        });
+        return () => unsubscribe();
     }, []);
 
-    const saveMatriz = useCallback((data) => {
-        setMatriz(data);
-        saveLS(LS_MATRIZ, data);
+    // Cargar la Matriz de Precios desde Firestore al montar
+    useEffect(() => {
+        getMatriz('ceba').then((docData) => {
+            if (docData && docData.items) {
+                setMatriz(docData.items);
+            }
+        }).catch(err => console.error("Error al cargar la matriz:", err));
     }, []);
 
     /* ── Upload CEBA Excel ── */
@@ -339,7 +339,7 @@ export default function RequerimientosCEBA() {
         if (!file || !file.name.match(/\.xlsx?$/i)) { setError("Solo archivos .xlsx o .xls"); return; }
         setProcessing(true); setError("");
         const reader = new FileReader();
-        reader.onload = (ev) => {
+        reader.onload = async (ev) => {
             try {
                 const data = new Uint8Array(ev.target.result);
                 let parsed;
@@ -353,8 +353,10 @@ export default function RequerimientosCEBA() {
                 if (parsed.length === 0) {
                     setError("No se pudo extraer datos del archivo. Verifique el formato.");
                 } else {
-                    const updated = [...cebas.filter(c => c.nombre !== parsed[0].nombre), ...parsed];
-                    saveCebas(updated);
+                    // Guardar los nuevos requerimientos en Firestore
+                    for (const c of parsed) {
+                        await setReqCeba(c.id, c);
+                    }
                     showToast(`${parsed.length} CEBA procesado: ${parsed[0].nombre} (${parsed[0].items.length} items)`);
                 }
             } catch (err) {
@@ -364,13 +366,13 @@ export default function RequerimientosCEBA() {
         };
         reader.onerror = () => { setError("Error leyendo el archivo"); setProcessing(false); };
         reader.readAsArrayBuffer(file);
-    }, [cebas, saveCebas]);
+    }, []);
 
     /* ── Upload Matriz Referencia ── */
     const processMatriz = useCallback((file) => {
         if (!file || !file.name.match(/\.xlsx?$/i)) { setError("Solo archivos .xlsx o .xls"); return; }
         const reader = new FileReader();
-        reader.onload = (ev) => {
+        reader.onload = async (ev) => {
             try {
                 const data = new Uint8Array(ev.target.result);
                 const wb = XLSX.read(data, { type: "array" });
@@ -385,12 +387,15 @@ export default function RequerimientosCEBA() {
                         items.push({ nombre, nombreNorm: normalizeItemName(nombre), precio, categoria: String(r[2] || "").trim() });
                     }
                 }
-                saveMatriz(items);
+                
+                // Guardar en Firestore
+                await setMatriz('ceba', { items });
+                setMatriz(items);
                 showToast(`Matriz de referencia cargada: ${items.length} bienes con precio unitario`);
             } catch (err) { setError(`Error en matriz: ${err.message}`); }
         };
         reader.readAsArrayBuffer(file);
-    }, [saveMatriz]);
+    }, []);
 
     /* ── Match items with reference matrix ── */
     const getRefPrice = useCallback((itemName) => {
@@ -532,9 +537,8 @@ export default function RequerimientosCEBA() {
     }, [filteredCebas]);
 
     /* ── Delete CEBA ── */
-    const deleteCeba = (id) => {
-        const updated = cebas.filter(c => c.id !== id);
-        saveCebas(updated);
+    const deleteCeba = async (id) => {
+        await deleteReqCeba(id);
         if (selectedCeba?.id === id) setSelectedCeba(null);
         showToast("CEBA eliminado");
     };
@@ -927,8 +931,15 @@ export default function RequerimientosCEBA() {
                 </div>
             )}
 
-            {/* Empty state for dashboard */}
-            {view === "dashboard" && cebas.length === 0 && (
+            {/* Loading state or Empty state for dashboard */}
+            {view === "dashboard" && loadingData && cebas.length === 0 && (
+                <div style={{ ...card, textAlign: "center", padding: 60 }}>
+                    <div style={{ display: 'inline-block', width: 24, height: 24, border: `3px solid ${C.g200}`, borderTopColor: C.navy4, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                    <p style={{ color: C.g500, fontSize: '0.85rem', marginTop: 10, fontFamily: "'DM Sans'" }}>Cargando requerimientos...</p>
+                    <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+                </div>
+            )}
+            {view === "dashboard" && !loadingData && cebas.length === 0 && (
                 <div style={{ ...card, textAlign: "center", padding: 60 }}>
                     {Icons.file(48, C.g300)}
                     <h3 style={{ color: C.navy1, fontSize: "1.2rem", margin: "16px 0 8px", fontFamily: "'DM Serif Display',serif" }}>Sin datos de requerimientos</h3>

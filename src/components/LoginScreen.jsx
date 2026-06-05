@@ -88,7 +88,7 @@ export default function LoginScreen() {
     const inp = (extra) => ({ width: "100%", padding: "12px 14px 12px 42px", borderRadius: 8, border: `1.5px solid ${C.g300}`, background: C.white, color: C.g900, fontSize: "0.9rem", outline: "none", transition: "border-color 0.2s", fontFamily: "'DM Sans',sans-serif", boxSizing: "border-box", ...extra });
 
     return (
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(160deg, ${C.navy1} 0%, ${C.navy2} 40%, ${C.navy3} 100%)` }}>
+        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: `linear-gradient(160deg, ${C.navy1} 0%, ${C.navy2} 40%, ${C.navy3} 100%)`, padding: 20 }}>
             <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500;600;700&display=swap');*{box-sizing:border-box;margin:0;padding:0}`}</style>
             <div style={{ width: "100%", maxWidth: mode === "register" ? 460 : 400, background: C.white, borderRadius: 16, padding: "44px 36px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", position: "relative" }}>
                 <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, borderRadius: "16px 16px 0 0", background: `linear-gradient(90deg, ${C.gold1}, ${C.gold2}, ${C.gold1})` }} />
@@ -173,6 +173,18 @@ export default function LoginScreen() {
                     </>
                 )}
             </div>
+
+            <footer style={{ marginTop: 24, textAlign: "center", display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center", maxWidth: 600 }}>
+                <a href="/legal/privacidad" style={{ color: "#94A3B8", fontSize: "0.78rem", textDecoration: "none" }} onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/legal/privacidad'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Política de Privacidad</a>
+                <span style={{ color: "#475569", fontSize: "0.78rem" }}>|</span>
+                <a href="/legal/terminos" style={{ color: "#94A3B8", fontSize: "0.78rem", textDecoration: "none" }} onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/legal/terminos'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Términos y Condiciones</a>
+                <span style={{ color: "#475569", fontSize: "0.78rem" }}>|</span>
+                <a href="/legal/aviso" style={{ color: "#94A3B8", fontSize: "0.78rem", textDecoration: "none" }} onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/legal/aviso'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Aviso Legal</a>
+                <span style={{ color: "#475569", fontSize: "0.78rem" }}>|</span>
+                <a href="/legal/reclamaciones" style={{ color: "#94A3B8", fontSize: "0.78rem", textDecoration: "none" }} onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/legal/reclamaciones'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Libro de Reclamaciones</a>
+                <span style={{ color: "#475569", fontSize: "0.78rem" }}>|</span>
+                <a href="/legal/eliminacion-datos" style={{ color: "#94A3B8", fontSize: "0.78rem", textDecoration: "none" }} onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/legal/eliminacion-datos'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Eliminación de Datos</a>
+            </footer>
         </div>
     );
 }

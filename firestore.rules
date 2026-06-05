@@ -1,0 +1,99 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper check for logged in users
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper to check user rol
+    function getUserData() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function isRole(role) {
+      return isAuthenticated() && getUserData().rol == role;
+    }
+
+    function isStaff() {
+      return isAuthenticated() && (getUserData().rol == 'admin' || getUserData().rol == 'jefatura' || getUserData().rol == 'personal');
+    }
+
+    function esDirectorDe(tipo, docId) {
+      return isAuthenticated() && getUserData().rol == 'director' && getUserData().institucionTipo == tipo && getUserData().institucionId == docId;
+    }
+
+    // Colección usuarios:
+    match /usuarios/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isRole('admin') || (isAuthenticated() && request.auth.uid == userId);
+    }
+
+    // Colección actividades y subcolección evidencias:
+    match /actividades/{actId} {
+      allow read: if isAuthenticated();
+      allow write: if isStaff();
+      
+      match /evidencias/{evId} {
+        allow read: if isAuthenticated();
+        allow write: if isStaff();
+      }
+    }
+
+    // Colección reuniones:
+    match /reuniones/{reunionId} {
+      allow read: if isAuthenticated();
+      allow create: if true; // cualquiera puede solicitar reunión
+      allow update, delete: if isStaff();
+    }
+
+    // Colección monitoreoSemanal y monitoreoAcumulado y esinadSemanas:
+    match /monitoreoSemanal/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isStaff();
+    }
+    match /monitoreoAcumulado/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isStaff();
+    }
+    match /esinadSemanas/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isStaff();
+    }
+
+    // Colección directorioCeba y directorioCetpro:
+    // SOLO personal/admin/jefatura y el director de la institución correspondiente pueden leer y escribir
+    match /directorioCeba/{id} {
+      allow read, write: if isStaff() || esDirectorDe('CEBA', id);
+    }
+    match /directorioCetpro/{id} {
+      allow read, write: if isStaff() || esDirectorDe('CETPRO', id);
+    }
+
+    // Colección requerimientosCeba y requerimientosCetpro y matrizReferencia:
+    match /requerimientosCeba/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isStaff();
+    }
+    match /requerimientosCetpro/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isStaff();
+    }
+    match /matrizReferencia/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isStaff();
+    }
+
+    // Configuración general:
+    match /config/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isRole('admin') || isRole('jefatura');
+    }
+
+    // Libro de Reclamaciones público:
+    match /reclamaciones/{id} {
+      allow create: if true; // formulario de reclamos público
+      allow read, update, delete: if isRole('admin');
+    }
+  }
+}

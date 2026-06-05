@@ -10,11 +10,33 @@ import FileAttachment from './components/FileAttachment';
 import EsinadExpedientes from './components/EsinadExpedientes';
 import RequerimientosModule from './components/RequerimientosModule';
 import DirectorioModule from './components/DirectorioModule';
+import ReportesModule from './components/ReportesModule';
 import { STAFF, priorityConfig, statusConfig, typeConfig, monthNames, dayNames, getDaysInMonth, getFirstDayOfMonth, fmtDate, todayStr } from './data/constants';
 import { calcularSLA } from './utils/slaCalculator';
+import { subscribeActividades, addActividad, updateActividad, deleteActividad, subscribeEvidencias, addEvidencia, subscribeUsuarios, subscribeReuniones } from './firebase/db';
+import { uploadEvidencia } from './firebase/storage';
+
+import ChatbotIA from './components/ChatbotIA';
+import ChangePasswordScreen from './components/ChangePasswordScreen';
+import LegalPages from './components/LegalPages';
+
 
 export default function App() {
-    const { user, logout, isRole } = useAuth();
+    const { user, logout, isRole, mustChangePassword } = useAuth();
+    const [currentPath, setCurrentPath] = useState(window.location.pathname);
+
+    useEffect(() => {
+        const handleLocationChange = () => {
+            setCurrentPath(window.location.pathname);
+        };
+        window.addEventListener('popstate', handleLocationChange);
+        window.addEventListener('hashchange', handleLocationChange);
+        return () => {
+            window.removeEventListener('popstate', handleLocationChange);
+            window.removeEventListener('hashchange', handleLocationChange);
+        };
+    }, []);
+
     const [showLogin, setShowLogin] = useState(false);
     const [showRegister, setShowRegister] = useState(false);
     const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
@@ -39,69 +61,70 @@ export default function App() {
     const [evidenceFiles, setEvidenceFiles] = useState([]);
     const [evidenceLoading, setEvidenceLoading] = useState(false);
     const [existingEvidence, setExistingEvidence] = useState([]);
+    const [dbStaff, setDbStaff] = useState([]);
 
-    // Funcion para cargar actividades de Google Sheets
-    const loadActividades = useCallback(async () => {
-        try {
-            const result = await API.listarActividades();
-            if (result && Array.isArray(result) && result.length > 0) {
-                const mapped = result.map((row, i) => ({
-                    id: row.id || row.actividad_id || `ACT-${i}`,
-                    title: row.titulo || row.title || '',
-                    type: row.tipo || row.type || 'estrategica',
-                    date: row.fecha_inicio || row.date || '',
-                    endDate: row.fecha_fin || row.endDate || row.fecha_inicio || '',
-                    time: row.horario || row.time || '',
-                    location: row.lugar || row.location || '',
-                    priority: row.prioridad || row.priority || 'media',
-                    status: row.estado || row.status || 'pendiente',
-                    progress: Math.max(
-                        parseInt(row.progreso || row.progress || '0'),
-                        parseInt(JSON.parse(localStorage.getItem('agebatp_progress_override') || '{}')[row.id || row.actividad_id] || 0)
-                    ),
-                    assigned: typeof row.personal_asignado === 'string' ? JSON.parse(row.personal_asignado || '[]') : (row.assigned || []),
-                    description: row.descripcion || row.description || '',
-                    actions: typeof row.acciones === 'string' ? JSON.parse(row.acciones || '[]') : (row.actions || [])
+    // Keep selected activity details dynamically synced with Firestore
+    const activeSelectedActivity = useMemo(() => {
+        if (!selectedActivity) return null;
+        return activities.find(a => a.id === selectedActivity.id) || selectedActivity;
+    }, [activities, selectedActivity]);
+
+    // Active staff list (Firestore users with staffId, fallback to constants STAFF)
+    const staff = useMemo(() => {
+        return dbStaff.length > 0 ? dbStaff : STAFF;
+    }, [dbStaff]);
+
+    // Cargar personal desde Firestore
+    useEffect(() => {
+        if (!user) return;
+        const unsubscribe = subscribeUsuarios((users) => {
+            const staffList = users
+                .filter(u => u.staffId != null)
+                .map(u => ({
+                    id: parseInt(u.staffId),
+                    name: u.nombre,
+                    role: u.cargo || u.rol || 'Personal',
+                    email: u.email,
+                    phone: u.telefono || '',
+                    initials: u.nombre.split(' ').filter(w => w.length > 2).slice(0, 2).map(w => w[0].toUpperCase()).join('') || u.nombre.substring(0, 2).toUpperCase()
                 }));
-                setActivities(mapped);
-            }
-        } catch (err) {
-            console.warn('No se pudo cargar actividades de Sheets:', err.message);
-        }
-        setDataLoading(false);
-    }, []);
+            setDbStaff(staffList);
+        });
+        return () => unsubscribe();
+    }, [user]);
 
-    // Cargar al montar + auto-refresh cada 30s — para TODOS los roles
+    // Subscripción en tiempo real a actividades de Firestore
     useEffect(() => {
         if (!user) {
             setDataLoading(false);
             return;
         }
-        loadActividades();
-        const interval = setInterval(() => { loadActividades(); }, 30000);
-        return () => clearInterval(interval);
-    }, [loadActividades, user]);
+        const unsubscribe = subscribeActividades((list) => {
+            setActivities(list || []);
+            setDataLoading(false);
+        });
+        return () => unsubscribe();
+    }, [user]);
 
-    // Fetch evidencias al abrir modal de Actividad y recalcular progreso asincronamente
+    // Subscripción en tiempo real a reuniones de Firestore
     useEffect(() => {
-        if (selectedActivity) {
+        if (!user) return;
+        const unsubscribe = subscribeReuniones((list) => {
+            setMeetingRequests(list || []);
+        });
+        return () => unsubscribe();
+    }, [user]);
+
+
+    // Fetch evidencias en tiempo real al abrir modal de Actividad
+    useEffect(() => {
+        if (activeSelectedActivity) {
+            const unsubscribe = subscribeEvidencias(activeSelectedActivity.id, (evs) => {
+                setExistingEvidence(evs || []);
+            });
+            return () => unsubscribe();
+        } else {
             setExistingEvidence([]);
-            API.listarEvidencias(selectedActivity.id, 'actividad')
-                .then(r => {
-                    if (r && Array.isArray(r.evidencias)) {
-                        setExistingEvidence(r.evidencias);
-                        const totalEvidencias = r.evidencias.length;
-                        const totalAcciones = selectedActivity.actions && selectedActivity.actions.length > 0 ? selectedActivity.actions.length : 4;
-                        const nuevoProgreso = Math.min(100, Math.round((totalEvidencias / totalAcciones) * 100));
-
-                        updateProgress(selectedActivity.id, nuevoProgreso);
-
-                        const overrides = JSON.parse(localStorage.getItem('agebatp_progress_override') || '{}');
-                        overrides[selectedActivity.id] = nuevoProgreso;
-                        localStorage.setItem('agebatp_progress_override', JSON.stringify(overrides));
-                    }
-                })
-                .catch(() => { });
         }
     }, [selectedActivity]);
 
@@ -146,32 +169,61 @@ export default function App() {
 
     const stats = useMemo(() => ({ total: activities.length, completadas: activities.filter(a => a.status === 'completado').length, enProceso: activities.filter(a => a.status === 'en_proceso').length, pendientes: activities.filter(a => a.status === 'pendiente').length }), [activities]);
 
+    const updateProgressAndStatus = async (activityId, checklist, evidencesCount, totalActions) => {
+        const checklistCount = Object.values(checklist || {}).filter(Boolean).length;
+        const maxCompleted = Math.max(checklistCount, evidencesCount);
+        const progress = Math.min(100, Math.round((maxCompleted / totalActions) * 100));
+        const status = progress >= 100 ? 'completado' : progress > 0 ? 'en_proceso' : 'pendiente';
+        
+        await updateActividad(activityId, {
+            checklist,
+            progreso: progress,
+            estado: status
+        });
+    };
+
     const handleAddActivity = async () => {
         if (!newActivity.title || !newActivity.date) { addToast('Complete titulo y fecha', 'error'); return; }
         const validActions = newActivity.actions.filter(a => a.trim());
         if (validActions.length === 0) { addToast('Debe agregar al menos 1 acción estratégica', 'error'); return; }
-        const actData = {
-            ...newActivity,
-            id: `ACT-${Date.now()}`,
-            status: 'pendiente',
-            progress: 0,
-            endDate: newActivity.endDate || newActivity.date,
-            time: newActivity.timeStart && newActivity.timeEnd ? `${newActivity.timeStart} - ${newActivity.timeEnd}` : newActivity.timeStart || '',
-            actions: newActivity.actions.filter(a => a.trim()),
-            created_by: user?.nombre || 'Admin',
-            attachments: activityFiles.map(f => ({ name: f.name, base64: f.base64, mimeType: f.mimeType }))
-        };
+        const actId = `ACT-${Date.now()}`;
         setAddLoading(true);
         try {
-            const result = await API.crearActividad(actData);
-            if (result.success) {
-                setActivities(prev => [...prev, actData]);
-                setNewActivity({ title: '', type: 'estrategica', date: '', endDate: '', timeStart: '', timeEnd: '', location: '', priority: 'media', assigned: [], description: '', actions: [''] });
-                setActivityFiles([]);
-                setShowAddModal(false);
-                addToast('Actividad creada. Se notifico al personal asignado.', 'success');
-            } else { addToast('Error al crear la actividad', 'error'); }
-        } catch { addToast('Error de conexion con el servidor', 'error'); }
+            const uploadedAttachments = [];
+            for (const file of activityFiles) {
+                const url = await uploadEvidencia(actId, user.uid || 'admin', file);
+                uploadedAttachments.push({ name: file.name, url });
+            }
+
+            const actData = {
+                ...newActivity,
+                id: actId,
+                status: 'pendiente',
+                progress: 0,
+                endDate: newActivity.endDate || newActivity.date,
+                time: newActivity.timeStart && newActivity.timeEnd ? `${newActivity.timeStart} - ${newActivity.timeEnd}` : newActivity.timeStart || '',
+                actions: newActivity.actions.filter(a => a.trim()),
+                created_by: user?.nombre || 'Admin',
+                checklist: {},
+                attachments: uploadedAttachments
+            };
+
+            await addActividad(actData);
+            
+            // Webhook notification (fire-and-forget)
+            try {
+                API.notificarNuevaActividad(actData);
+            } catch (err) {
+                console.warn("Failed to notify new activity via webhook", err);
+            }
+
+            setNewActivity({ title: '', type: 'estrategica', date: '', endDate: '', timeStart: '', timeEnd: '', location: '', priority: 'media', assigned: [], description: '', actions: [''] });
+            setActivityFiles([]);
+            setShowAddModal(false);
+            addToast('Actividad creada. Se notifico al personal asignado.', 'success');
+        } catch (err) {
+            addToast('Error al crear la actividad: ' + err.message, 'error');
+        }
         setAddLoading(false);
     };
 
@@ -179,43 +231,39 @@ export default function App() {
         if (evidenceFiles.length === 0) { addToast('Seleccione al menos un archivo', 'error'); return; }
         setEvidenceLoading(true);
         try {
+            const uploadPromises = [];
             for (const file of evidenceFiles) {
-                await API.subirEvidencia(activity.id, user?.id || 'admin', file);
+                const url = await uploadEvidencia(activity.id, user?.uid || 'admin', file);
+                uploadPromises.push(addEvidencia(activity.id, {
+                    url,
+                    name: file.name || 'Evidencia',
+                    uploadedBy: user?.nombre || 'Personal',
+                    uploadedById: user?.uid || 'admin'
+                }));
             }
+            await Promise.all(uploadPromises);
+
+            const newEvidenceCount = existingEvidence.length + evidenceFiles.length;
+            const totalActions = activity.actions?.length || 4;
+            await updateProgressAndStatus(activity.id, activity.checklist || {}, newEvidenceCount, totalActions);
+
             addToast(`${evidenceFiles.length} evidencia(s) subida(s) correctamente`, 'success');
             setEvidenceFiles([]);
-            // Reload evidences
-            try {
-                const ev = await API.listarEvidencias(activity.id);
-                if (Array.isArray(ev)) {
-                    setExistingEvidence(ev);
-
-                    // Calcular el nuevo progreso exclusivamente con codigo frontend
-                    const totalEvidencias = ev.length;
-                    const totalAcciones = activity.actions && activity.actions.length > 0 ? activity.actions.length : 4;
-                    const nuevoProgreso = Math.min(100, Math.round((totalEvidencias / totalAcciones) * 100));
-
-                    // Actualizar UI
-                    updateProgress(activity.id, nuevoProgreso);
-
-                    // Guardar en cache local para que no se borre al refrescar de GSheets
-                    const overrides = JSON.parse(localStorage.getItem('agebatp_progress_override') || '{}');
-                    overrides[activity.id] = nuevoProgreso;
-                    localStorage.setItem('agebatp_progress_override', JSON.stringify(overrides));
-                }
-            } catch { /* no-op */ }
-        } catch { addToast('Error al subir evidencia', 'error'); }
+        } catch (err) {
+            addToast('Error al subir evidencia: ' + err.message, 'error');
+        }
         setEvidenceLoading(false);
     };
 
-    const updateProgress = (actId, progress) => {
-        setActivities(prev => prev.map(a => a.id === actId ? { ...a, progress, status: progress >= 100 ? 'completado' : progress > 0 ? 'en_proceso' : 'pendiente' } : a));
+    const updateProgress = async (actId, progress) => {
+        const status = progress >= 100 ? 'completado' : progress > 0 ? 'en_proceso' : 'pendiente';
+        await updateActividad(actId, { progreso: progress, estado: status });
     };
 
     const exportToCSV = () => {
         const sep = '\t';
         const h = ['N', 'Actividad', 'Tipo', 'Fecha Inicio', 'Fecha Fin', 'Horario', 'Lugar', 'Prioridad', 'Estado', 'Avance', 'Personal', 'Descripcion'];
-        const r = activities.map((a, i) => [i + 1, a.title, typeConfig[a.type]?.label || a.type, a.date, a.endDate || a.date, a.time, a.location, priorityConfig[a.priority]?.label || a.priority, statusConfig[a.status]?.label || a.status, `${a.progress}%`, a.assigned.map(id => STAFF.find(s => s.id === id)?.name || '').join('; '), a.description]);
+        const r = activities.map((a, i) => [i + 1, a.title, typeConfig[a.type]?.label || a.type, a.date, a.endDate || a.date, a.time, a.location, priorityConfig[a.priority]?.label || a.priority, statusConfig[a.status]?.label || a.status, `${a.progress || 0}%`, a.assigned.map(id => staff.find(s => s.id === id)?.name || '').join('; '), a.description]);
         const csv = [h, ...r].map(row => row.map(c => `"${String(c || '').replace(/"/g, '""')}"`).join(sep)).join('\r\n');
         const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `Planificador_AGEBATP_${monthNames[currentMonth]}_${currentYear}.csv`; link.click();
@@ -227,9 +275,10 @@ export default function App() {
     const isPublic = user && isRole('publico');
 
     const ROLE_PERMS = {
-        admin: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio"],
-        jefatura: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio"],
-        personal: ["calendario", "actividades", "expedientes", "reuniones", "directorio"],
+        admin: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio", "reportes"],
+        jefatura: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio", "reportes"],
+        personal: ["calendario", "actividades", "expedientes", "reuniones", "directorio", "reportes"],
+        director: ["directorio"],
         publico: ["calendario", "reuniones"]
     };
     const perms = user ? (ROLE_PERMS[user.rol] || []) : [];
@@ -242,7 +291,8 @@ export default function App() {
         { id: 'reuniones', label: 'Reuniones', icon: 'calendar' },
         { id: 'monitoreo', label: 'Monitoreo', icon: 'barChart' },
         { id: 'requerimientos', label: 'Requerimientos', icon: 'fileText' },
-        { id: 'directorio', label: 'Directorio', icon: 'users' }
+        { id: 'directorio', label: 'Directorio', icon: 'users' },
+        { id: 'reportes', label: 'Reportes', icon: 'barChart' }
     ];
     const tabs = allTabs.filter(t => perms.includes(t.id));
 
@@ -253,8 +303,20 @@ export default function App() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab, user]);
 
+    if (currentPath.startsWith('/legal/') || window.location.hash.startsWith('#/legal/')) {
+        const path = currentPath.startsWith('/legal/') ? currentPath : window.location.hash.replace('#', '');
+        return <LegalPages path={path} onBack={() => {
+            window.history.pushState({}, '', '/');
+            setCurrentPath('/');
+        }} />;
+    }
+
     if (!user) {
         return <LoginScreen />;
+    }
+
+    if (mustChangePassword) {
+        return <ChangePasswordScreen />;
     }
 
     // Inline styles
@@ -425,7 +487,7 @@ export default function App() {
                             <input placeholder="Buscar actividad..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ ...S.input, maxWidth: 320 }} />
                             <select value={staffFilter} onChange={e => setStaffFilter(e.target.value)} style={{ ...S.input, maxWidth: 280 }}>
                                 <option value="todos">Todo el personal</option>
-                                {STAFF.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
                         </div>
                         {filteredActivities.map(a => (
@@ -455,7 +517,7 @@ export default function App() {
                                 </div>
                                 {a.description && <div style={{ fontSize: 12, color: '#64748B', marginTop: 8 }}>{a.description}</div>}
                                 <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-                                    {a.assigned.map(id => { const s = STAFF.find(x => x.id === id); return s ? <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#F8FAFC', border: '1px solid #E8ECF3', padding: '4px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600, color: '#475569' }}><div style={{ width: 20, height: 20, borderRadius: 4, background: '#1B3A5C', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700 }}>{s.initials}</div>{s.name.split(' ').slice(0, 2).join(' ')}</div> : null; })}
+                                    {a.assigned.map(id => { const s = staff.find(x => x.id === id); return s ? <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#F8FAFC', border: '1px solid #E8ECF3', padding: '4px 10px', borderRadius: 4, fontSize: 11, fontWeight: 600, color: '#475569' }}><div style={{ width: 20, height: 20, borderRadius: 4, background: '#1B3A5C', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700 }}>{s.initials}</div>{s.name.split(' ').slice(0, 2).join(' ')}</div> : null; })}
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
                                     <div style={{ flex: 1, height: 6, background: '#F1F5F9', borderRadius: 3, overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 3, width: `${a.progress}%`, background: a.progress < 30 ? '#B91C1C' : a.progress < 70 ? '#B45309' : '#15803D' }} /></div>
@@ -466,7 +528,7 @@ export default function App() {
                         ))}
                     </div>
                 )}
-
+ 
                 {/* PERSONAL */}
                 {activeTab === 'personal' && (
                     <div className="grid-personal" style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 20, alignItems: 'start' }}>
@@ -488,19 +550,44 @@ export default function App() {
                                     <button onClick={async () => {
                                         if (!newStaffForm.name || !newStaffForm.role) { addToast('Complete nombre y cargo', 'error'); return; }
                                         if (!newStaffForm.email) { addToast('El email es obligatorio para el login del personal', 'error'); return; }
-                                        if (!newStaffForm.password || newStaffForm.password.length < 4) { addToast('La contraseña debe tener al menos 4 caracteres', 'error'); return; }
-                                        const initials = newStaffForm.name.split(' ').filter(w => w.length > 2).slice(0, 2).map(w => w[0].toUpperCase()).join('');
-                                        const newId = Math.max(...STAFF.map(s => s.id)) + 1;
-                                        const newPerson = { id: newId, name: newStaffForm.name, role: newStaffForm.role, phone: newStaffForm.phone || '', email: newStaffForm.email || '', initials, password: newStaffForm.password };
-                                        STAFF.push(newPerson);
-                                        try { await API.agregarPersonal(newPerson); } catch (e) { console.warn('Staff sync error:', e); }
-                                        setNewStaffForm({ name: '', role: '', phone: '', email: '', password: '' });
-                                        setShowAddStaff(false);
-                                        addToast(`${newStaffForm.name} agregado al equipo y guardado en Sheets`, 'success');
+                                        if (!newStaffForm.password || newStaffForm.password.length < 6) { addToast('La contraseña de Firebase debe tener al menos 6 caracteres', 'error'); return; }
+                                        
+                                        const newId = Math.max(...staff.map(s => s.id), 0) + 1;
+                                        const newPerson = {
+                                            nombre: newStaffForm.name,
+                                            cargo: newStaffForm.role,
+                                            telefono: newStaffForm.phone || '',
+                                            email: newStaffForm.email,
+                                            rol: 'personal',
+                                            staffId: newId,
+                                            activo: true
+                                        };
+                                        
+                                        try {
+                                            // Write to Firestore - collection "usuarios", doc ID "staff_X"
+                                            await setDoc(doc(db, 'usuarios', `staff_${newId}`), {
+                                                ...newPerson,
+                                                createdAt: serverTimestamp(),
+                                                updatedAt: serverTimestamp()
+                                            });
+                                            
+                                            // Call n8n webhook notification (fire-and-forget) to send credentials
+                                            try {
+                                                API.notificarNuevoPersonal({ ...newPerson, password: newStaffForm.password });
+                                            } catch (wErr) {
+                                                console.warn("Webhook credentials notification failed", wErr);
+                                            }
+                                            
+                                            setNewStaffForm({ name: '', role: '', phone: '', email: '', password: '' });
+                                            setShowAddStaff(false);
+                                            addToast(`${newStaffForm.name} agregado al equipo en Firestore`, 'success');
+                                        } catch (err) {
+                                            addToast('Error al agregar personal: ' + err.message, 'error');
+                                        }
                                     }} style={{ ...S.btn('#15803D', '#FFF'), marginTop: 12, width: '100%' }}>Agregar al Equipo</button>
                                 </div>
                             )}
-                            {STAFF.map(s => {
+                            {staff.map(s => {
                                 const sa = activities.filter(a => a.assigned.includes(s.id));
                                 const avg = sa.length ? Math.round(sa.reduce((sum, a) => sum + a.progress, 0) / sa.length) : 0;
                                 return (
@@ -514,7 +601,27 @@ export default function App() {
                                         </div>
                                         <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 22, fontWeight: 700, color: avg < 30 ? '#B91C1C' : avg < 70 ? '#B45309' : '#15803D' }}>{avg}%</div>
                                         {(isRole('admin') || isRole('jefatura')) && (
-                                            <button onClick={async (e) => { e.stopPropagation(); if (confirm(`¿Eliminar a ${s.name} del equipo?`)) { const idx = STAFF.findIndex(x => x.id === s.id); if (idx > -1) { const removed = STAFF.splice(idx, 1)[0]; try { await API.eliminarPersonal(removed.id); } catch (err) { console.warn('Error syncing delete:', err); } addToast(`${s.name} eliminado del equipo y de Sheets`, 'success'); setSearchTerm(t => t); } } }} style={{ background: 'none', border: 'none', color: '#B91C1C', cursor: 'pointer', fontSize: 16, padding: '4px 8px', borderRadius: 4 }} title="Eliminar personal">✕</button>
+                                            <button onClick={async (e) => {
+                                                e.stopPropagation();
+                                                if (confirm(`¿Eliminar a ${s.name} del equipo?`)) {
+                                                    try {
+                                                        // Find the user doc ID matching staffId
+                                                        const targetDocId = `staff_${s.id}`;
+                                                        await deleteDoc(doc(db, 'usuarios', targetDocId));
+                                                        
+                                                        // Notify n8n
+                                                        try {
+                                                            await API.eliminarPersonal(s.id);
+                                                        } catch (err) {
+                                                            console.warn('n8n delete notification failed:', err);
+                                                        }
+                                                        
+                                                        addToast(`${s.name} eliminado del equipo en Firestore`, 'success');
+                                                    } catch (err) {
+                                                        addToast('Error al eliminar personal: ' + err.message, 'error');
+                                                    }
+                                                }
+                                            }} style={{ background: 'none', border: 'none', color: '#B91C1C', cursor: 'pointer', fontSize: 16, padding: '4px 8px', borderRadius: 4 }} title="Eliminar personal">✕</button>
                                         )}
                                     </div>
                                 );
@@ -552,7 +659,7 @@ export default function App() {
                             <div style={{ ...S.card, marginTop: 20 }}>
                                 <div style={{ ...S.sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Icon name="list" size={16} color="#1E4D7B" />Mis Solicitudes de Reunion</span>
-                                    <button onClick={async () => { try { const data = await API.listarReuniones(); if (Array.isArray(data)) setMeetingRequests(data); } catch { addToast('Error cargando reuniones', 'error'); } }} style={{ ...S.btn('rgba(30,77,123,0.1)', '#1E4D7B'), fontSize: 11 }}>Actualizar</button>
+                                    <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 500 }}>Sincronizado en tiempo real</span>
                                 </div>
                                 {meetingRequests.length === 0 ? (
                                     <div style={{ textAlign: 'center', padding: 24, color: '#94A3B8', fontSize: 13 }}>No hay solicitudes registradas. Haz click en "Actualizar" para cargar.</div>
@@ -564,7 +671,10 @@ export default function App() {
                                         <div key={i} style={{ ...S.card, borderLeft: `4px solid ${stColor}`, padding: 14, marginBottom: 10, background: stBg }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', flexWrap: 'wrap', gap: 8 }}>
                                                 <div><span style={{ fontFamily: "'JetBrains Mono'", fontSize: 11, color: '#1E4D7B', fontWeight: 600 }}>{r.reunion_id}</span></div>
-                                                <span style={S.badge(stBg, stColor)}>{st === 'aceptada' ? '✓ ACEPTADA' : st === 'rechazada' ? '✕ RECHAZADA' : '⏳ PENDIENTE'}</span>
+                                                <span style={{ ...S.badge(stBg, stColor), display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                    {st === 'aceptada' ? <Icon name="check" size={10} /> : st === 'rechazada' ? <Icon name="x" size={10} /> : <Icon name="clock" size={10} />}
+                                                    {st === 'aceptada' ? 'ACEPTADA' : st === 'rechazada' ? 'RECHAZADA' : 'PENDIENTE'}
+                                                </span>
                                             </div>
                                             <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', margin: '4px 0' }}>{r.motivo || 'Sin motivo'}</div>
                                             <div style={{ display: 'flex', gap: 16, color: '#64748B', fontSize: 11, flexWrap: 'wrap' }}>
@@ -608,6 +718,11 @@ export default function App() {
                 {activeTab === 'directorio' && (
                     <DirectorioModule />
                 )}
+
+                {/* REPORTES / DASHBOARD */}
+                {activeTab === 'reportes' && (
+                    <ReportesModule />
+                )}
             </main>
 
             {/* ADD ACTIVITY MODAL */}
@@ -635,7 +750,7 @@ export default function App() {
                         <div style={{ marginBottom: 16 }}>
                             <label style={S.label}>Personal Asignado</label>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                                {STAFF.map(s => <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}><input type="checkbox" checked={newActivity.assigned.includes(s.id)} onChange={e => { if (e.target.checked) setNewActivity({ ...newActivity, assigned: [...newActivity.assigned, s.id] }); else setNewActivity({ ...newActivity, assigned: newActivity.assigned.filter(x => x !== s.id) }) }} style={{ accentColor: '#1E4D7B' }} />{s.name.split(' ').slice(0, 3).join(' ')}</label>)}
+                                {staff.map(s => <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}><input type="checkbox" checked={newActivity.assigned.includes(s.id)} onChange={e => { if (e.target.checked) setNewActivity({ ...newActivity, assigned: [...newActivity.assigned, s.id] }); else setNewActivity({ ...newActivity, assigned: newActivity.assigned.filter(x => x !== s.id) }) }} style={{ accentColor: '#1E4D7B' }} />{s.name.split(' ').slice(0, 3).join(' ')}</label>)}
                             </div>
                         </div>
                         <div style={{ marginBottom: 16 }}>
@@ -668,18 +783,18 @@ export default function App() {
             )}
 
             {/* DETAIL MODAL */}
-            {selectedActivity && (
+            {activeSelectedActivity && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(12,25,41,0.6)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(3px)' }} onClick={() => setSelectedActivity(null)}>
                     <div style={{ ...S.card, padding: 28, width: '100%', maxWidth: 600, maxHeight: '85vh', overflowY: 'auto', animation: 'fadeIn 0.2s ease' }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 20 }}>
                             <div>
-                                <div style={{ fontSize: 10, fontWeight: 700, color: typeConfig[selectedActivity.type]?.color, textTransform: 'uppercase', letterSpacing: 1 }}>{typeConfig[selectedActivity.type]?.label}</div>
-                                <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 20, color: '#122240', marginTop: 4 }}>{selectedActivity.title}</div>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: typeConfig[activeSelectedActivity.type]?.color, textTransform: 'uppercase', letterSpacing: 1 }}>{typeConfig[activeSelectedActivity.type]?.label}</div>
+                                <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 20, color: '#122240', marginTop: 4 }}>{activeSelectedActivity.title}</div>
                             </div>
                             <button onClick={() => setSelectedActivity(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}><Icon name="x" size={20} /></button>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
-                            {[{ icon: 'calendar', label: 'Fecha', value: selectedActivity.date }, { icon: 'clock', label: 'Horario', value: selectedActivity.time }, { icon: 'mapPin', label: 'Lugar', value: selectedActivity.location }].map((d, i) => (
+                            {[{ icon: 'calendar', label: 'Fecha', value: activeSelectedActivity.date }, { icon: 'clock', label: 'Horario', value: activeSelectedActivity.time }, { icon: 'mapPin', label: 'Lugar', value: activeSelectedActivity.location }].map((d, i) => (
                                 <div key={i} style={{ background: '#F8FAFC', border: '1px solid #E8ECF3', padding: 12, borderRadius: 6, textAlign: 'center' }}>
                                     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}><Icon name={d.icon} size={14} color="#1E4D7B" /></div>
                                     <div style={{ fontSize: 10, color: '#64748B', textTransform: 'uppercase', fontWeight: 600 }}>{d.label}</div>
@@ -687,51 +802,36 @@ export default function App() {
                                 </div>
                             ))}
                         </div>
-                        {selectedActivity.description && <div style={{ fontSize: 13, color: '#475569', marginBottom: 20, lineHeight: 1.7, padding: 14, background: '#F8FAFC', borderRadius: 6, border: '1px solid #E8ECF3' }}>{selectedActivity.description}</div>}
+                        {activeSelectedActivity.description && <div style={{ fontSize: 13, color: '#475569', marginBottom: 20, lineHeight: 1.7, padding: 14, background: '#F8FAFC', borderRadius: 6, border: '1px solid #E8ECF3' }}>{activeSelectedActivity.description}</div>}
                         <div style={{ marginBottom: 20 }}>
                             <div style={S.label}>Avance de la Actividad (Evidencia o Checklist)</div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                                <div style={{ flex: 1, height: 10, background: '#F1F5F9', borderRadius: 5, overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 5, width: `${selectedActivity.progress}%`, background: selectedActivity.progress < 30 ? '#B91C1C' : selectedActivity.progress < 70 ? '#B45309' : '#15803D' }} /></div>
-                                <span style={{ fontFamily: "'JetBrains Mono'", fontWeight: 700, fontSize: 18 }}>{selectedActivity.progress}%</span>
+                                <div style={{ flex: 1, height: 10, background: '#F1F5F9', borderRadius: 5, overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 5, width: `${activeSelectedActivity.progress}%`, background: activeSelectedActivity.progress < 30 ? '#B91C1C' : activeSelectedActivity.progress < 70 ? '#B45309' : '#15803D' }} /></div>
+                                <span style={{ fontFamily: "'JetBrains Mono'", fontWeight: 700, fontSize: 18 }}>{activeSelectedActivity.progress}%</span>
                             </div>
-                            <div style={{ fontSize: 10, color: '#64748B', marginTop: 6 }}>* El progreso aumenta un {selectedActivity.actions?.length > 0 ? Math.round(100 / Math.max(1, selectedActivity.actions.length)) : 25}% por cada acción completada (checklist o evidencia). {selectedActivity.actions?.length > 0 ? selectedActivity.actions.length : 4} acción(es) para 100%.</div>
+                            <div style={{ fontSize: 10, color: '#64748B', marginTop: 6 }}>* El progreso aumenta un {activeSelectedActivity.actions?.length > 0 ? Math.round(100 / Math.max(1, activeSelectedActivity.actions.length)) : 25}% por cada acción completada (checklist o evidencia). {activeSelectedActivity.actions?.length > 0 ? activeSelectedActivity.actions.length : 4} acción(es) para 100%.</div>
                         </div>
                         <div style={{ marginBottom: 20 }}>
                             <div style={S.label}>Personal Asignado</div>
-                            {selectedActivity.assigned.map(id => { const s = STAFF.find(x => x.id === id); return s ? <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #E8ECF3' }}><div style={{ width: 32, height: 32, borderRadius: 6, background: '#1B3A5C', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 10 }}>{s.initials}</div><div><div style={{ fontSize: 13, fontWeight: 700, color: '#122240' }}>{s.name}</div><div style={{ fontSize: 11, color: '#64748B' }}>{s.role}</div></div></div> : null; })}
+                            {activeSelectedActivity.assigned.map(id => { const s = staff.find(x => x.id === id); return s ? <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #E8ECF3' }}><div style={{ width: 32, height: 32, borderRadius: 6, background: '#1B3A5C', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 10 }}>{s.initials}</div><div><div style={{ fontSize: 13, fontWeight: 700, color: '#122240' }}>{s.name}</div><div style={{ fontSize: 11, color: '#64748B' }}>{s.role}</div></div></div> : null; })}
                         </div>
-                        {selectedActivity.actions?.length > 0 && (
+                        {activeSelectedActivity.actions?.length > 0 && (
                             <div style={{ marginBottom: 20 }}>
                                 <div style={{ ...S.label, display: 'flex', alignItems: 'center', gap: 6 }}>Acciones Estrategicas — Checklist <span style={{ fontSize: 9, background: '#1E4D7B', color: 'white', padding: '1px 6px', borderRadius: 3 }}>Click para completar</span></div>
-                                {selectedActivity.actions.map((action, idx) => {
-                                    const checkedActions = JSON.parse(localStorage.getItem(`agebatp_checklist_${selectedActivity.id}`) || '[]');
-                                    const isChecked = checkedActions.includes(idx);
-                                    return <div key={idx} onClick={(ev) => {
+                                {activeSelectedActivity.actions.map((action, idx) => {
+                                    const isChecked = !!(activeSelectedActivity.checklist && activeSelectedActivity.checklist[String(idx)]);
+                                    return <div key={idx} onClick={async (ev) => {
                                         ev.stopPropagation();
-                                        const current = JSON.parse(localStorage.getItem(`agebatp_checklist_${selectedActivity.id}`) || '[]');
-                                        let updated;
-                                        if (current.includes(idx)) {
-                                            updated = current.filter(i => i !== idx);
-                                        } else {
-                                            updated = [...current, idx];
-                                        }
-                                        localStorage.setItem(`agebatp_checklist_${selectedActivity.id}`, JSON.stringify(updated));
-                                        // Recalculate progress: max(checklist%, evidence%)
-                                        const totalAcciones = selectedActivity.actions.length;
-                                        const checklistCount = updated.length;
+                                        const updatedChecklist = { ...(activeSelectedActivity.checklist || {}) };
+                                        updatedChecklist[String(idx)] = !isChecked;
+
+                                        const totalAcciones = activeSelectedActivity.actions.length;
+                                        const checklistCount = Object.values(updatedChecklist).filter(Boolean).length;
                                         const evidenceCount = existingEvidence.length;
-                                        const maxCompleted = Math.max(checklistCount, evidenceCount);
-                                        const nuevoProgreso = Math.min(100, Math.round((maxCompleted / totalAcciones) * 100));
-                                        // Update in activities state
-                                        setActivities(prev => prev.map(a => a.id === selectedActivity.id ? { ...a, progress: nuevoProgreso } : a));
-                                        // Also persist in localStorage override
-                                        const overrides = JSON.parse(localStorage.getItem('agebatp_progress_override') || '{}');
-                                        overrides[selectedActivity.id] = nuevoProgreso;
-                                        localStorage.setItem('agebatp_progress_override', JSON.stringify(overrides));
-                                        // Force re-render of the modal
-                                        setSelectedActivity(prev => ({ ...prev, progress: nuevoProgreso }));
+                                        
+                                        await updateProgressAndStatus(activeSelectedActivity.id, updatedChecklist, evidenceCount, totalAcciones);
                                     }} style={{ display: 'flex', gap: 10, padding: '10px 8px', fontSize: 13, borderBottom: '1px solid #E8ECF3', color: isChecked ? '#15803D' : '#334155', cursor: 'pointer', background: isChecked ? '#F0FDF4' : 'transparent', borderRadius: 4, transition: 'all 0.15s', alignItems: 'center' }}>
-                                        <div style={{ width: 22, height: 22, borderRadius: 4, border: `2px solid ${isChecked ? '#15803D' : '#CBD5E1'}`, background: isChecked ? '#15803D' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>{isChecked && <span style={{ color: 'white', fontSize: 14, fontWeight: 700, lineHeight: 1 }}>✓</span>}</div>
+                                        <div style={{ width: 22, height: 22, borderRadius: 4, border: `2px solid ${isChecked ? '#15803D' : '#CBD5E1'}`, background: isChecked ? '#15803D' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>{isChecked && <Icon name="check" size={14} color="white" />}</div>
                                         <span style={{ fontFamily: "'JetBrains Mono'", fontWeight: 700, color: '#1E4D7B', fontSize: 12, minWidth: 24, flexShrink: 0 }}>{String(idx + 1).padStart(2, '0')}</span>
                                         <span style={{ textDecoration: isChecked ? 'line-through' : 'none', opacity: isChecked ? 0.7 : 1 }}>{action}</span>
                                     </div>;
@@ -750,9 +850,10 @@ export default function App() {
                                     onChange={setEvidenceFiles}
                                     label=""
                                     compact
+                                    multiple={false}
                                 />
                                 <button
-                                    onClick={() => handleUploadEvidence(selectedActivity)}
+                                    onClick={() => handleUploadEvidence(activeSelectedActivity)}
                                     disabled={evidenceLoading || evidenceFiles.length === 0}
                                     style={{ ...S.btn(evidenceFiles.length > 0 ? '#15803D' : '#94A3B8', '#FFFFFF'), marginTop: 10, width: '100%', justifyContent: 'center', opacity: evidenceLoading ? 0.7 : 1 }}
                                 >
@@ -764,8 +865,8 @@ export default function App() {
                                         {existingEvidence.map((ev, i) => (
                                             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, marginBottom: 4, fontSize: 12, color: '#15803D' }}>
                                                 <Icon name="check" size={14} color="#15803D" />
-                                                <span style={{ flex: 1 }}>{ev.nombre_archivo || ev.filename || `Evidencia ${i + 1}`}</span>
-                                                <span style={{ fontSize: 10, color: '#94A3B8' }}>{ev.fecha || ''}</span>
+                                                <span style={{ flex: 1 }}>{ev.name || ev.nombre_archivo || ev.filename || `Evidencia ${i + 1}`}</span>
+                                                <span style={{ fontSize: 10, color: '#94A3B8' }}>{ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : ''}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -783,7 +884,21 @@ export default function App() {
             <footer style={{ borderTop: '3px solid #CA8A04', background: '#0C1929', padding: '16px 28px', textAlign: 'center' }}>
                 <div style={{ fontSize: 11, color: '#94A3B8', letterSpacing: 0.5 }}>Sistema de Planificacion en Tiempo Real con IA AGEBATP 2026 - UGEL 03</div>
                 <div style={{ fontSize: 10, color: '#64748B', marginTop: 4 }}>Area de Gestion de la Educacion Basica y Tecnico Productiva - {monthNames[currentMonth]} {currentYear}</div>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center', marginTop: 10 }}>
+                    <a href="/legal/privacidad" style={{ color: '#94A3B8', fontSize: '0.78rem', textDecoration: 'none' }} onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/legal/privacidad'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Política de Privacidad</a>
+                    <span style={{ color: '#475569', fontSize: '0.78rem' }}>|</span>
+                    <a href="/legal/terminos" style={{ color: '#94A3B8', fontSize: '0.78rem', textDecoration: 'none' }} onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/legal/terminos'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Términos y Condiciones</a>
+                    <span style={{ color: '#475569', fontSize: '0.78rem' }}>|</span>
+                    <a href="/legal/aviso" style={{ color: '#94A3B8', fontSize: '0.78rem', textDecoration: 'none' }} onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/legal/aviso'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Aviso Legal</a>
+                    <span style={{ color: '#475569', fontSize: '0.78rem' }}>|</span>
+                    <a href="/legal/reclamaciones" style={{ color: '#94A3B8', fontSize: '0.78rem', textDecoration: 'none' }} onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/legal/reclamaciones'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Libro de Reclamaciones</a>
+                    <span style={{ color: '#475569', fontSize: '0.78rem' }}>|</span>
+                    <a href="/legal/eliminacion-datos" style={{ color: '#94A3B8', fontSize: '0.78rem', textDecoration: 'none' }} onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/legal/eliminacion-datos'); window.dispatchEvent(new PopStateEvent('popstate')); }}>Eliminación de Datos</a>
+                </div>
             </footer>
+
+            {/* Chatbot IA */}
+            {user && <ChatbotIA />}
         </div>
     );
 }

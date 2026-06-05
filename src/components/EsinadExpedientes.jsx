@@ -1,10 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { subscribeEsinadSemanas } from '../firebase/db';
 
 /* ═══════════════════════════════════════════════════════
    CONSTANTS & PALETA
    ═══════════════════════════════════════════════════════ */
-const LS_KEY = 'agebatp_esinad_semanal';
-
 const C = {
     navy1: '#0C1929', navy2: '#122240', navy3: '#1B3A5C', navy4: '#1E4D7B', navy5: '#2563A0',
     gold1: '#CA8A04', gold2: '#D4A017',
@@ -31,10 +30,6 @@ const PERSON_COLORS = {
 /* ═══════════════════════════════════════════════════════
    HELPERS
    ═══════════════════════════════════════════════════════ */
-function loadData() {
-    try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch { return []; }
-}
-
 function formatDateDMY(d) {
     if (!d) return '';
     const parts = d.split('-');
@@ -52,7 +47,16 @@ function fmtWeek(w) {
    MAIN COMPONENT
    ═══════════════════════════════════════════════════════ */
 export default function EsinadExpedientes() {
-    const [weeks] = useState(loadData);
+    const [weeks, setWeeks] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const unsubscribe = subscribeEsinadSemanas((data) => {
+            setWeeks(data || []);
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
     const [filterTipo, setFilterTipo] = useState('todos');
     const [filterPersonal, setFilterPersonal] = useState('todos');
     const [filterSemana, setFilterSemana] = useState('todas');
@@ -116,6 +120,16 @@ export default function EsinadExpedientes() {
     const inputS = { padding: '9px 14px', borderRadius: 6, border: `1px solid ${C.g200}`, background: C.white, color: '#1E293B', fontFamily: "'DM Sans'", fontSize: 13, outline: 'none' };
 
     /* Empty state */
+    if (loading) {
+        return (
+            <div style={{ ...card, textAlign: 'center', padding: 60, fontFamily: "'DM Sans'" }}>
+                <div style={{ display: 'inline-block', width: 24, height: 24, border: `3px solid ${C.g200}`, borderTopColor: C.navy4, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                <p style={{ color: C.g500, fontSize: '0.85rem', marginTop: 10 }}>Cargando expedientes...</p>
+                <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+            </div>
+        );
+    }
+
     if (allDocs.length === 0) {
         return (
             <div style={{ ...card, textAlign: 'center', padding: 60 }}>

@@ -3,6 +3,7 @@ import Icon from './Icon';
 import { useAuth } from '../context/AuthContext';
 import { API } from '../api/endpoints';
 import { STAFF } from '../data/constants';
+import { subscribeReuniones, addReunion, updateReunion, subscribeUsuarios } from '../firebase/db';
 
 export default function MeetingRequest({ onToast }) {
     const { user, isRole } = useAuth();
@@ -12,43 +13,59 @@ export default function MeetingRequest({ onToast }) {
     const [solicitudes, setSolicitudes] = useState([]);
     const [respondLoading, setRespondLoading] = useState(null);
     const [loadingSolicitudes, setLoadingSolicitudes] = useState(false);
+    const [staffList, setStaffList] = useState([]);
 
-    // Cargar solicitudes desde API para persistencia
-    const loadSolicitudes = useCallback(async () => {
+    // Subscribirse a usuarios para obtener la lista de personal dinámicamente
+    useEffect(() => {
+        const unsubscribe = subscribeUsuarios((users) => {
+            const filteredStaff = users
+                .filter(u => u.staffId != null)
+                .map(u => ({
+                    id: parseInt(u.staffId),
+                    name: u.nombre,
+                    role: u.rol === 'admin' ? 'Sistemas' : (u.cargo || 'Especialista'),
+                    initials: u.nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+                }));
+            if (filteredStaff.length > 0) {
+                setStaffList(filteredStaff);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const resolvedStaff = staffList.length > 0 ? staffList : STAFF;
+
+    // Subscribirse a las reuniones en tiempo real
+    useEffect(() => {
         setLoadingSolicitudes(true);
-        try {
-            const data = await API.listarReuniones();
+        const unsubscribe = subscribeReuniones((data) => {
             if (Array.isArray(data)) {
                 setSolicitudes(data.map(r => ({
-                    reunion_id: r.reunion_id || '',
-                    nombre: r.solicitante_nombre || r.nombre || '',
-                    telefono: r.solicitante_telefono || r.telefono || '',
-                    email: r.solicitante_email || r.email || '',
-                    cargo: r.solicitante_cargo || r.cargo || '',
-                    institucion: r.solicitante_institucion || r.institucion || '',
-                    fecha: r.fecha_propuesta || r.fecha || '',
-                    hora: r.hora_propuesta || r.hora || '',
+                    reunion_id: r.id || '',
+                    nombre: r.nombre || '',
+                    telefono: r.telefono || '',
+                    email: r.email || '',
+                    cargo: r.cargo || '',
+                    institucion: r.institucion || '',
+                    fecha: r.fecha || '',
+                    hora: r.hora || '',
                     motivo: r.motivo || '',
-                    descripcion: r.descripcion || r.comentario_solicitante || r.comentario || '',
-                    personal_id: r.personal_destino_id || r.personal_id || '',
-                    jefatura_id: r.jefatura_id || r.secretaria_id || '',
-                    comentario: r.comentario_solicitante || r.comentario || '',
+                    descripcion: r.descripcion || '',
+                    personal_id: r.personal_id || '',
+                    jefatura_id: r.jefatura_id || '',
+                    comentario: r.comentario || '',
                     estado: r.estado || 'pendiente',
                     comentario_admin: r.comentario_admin || '',
                     respondido_por: r.respondido_por || '',
                     fecha_respuesta: r.fecha_respuesta || '',
-                    tiene_conflicto: r.tiene_conflicto === 'true' || r.tiene_conflicto === true,
+                    tiene_conflicto: r.tiene_conflicto === true || r.tiene_conflicto === 'true',
                     tipo_reunion: r.tipo_reunion || 'presencial'
                 })));
             }
-        } catch (err) {
-            console.warn('Error cargando solicitudes:', err);
-        }
-        setLoadingSolicitudes(false);
+            setLoadingSolicitudes(false);
+        });
+        return () => unsubscribe();
     }, []);
-
-    // Cargar al montar
-    useEffect(() => { loadSolicitudes(); }, [loadSolicitudes]);
 
     const upd = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
     const fieldStyle = { width: '100%', padding: '10px 14px', borderRadius: 6, border: '1px solid #D6DCE8', fontSize: 13, fontFamily: "'DM Sans'" };
@@ -61,23 +78,27 @@ export default function MeetingRequest({ onToast }) {
         }
         setLoading(true);
         try {
-            const personalSelect = STAFF.find(s => s.id === parseInt(form.personal_id));
+            const personalSelect = resolvedStaff.find(s => s.id === parseInt(form.personal_id));
             const dataToSubmit = {
                 ...form,
-                personal_asignado: personalSelect ? personalSelect.name : ''
+                personal_asignado: personalSelect ? personalSelect.name : '',
+                estado: 'pendiente'
             };
-            const result = await API.solicitarReunion(dataToSubmit);
-            if (result.success) {
-                onToast('Solicitud de reunion registrada. El personal sera notificado.', 'success');
-                if (result.tiene_conflicto) {
-                    onToast('Advertencia: el personal tiene actividades programadas en esa fecha.', 'info');
-                }
-                setSolicitudes(prev => [...prev, { ...form, reunion_id: result.reunion_id, estado: 'pendiente', tiene_conflicto: result.tiene_conflicto }]);
-                setForm({ nombre: '', telefono: '', email: '', cargo: '', institucion: '', fecha: '', hora: '', motivo: '', descripcion: '', personal_id: '', jefatura_id: '', tipo_reunion: 'presencial' });
-            } else {
-                onToast('Error al enviar la solicitud', 'error');
-            }
-        } catch { onToast('Error de conexion con el servidor', 'error'); }
+
+            // 1. Guardar en Firestore
+            const reunionId = await addReunion(dataToSubmit);
+
+            // 2. Disparar notificación por n8n (fire-and-forget)
+            API.solicitarReunion({ ...dataToSubmit, id: reunionId }).catch((err) => {
+                console.warn('Fallo envío de notificación a n8n, pero se guardó en Firestore:', err);
+            });
+
+            onToast('Solicitud de reunión registrada. El personal será notificado.', 'success');
+            setForm({ nombre: '', telefono: '', email: '', cargo: '', institucion: '', fecha: '', hora: '', motivo: '', descripcion: '', personal_id: '', jefatura_id: '', tipo_reunion: 'presencial' });
+        } catch (err) {
+            console.error('Error al registrar reunión:', err);
+            onToast('Error al enviar la solicitud', 'error');
+        }
         setLoading(false);
     };
 
@@ -85,11 +106,26 @@ export default function MeetingRequest({ onToast }) {
         const comentario = prompt(decision === 'aceptada' ? 'Comentario (opcional):' : 'Motivo del rechazo:') || '';
         setRespondLoading(reunion_id);
         try {
-            const pName = STAFF.find(x => x.id === parseInt(personal_id))?.name || '';
-            await API.responderReunion(reunion_id, decision, comentario, user?.nombre || 'Admin', pName);
-            setSolicitudes(prev => prev.map(s => s.reunion_id === reunion_id ? { ...s, estado: decision, comentario_admin: comentario } : s));
-            onToast(`Reunion ${decision}`, 'success');
-        } catch { onToast('Error al responder', 'error'); }
+            const pName = resolvedStaff.find(x => x.id === parseInt(personal_id))?.name || '';
+            
+            // 1. Actualizar en Firestore
+            await updateReunion(reunion_id, {
+                estado: decision,
+                comentario_admin: comentario,
+                respondido_por: user?.nombre || 'Admin',
+                fecha_respuesta: new Date().toISOString()
+            });
+
+            // 2. Disparar notificación por n8n (fire-and-forget)
+            API.responderReunion(reunion_id, decision, comentario, user?.nombre || 'Admin', pName).catch((err) => {
+                console.warn('Fallo respuesta n8n, pero se actualizó en Firestore:', err);
+            });
+
+            onToast(`Reunión ${decision}`, 'success');
+        } catch (err) {
+            console.error('Error al responder reunión:', err);
+            onToast('Error al responder', 'error');
+        }
         setRespondLoading(null);
     };
 
@@ -133,14 +169,14 @@ export default function MeetingRequest({ onToast }) {
                                     <label style={labelStyle}>Personal con quien desea reunirse *</label>
                                     <select value={form.personal_id} onChange={e => upd('personal_id', e.target.value)} style={fieldStyle}>
                                         <option value="">Seleccione personal</option>
-                                        {STAFF.filter(s => s.role !== 'Jefatura').map(s => <option key={s.id} value={s.id}>{s.name} - {s.role}</option>)}
+                                        {resolvedStaff.filter(s => s.role !== 'Jefatura').map(s => <option key={s.id} value={s.id}>{s.name} - {s.role}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label style={labelStyle}>Jefatura (Notificación) *</label>
                                     <select value={form.jefatura_id} onChange={e => upd('jefatura_id', e.target.value)} style={fieldStyle}>
                                         <option value="">Seleccione jefatura</option>
-                                        {STAFF.filter(s => s.role === 'Jefatura').map(s => <option key={s.id} value={s.id}>{s.name} - {s.role}</option>)}
+                                        {resolvedStaff.filter(s => s.role === 'Jefatura').map(s => <option key={s.id} value={s.id}>{s.name} - {s.role}</option>)}
                                     </select>
                                 </div>
                             </div>
@@ -182,10 +218,13 @@ export default function MeetingRequest({ onToast }) {
                 <div style={{ background: '#FFFFFF', border: '1px solid #D6DCE8', borderRadius: 8, padding: 20, boxShadow: '0 1px 3px rgba(15,23,42,0.06)' }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#122240', textTransform: 'uppercase', letterSpacing: 0.6, paddingBottom: 14, marginBottom: 16, borderBottom: '2px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Icon name="list" size={16} color="#1E4D7B" /> Solicitudes de Reunion</span>
-                        <button onClick={loadSolicitudes} disabled={loadingSolicitudes} style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #D6DCE8', background: loadingSolicitudes ? '#F1F5F9' : '#FFFFFF', color: '#1E4D7B', fontSize: 11, fontWeight: 600, fontFamily: "'DM Sans'", cursor: 'pointer' }}>{loadingSolicitudes ? 'Cargando...' : 'Actualizar'}</button>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: '#15803D', background: '#F0FDF4', padding: '4px 8px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#15803D', display: 'inline-block' }}></span>
+                            Tiempo Real
+                        </span>
                     </div>
                     {solicitudes.filter(s => s.estado === 'pendiente').length === 0 && (
-                        <div style={{ textAlign: 'center', padding: 40, color: '#94A3B8', fontSize: 13 }}>No hay solicitudes pendientes. Haz click en "Actualizar" para cargar.</div>
+                        <div style={{ textAlign: 'center', padding: 40, color: '#94A3B8', fontSize: 13 }}>No hay solicitudes pendientes en este momento.</div>
                     )}
                     {solicitudes.filter(s => s.estado === 'pendiente').map((s, i) => (
                         <div key={i} style={{ border: '1px solid #D6DCE8', borderLeft: s.tiene_conflicto ? '4px solid #B91C1C' : '4px solid #1E4D7B', borderRadius: 6, padding: 16, marginBottom: 12 }}>
@@ -194,7 +233,7 @@ export default function MeetingRequest({ onToast }) {
                                     <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 11, color: '#1E4D7B', fontWeight: 600 }}>{s.reunion_id}</div>
                                     <div style={{ fontSize: 14, fontWeight: 700, color: '#122240', marginTop: 4 }}>{s.nombre}</div>
                                     <div style={{ fontSize: 12, color: '#64748B' }}>{s.cargo} - {s.institucion}</div>
-                                    <div style={{ fontSize: 12, color: '#1E4D7B', fontWeight: 600, marginTop: 6 }}>Personal solicitado: {STAFF.find(x => x.id === parseInt(s.personal_id))?.name || 'Personal'}</div>
+                                    <div style={{ fontSize: 12, color: '#1E4D7B', fontWeight: 600, marginTop: 6 }}>Personal solicitado: {resolvedStaff.find(x => x.id === parseInt(s.personal_id))?.name || 'Personal'}</div>
                                 </div>
                                 {s.tiene_conflicto && <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 4, background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA' }}>Conflicto de horario</span>}
                             </div>
