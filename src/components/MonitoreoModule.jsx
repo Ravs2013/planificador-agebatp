@@ -859,10 +859,68 @@ export default function MonitoreoModule() {
                         }
                     };
 
-                    const currentWeekData = esinadWeeks.find(w => w.semana === esinadSelectedWeek);
-                    const esinadAcumulado = (() => { const acum = {}; PERSONAL_ESINAD.forEach(p => { acum[p.id] = { procesadosSinad: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 }; }); esinadWeeks.forEach(w => { w.personas.forEach(pe => { if (acum[pe.personId]) { acum[pe.personId].procesadosSinad += pe.procesadosSinad || 0; acum[pe.personId].informes += pe.informes || 0; acum[pe.personId].oficios += pe.oficios || 0; acum[pe.personId].oficiosMultiples += pe.oficiosMultiples || 0; acum[pe.personId].memorandums += pe.memorandums || 0; acum[pe.personId].totalReal += pe.totalReal || 0; } }); }); return acum; })();
+                    const getPersonasFromWeek = (w) => {
+                        if (!w) return [];
+                        if (w.personas && Array.isArray(w.personas)) return w.personas;
+                        const docs = w.documentos || [];
+                        const personStats = {};
+                        PERSONAL_ESINAD.forEach(p => {
+                            personStats[p.id] = { procesadosSinad: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 };
+                        });
+                        docs.forEach(doc => {
+                            const pId = doc.personId;
+                            if (personStats[pId]) {
+                                personStats[pId].procesadosSinad++;
+                                const cat = doc.categoria;
+                                let catKey = null;
+                                if (cat === "Informes") catKey = "informes";
+                                else if (cat === "Oficios") catKey = "oficios";
+                                else if (cat === "Of. Multiples") catKey = "oficiosMultiples";
+                                else if (cat === "Memorandums") catKey = "memorandums";
+                                
+                                if (catKey) {
+                                    personStats[pId][catKey]++;
+                                    personStats[pId].totalReal++;
+                                }
+                            }
+                        });
+                        return PERSONAL_ESINAD.map(p => ({
+                            personId: p.id,
+                            nombreExcel: "",
+                            shortName: p.shortName,
+                            rol: p.rol,
+                            tipo: p.tipo,
+                            ...personStats[p.id]
+                        }));
+                    };
 
-                    const activeData = esinadViewMode === "semana" && currentWeekData ? currentWeekData.personas : esinadViewMode === "acumulado" ? PERSONAL_ESINAD.map(p => ({ personId: p.id, shortName: p.shortName, rol: p.rol, tipo: p.tipo, ...esinadAcumulado[p.id] })) : [];
+                    const currentWeekData = esinadWeeks.find(w => w.semana === esinadSelectedWeek);
+                    const esinadAcumulado = (() => {
+                        const acum = {};
+                        PERSONAL_ESINAD.forEach(p => {
+                            acum[p.id] = { procesadosSinad: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 };
+                        });
+                        esinadWeeks.forEach(w => {
+                            const personas = getPersonasFromWeek(w);
+                            personas.forEach(pe => {
+                                if (acum[pe.personId]) {
+                                    acum[pe.personId].procesadosSinad += pe.procesadosSinad || 0;
+                                    acum[pe.personId].informes += pe.informes || 0;
+                                    acum[pe.personId].oficios += pe.oficios || 0;
+                                    acum[pe.personId].oficiosMultiples += pe.oficiosMultiples || 0;
+                                    acum[pe.personId].memorandums += pe.memorandums || 0;
+                                    acum[pe.personId].totalReal += pe.totalReal || 0;
+                                }
+                            });
+                        });
+                        return acum;
+                    })();
+
+                    const activeData = esinadViewMode === "semana" && currentWeekData 
+                        ? getPersonasFromWeek(currentWeekData) 
+                        : esinadViewMode === "acumulado" 
+                            ? PERSONAL_ESINAD.map(p => ({ personId: p.id, shortName: p.shortName, rol: p.rol, tipo: p.tipo, ...esinadAcumulado[p.id] })) 
+                            : [];
                     const activeDocs = esinadViewMode === "semana" && currentWeekData ? (currentWeekData.documentos || []) : esinadViewMode === "acumulado" ? esinadWeeks.flatMap(w => w.documentos || []) : [];
 
                     const ekpis = (() => { const ts = activeData.reduce((s, d) => s + (d.procesadosSinad || 0), 0); const tr = activeData.reduce((s, d) => s + (d.totalReal || 0), 0); return { totalSinad: ts, totalReal: tr, eficiencia: ts > 0 ? Math.round(tr / ts * 100) : 0, semanasCount: esinadWeeks.length }; })();
@@ -900,7 +958,11 @@ export default function MonitoreoModule() {
                                     <div style={{ padding: "10px 14px", background: `${C.green}08`, border: `1px solid ${C.green}25`, borderRadius: 6, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                             {I.check(16, C.green)}
-                                            <span style={{ fontSize: 12, color: C.green, fontWeight: 600, fontFamily: "'DM Sans'" }}>Datos cargados: {new Date(currentWeekData.fechaCarga).toLocaleDateString()} -- {currentWeekData.nombreArchivo} ({currentWeekData.totalFilas} filas)</span>
+                                            <span style={{ fontSize: 12, color: C.green, fontWeight: 600, fontFamily: "'DM Sans'" }}>
+                                                Datos cargados: {currentWeekData.fechaCarga ? new Date(currentWeekData.fechaCarga).toLocaleDateString() : (currentWeekData.createdAt?.toDate ? currentWeekData.createdAt.toDate().toLocaleDateString() : 'N/A')} 
+                                                {currentWeekData.nombreArchivo ? ` -- ${currentWeekData.nombreArchivo}` : ''} 
+                                                {` (${currentWeekData.totalFilas ?? (currentWeekData.documentos?.length || 0)} filas)`}
+                                            </span>
                                         </div>
                                         <div style={{ display: "flex", gap: 6 }}>
                                             <button onClick={() => esinadFileRef.current?.click()} style={{ padding: "5px 12px", borderRadius: 5, border: `1px solid ${C.amber}`, background: C.white, color: C.amber, cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "'DM Sans'" }}>Reemplazar</button>
