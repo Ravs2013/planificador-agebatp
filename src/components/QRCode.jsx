@@ -1,13 +1,13 @@
-const PLANIFICADOR_URL = 'https://ravsbot-planificador.xv74e4.easypanel.host';
+const PLANIFICADOR_URL = 'https://planificador-agebatp.web.app/';
 
 export default function QRCode({ size = 220 }) {
     return (
         <img
-            src="/assets/qr-planificador.png"
+            src="/assets/qr-planificador.jpeg"
             alt="QR Acceso al Planificador AGEBATP"
             width={size}
             height={size}
-            style={{ borderRadius: 4 }}
+            style={{ borderRadius: 4, objectFit: 'contain' }}
         />
     );
 }

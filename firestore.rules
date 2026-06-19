@@ -61,6 +61,16 @@ service cloud.firestore {
       allow write: if isStaff();
     }
 
+    // Colecciones de Monitoreo Docente:
+    match /monitoreoDocenteEba/{id} {
+      allow read: if isStaff();
+      allow write: if isRole('admin') || isRole('jefatura');
+    }
+    match /monitoreoDocenteEtp/{id} {
+      allow read: if isStaff();
+      allow write: if isRole('admin') || isRole('jefatura');
+    }
+
     // Colección directorioCeba y directorioCetpro:
     // SOLO personal/admin/jefatura y el director de la institución correspondiente pueden leer y escribir
     match /directorioCeba/{id} {

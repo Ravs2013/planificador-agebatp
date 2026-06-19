@@ -378,6 +378,8 @@ export default function DirectorioCEBA() {
         aulasInicial: 0,
         aulasIntermedio: 0,
         aulasAvanzado: 0,
+        docentesNombrados: 0,
+        docentesContratados: 0,
         adminNombrados: 0,
         adminContratados: 0,
         apoyoIntermitenteLeve: 0,
@@ -425,6 +427,8 @@ export default function DirectorioCEBA() {
             aulasInicial: 0,
             aulasIntermedio: 0,
             aulasAvanzado: 0,
+            docentesNombrados: 0,
+            docentesContratados: 0,
             adminNombrados: 0,
             adminContratados: 0,
             apoyoIntermitenteLeve: 0,
@@ -489,6 +493,8 @@ export default function DirectorioCEBA() {
             aulasInicial: parseInt(formData.aulasInicial) || 0,
             aulasIntermedio: parseInt(formData.aulasIntermedio) || 0,
             aulasAvanzado: parseInt(formData.aulasAvanzado) || 0,
+            docentesNombrados: parseInt(formData.docentesNombrados) || 0,
+            docentesContratados: parseInt(formData.docentesContratados) || 0,
             adminNombrados: parseInt(formData.adminNombrados) || 0,
             adminContratados: parseInt(formData.adminContratados) || 0,
             cantidadPerifericos: parseInt(formData.cantidadPerifericos) || 0,
@@ -676,6 +682,22 @@ export default function DirectorioCEBA() {
         };
     }, [data]);
 
+    // Bar Data for Charts
+    const barData = useMemo(() =>
+        [...data].sort((a, b) => (b.alumnosCenso || 0) - (a.alumnosCenso || 0))
+            .map(c => ({
+                nombre: c.nombre?.length > 28 ? c.nombre.substring(0, 28) + "..." : c.nombre,
+                Estudiantes: c.alumnosCenso || 0
+            })),
+    [data]);
+
+    // Pie Data for Charts
+    const pieData = useMemo(() => {
+        const m = {};
+        data.forEach(c => { const d = c.distrito || "Otro"; m[d] = (m[d] || 0) + 1; });
+        return Object.entries(m).map(([name, value]) => ({ name, value }));
+    }, [data]);
+
     // Export PDF — scaled multi-page A1 vertical
     const handleExportPDF = useCallback(() => {
         setExporting(true);
@@ -774,47 +796,7 @@ export default function DirectorioCEBA() {
         );
     }
 
-    if (data.length === 0 && !loading) {
-        return (
-            <div style={{ padding: 40, maxWidth: 640, margin: "40px auto" }}>
-                <div 
-                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                    onDragLeave={() => setDragOver(false)}
-                    onDrop={handleDrop}
-                    style={{
-                        border: `2.5px dashed ${dragOver ? C.navy4 : C.g300}`,
-                        background: dragOver ? `${C.navy4}08` : C.white,
-                        borderRadius: 12,
-                        padding: "60px 40px",
-                        textAlign: "center",
-                        transition: "all 0.2s ease",
-                        boxShadow: "0 4px 12px rgba(15,23,42,0.03)"
-                    }}
-                >
-                    <div style={{ marginBottom: 20 }}>
-                        {Icons.school(56, dragOver ? C.navy4 : C.g400)}
-                    </div>
-                    <h3 style={{ color: C.navy1, fontSize: "1.3rem", margin: "0 0 10px", fontFamily: "'DM Serif Display',serif" }}>
-                        Directorio CEBA - UGEL 03
-                    </h3>
-                    <p style={{ color: C.g500, fontSize: "0.88rem", fontFamily: "'DM Sans'", maxWidth: 440, margin: "0 auto 28px", lineHeight: 1.5 }}>
-                        Arrastra y suelta tu archivo Excel del Directorio CEBA aquí, o haz click en el botón para explorar tus archivos locales.
-                    </p>
-                    <div style={{ display: "flex", gap: 12, justifyContent: "center", alignItems: "center" }}>
-                        <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFileUpload} />
-                        <button onClick={() => fileRef.current?.click()} style={{ ...S.btn(C.navy4, C.white, C.navy5), padding: "12px 28px", fontSize: 13 }}>
-                            {Icons.upload(15, C.white)} Seleccionar Archivo Excel
-                        </button>
-                        {(isRole('admin') || isRole('jefatura')) && (
-                            <button onClick={openAddCEBA} style={{ ...S.btn(C.gold2, C.white, C.gold1), padding: "12px 28px", fontSize: 13 }}>
-                                + Cargar Manualmente
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </div>
-        );
-    }
+
 
     /* ═══════════════════════════════════════════════════════
        MAIN RENDER
@@ -860,169 +842,210 @@ export default function DirectorioCEBA() {
                 </div>
             </div>
 
-            {/* SEARCH & FILTER */}
-            <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-                <div style={{ position: "relative", flex: "1 1 300px", maxWidth: 400 }}>
-                    <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>{Icons.search(14, C.g400)}</div>
-                    <input
-                        placeholder="Buscar por nombre, distrito, director, correo..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        style={{ ...S.input, width: "100%", paddingLeft: 34, boxSizing: "border-box" }}
-                    />
-                </div>
-                <select value={distritoFilter} onChange={e => setDistritoFilter(e.target.value)} style={{ ...S.input, minWidth: 180 }}>
-                    <option value="todos">Todos los distritos</option>
-                    {distritos.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-            </div>
-
-            {/* CONTENT REF FOR PDF EXPORT */}
-            <div>
-                {/* KPIs */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 24 }}>
-                    <StatCard icon={Icons.school(20, C.navy4)} label="Total CEBA" value={kpis.totalCEBA} sub="Instituciones registradas" border={C.navy4} />
-                    <StatCard icon={Icons.users(20, C.green)} label="Total Estudiantes" value={kpis.totalEstudiantes.toLocaleString()} sub="Alumnos matriculados (censo)" border={C.green} />
-                    <StatCard icon={Icons.book(20, C.indigo)} label="Total Docentes" value={kpis.totalDocentes.toLocaleString()} sub="Todos los ciclos" border={C.indigo} />
-                    <StatCard icon={Icons.grid(20, C.amber)} label="Total Aulas" value={kpis.totalAulas.toLocaleString()} sub="Todos los ciclos" border={C.amber} />
-                    <StatCard icon={Icons.briefcase(20, C.purple)} label="Personal Admin" value={kpis.totalAdmin.toLocaleString()} sub="Nombrados + Contratados" border={C.purple} />
-                    <StatCard icon={Icons.mapPin(20, C.teal)} label="Distritos" value={kpis.distritosUnicos} sub="Distritos atendidos" border={C.teal} />
-                </div>
-
-                {/* CHARTS */}
-                {data.length > 0 && (
-                    <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 24 }} className="grid-calendar">
-                        {/* Bar Chart: Students by CEBA */}
-                        <div style={S.card}>
-                            <h3 style={{ color: C.navy1, fontSize: "1rem", margin: "0 0 16px", fontFamily: "'DM Serif Display',serif" }}>
-                                Estudiantes por CEBA
-                            </h3>
-                            <ResponsiveContainer width="100%" height={Math.max(300, barData.length * 36)}>
-                                <BarChart data={barData} layout="vertical" barSize={18} margin={{ left: 20 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke={C.g200} />
-                                    <XAxis type="number" tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} />
-                                    <YAxis type="category" dataKey="nombre" width={180} tick={{ fill: C.g600, fontSize: 10, fontFamily: "'DM Sans'" }} />
-                                    <Tooltip content={<CTip />} />
-                                    <Bar dataKey="Estudiantes" fill={C.navy4} radius={[0, 4, 4, 0]} />
-                                </BarChart>
-                            </ResponsiveContainer>
+            {data.length === 0 ? (
+                <div style={{ padding: 40, maxWidth: 640, margin: "40px auto" }}>
+                    <div 
+                        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                        onDragLeave={() => setDragOver(false)}
+                        onDrop={handleDrop}
+                        style={{
+                            border: `2.5px dashed ${dragOver ? C.navy4 : C.g300}`,
+                            background: dragOver ? `${C.navy4}08` : C.white,
+                            borderRadius: 12,
+                            padding: "60px 40px",
+                            textAlign: "center",
+                            transition: "all 0.2s ease",
+                            boxShadow: "0 4px 12px rgba(15,23,42,0.03)"
+                        }}
+                    >
+                        <div style={{ marginBottom: 20 }}>
+                            {Icons.school(56, dragOver ? C.navy4 : C.g400)}
                         </div>
-
-                        {/* Pie Chart: CEBAs by District */}
-                        <div style={S.card}>
-                            <h3 style={{ color: C.navy1, fontSize: "1rem", margin: "0 0 16px", fontFamily: "'DM Serif Display',serif" }}>
-                                Distribucion por Distrito
-                            </h3>
-                            <ResponsiveContainer width="100%" height={300}>
-                                <PieChart>
-                                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2} dataKey="value" label={({ name, value }) => `${name} (${value})`} labelLine={{ stroke: C.g300 }}>
-                                        {pieData.map((_, idx) => <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />)}
-                                    </Pie>
-                                    <Tooltip content={<CTip />} />
-                                </PieChart>
-                            </ResponsiveContainer>
+                        <h3 style={{ color: C.navy1, fontSize: "1.3rem", margin: "0 0 10px", fontFamily: "'DM Serif Display',serif" }}>
+                            Directorio CEBA - UGEL 03
+                        </h3>
+                        <p style={{ color: C.g500, fontSize: "0.88rem", fontFamily: "'DM Sans'", maxWidth: 440, margin: "0 auto 28px", lineHeight: 1.5 }}>
+                            Arrastra y suelta tu archivo Excel del Directorio CEBA aquí, o haz click en el botón para explorar tus archivos locales.
+                        </p>
+                        <div style={{ display: "flex", gap: 12, justifyContent: "center", alignItems: "center" }}>
+                            <button onClick={() => fileRef.current?.click()} style={{ ...S.btn(C.navy4, C.white, C.navy5), padding: "12px 28px", fontSize: 13 }}>
+                                {Icons.upload(15, C.white)} Seleccionar Archivo Excel
+                            </button>
+                            {(isRole('admin') || isRole('jefatura')) && (
+                                <button onClick={openAddCEBA} style={{ ...S.btn(C.gold2, C.white, C.gold1), padding: "12px 28px", fontSize: 13 }}>
+                                    + Cargar Manualmente
+                                </button>
+                            )}
                         </div>
                     </div>
-                )}
+                </div>
+            ) : (
+                <>
+                    {/* SEARCH & FILTER */}
+                    <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+                        <div style={{ position: "relative", flex: "1 1 300px", maxWidth: 400 }}>
+                            <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>{Icons.search(14, C.g400)}</div>
+                            <input
+                                placeholder="Buscar por nombre, distrito, director, correo..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                style={{ ...S.input, width: "100%", paddingLeft: 34, boxSizing: "border-box" }}
+                            />
+                        </div>
+                        <select value={distritoFilter} onChange={e => setDistritoFilter(e.target.value)} style={{ ...S.input, minWidth: 180 }}>
+                            <option value="todos">Todos los distritos</option>
+                            {distritos.map(d => <option key={d} value={d}>{d}</option>)}
+                        </select>
+                    </div>
 
-                {/* CARD GRID */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 16 }}>
-                    {filtered.map((ceba, idx) => {
-                        const isEstatal = (ceba.tipoGestion || "").toUpperCase().includes("ESTATAL");
-                        const totalDocentes = (ceba.docentesInicial || 0) + (ceba.docentesIntermedio || 0) + (ceba.docentesAvanzado || 0);
-                        const totalAulas = (ceba.aulasInicial || 0) + (ceba.aulasIntermedio || 0) + (ceba.aulasAvanzado || 0);
-                        return (
-                            <div
-                                key={idx}
-                                onClick={() => setSelectedCEBA(ceba)}
-                                style={{
-                                    ...S.card,
-                                    cursor: "pointer",
-                                    transition: "all 0.2s",
-                                    position: "relative",
-                                }}
-                                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(15,23,42,0.12)"; }}
-                                onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(15,23,42,0.06)"; }}
-                            >
-                                {/* Header */}
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 12 }}>
-                                    <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Sans'", lineHeight: 1.3, flex: 1 }}>
-                                        {ceba.nombre}
-                                    </h4>
-                                    <div style={{ display: "flex", gap: 4, flexShrink: 0, flexWrap: "wrap" }}>
-                                        <span style={S.badge(
-                                            isEstatal ? "#F0FDF4" : "#FFFBEB",
-                                            isEstatal ? C.green : C.amber,
-                                            isEstatal ? "#BBF7D0" : "#FDE68A"
-                                        )}>
-                                            {isEstatal ? "ESTATAL" : "CONVENIO"}
-                                        </span>
-                                        <span style={S.badge(`${C.navy5}15`, C.navy5, `${C.navy5}30`)}>
-                                            {ceba.distrito}
-                                        </span>
-                                    </div>
+                    {/* CONTENT REF FOR PDF EXPORT */}
+                    <div>
+                        {/* KPIs */}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 24 }}>
+                            <StatCard icon={Icons.school(20, C.navy4)} label="Total CEBA" value={kpis.totalCEBA} sub="Instituciones registradas" border={C.navy4} />
+                            <StatCard icon={Icons.users(20, C.green)} label="Total Estudiantes" value={kpis.totalEstudiantes.toLocaleString()} sub="Alumnos matriculados (censo)" border={C.green} />
+                            <StatCard icon={Icons.book(20, C.indigo)} label="Total Docentes" value={kpis.totalDocentes.toLocaleString()} sub="Todos los ciclos" border={C.indigo} />
+                            <StatCard icon={Icons.grid(20, C.amber)} label="Total Aulas" value={kpis.totalAulas.toLocaleString()} sub="Todos los ciclos" border={C.amber} />
+                            <StatCard icon={Icons.briefcase(20, C.purple)} label="Personal Admin" value={kpis.totalAdmin.toLocaleString()} sub="Nombrados + Contratados" border={C.purple} />
+                            <StatCard icon={Icons.mapPin(20, C.teal)} label="Distritos" value={kpis.distritosUnicos} sub="Distritos atendidos" border={C.teal} />
+                        </div>
+
+                        {/* CHARTS */}
+                        {data.length > 0 && (
+                            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 24 }} className="grid-calendar">
+                                {/* Bar Chart: Students by CEBA */}
+                                <div style={S.card}>
+                                    <h3 style={{ color: C.navy1, fontSize: "1rem", margin: "0 0 16px", fontFamily: "'DM Serif Display',serif" }}>
+                                        Estudiantes por CEBA
+                                    </h3>
+                                    <ResponsiveContainer width="100%" height={Math.max(300, barData.length * 36)}>
+                                        <BarChart data={barData} layout="vertical" barSize={18} margin={{ left: 20 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke={C.g200} />
+                                            <XAxis type="number" tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} />
+                                            <YAxis type="category" dataKey="nombre" width={180} tick={{ fill: C.g600, fontSize: 10, fontFamily: "'DM Sans'" }} />
+                                            <Tooltip content={<CTip />} />
+                                            <Bar dataKey="Estudiantes" fill={C.navy4} radius={[0, 4, 4, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
                                 </div>
 
-                                {/* Director */}
-                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                                    <div style={{ width: 30, height: 30, borderRadius: 6, background: C.navy3, color: C.white, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 10, flexShrink: 0, fontFamily: "'JetBrains Mono'" }}>
-                                        {(ceba.nombres || "D")[0]}{(ceba.apellidoPaterno || "R")[0]}
-                                    </div>
-                                    <div style={{ minWidth: 0 }}>
-                                        <div style={{ fontSize: "0.78rem", fontWeight: 600, color: C.navy1, fontFamily: "'DM Sans'", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                            {directorName(ceba) || "Sin responsable"}
-                                        </div>
-                                        <div style={{ fontSize: "0.68rem", color: C.g500, fontFamily: "'DM Sans'" }}>{ceba.cargo || ""}</div>
-                                    </div>
-                                </div>
-
-                                {/* Contact */}
-                                {ceba.correoInstitucional && (
-                                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: C.g500, fontFamily: "'DM Sans'", marginBottom: 4 }}>
-                                        {Icons.mail(11, C.g400)}
-                                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ceba.correoInstitucional}</span>
-                                    </div>
-                                )}
-                                {ceba.celular && (
-                                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: C.g500, fontFamily: "'DM Sans'", marginBottom: 4 }}>
-                                        {Icons.phone(11, C.g400)}
-                                        <span>{ceba.celular}</span>
-                                    </div>
-                                )}
-
-                                {/* Address */}
-                                {ceba.direccion && (
-                                    <div style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: "0.72rem", color: C.g500, fontFamily: "'DM Sans'", marginBottom: 12 }}>
-                                        {Icons.mapPin(11, C.g400)}
-                                        <span style={{ lineHeight: 1.3 }}>{ceba.direccion}</span>
-                                    </div>
-                                )}
-
-                                {/* Mini Stats */}
-                                <div style={{ display: "flex", gap: 0, borderTop: `1px solid ${C.g100}`, paddingTop: 10 }}>
-                                    {[
-                                        { label: "Estudiantes", value: ceba.alumnosCenso || 0, color: C.green },
-                                        { label: "Docentes", value: totalDocentes, color: C.indigo },
-                                        { label: "Aulas", value: totalAulas, color: C.amber },
-                                        { label: "Perifericos", value: ceba.cantidadPerifericos || 0, color: C.teal },
-                                    ].map((st, i) => (
-                                        <div key={i} style={{ flex: 1, textAlign: "center", borderRight: i < 3 ? `1px solid ${C.g100}` : "none" }}>
-                                            <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1rem", fontWeight: 700, color: st.color }}>{st.value}</div>
-                                            <div style={{ fontSize: "0.58rem", color: C.g500, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", fontFamily: "'DM Sans'" }}>{st.label}</div>
-                                        </div>
-                                    ))}
+                                {/* Pie Chart: CEBAs by District */}
+                                <div style={S.card}>
+                                    <h3 style={{ color: C.navy1, fontSize: "1rem", margin: "0 0 16px", fontFamily: "'DM Serif Display',serif" }}>
+                                        Distribucion por Distrito
+                                    </h3>
+                                    <ResponsiveContainer width="100%" height={300}>
+                                        <PieChart>
+                                            <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2} dataKey="value" label={({ name, value }) => `${name} (${value})`} labelLine={{ stroke: C.g300 }}>
+                                                {pieData.map((_, idx) => <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />)}
+                                            </Pie>
+                                            <Tooltip content={<CTip />} />
+                                        </PieChart>
+                                    </ResponsiveContainer>
                                 </div>
                             </div>
-                        );
-                    })}
-                </div>
+                        )}
 
-                {filtered.length === 0 && data.length > 0 && (
-                    <div style={{ textAlign: "center", padding: 48, color: C.g400, fontSize: "0.9rem", fontFamily: "'DM Sans'" }}>
-                        No se encontraron resultados con los filtros aplicados.
+                        {/* CARD GRID */}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 16 }}>
+                            {filtered.map((ceba, idx) => {
+                                const isEstatal = (ceba.tipoGestion || "").toUpperCase().includes("ESTATAL");
+                                const totalDocentes = (ceba.docentesInicial || 0) + (ceba.docentesIntermedio || 0) + (ceba.docentesAvanzado || 0);
+                                const totalAulas = (ceba.aulasInicial || 0) + (ceba.aulasIntermedio || 0) + (ceba.aulasAvanzado || 0);
+                                return (
+                                    <div
+                                        key={idx}
+                                        onClick={() => setSelectedCEBA(ceba)}
+                                        style={{
+                                            ...S.card,
+                                            cursor: "pointer",
+                                            transition: "all 0.2s",
+                                            position: "relative",
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(15,23,42,0.12)"; }}
+                                        onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(15,23,42,0.06)"; }}
+                                    >
+                                        {/* Header */}
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 12 }}>
+                                            <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Sans'", lineHeight: 1.3, flex: 1 }}>
+                                                {ceba.nombre}
+                                            </h4>
+                                            <div style={{ display: "flex", gap: 4, flexShrink: 0, flexWrap: "wrap" }}>
+                                                <span style={S.badge(
+                                                    isEstatal ? "#F0FDF4" : "#FFFBEB",
+                                                    isEstatal ? C.green : C.amber,
+                                                    isEstatal ? "#BBF7D0" : "#FDE68A"
+                                                )}>
+                                                    {isEstatal ? "ESTATAL" : "CONVENIO"}
+                                                </span>
+                                                <span style={S.badge(`${C.navy5}15`, C.navy5, `${C.navy5}30`)}>
+                                                    {ceba.distrito}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Director */}
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                                            <div style={{ width: 30, height: 30, borderRadius: 6, background: C.navy3, color: C.white, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 10, flexShrink: 0, fontFamily: "'JetBrains Mono'" }}>
+                                                {(ceba.nombres || "D")[0]}{(ceba.apellidoPaterno || "R")[0]}
+                                            </div>
+                                            <div style={{ minWidth: 0 }}>
+                                                <div style={{ fontSize: "0.78rem", fontWeight: 600, color: C.navy1, fontFamily: "'DM Sans'", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                    {directorName(ceba) || "Sin responsable"}
+                                                </div>
+                                                <div style={{ fontSize: "0.68rem", color: C.g500, fontFamily: "'DM Sans'" }}>{ceba.cargo || ""}</div>
+                                            </div>
+                                        </div>
+
+                                        {/* Contact */}
+                                        {ceba.correoInstitucional && (
+                                            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: C.g500, fontFamily: "'DM Sans'", marginBottom: 4 }}>
+                                                {Icons.mail(11, C.g400)}
+                                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ceba.correoInstitucional}</span>
+                                            </div>
+                                        )}
+                                        {ceba.celular && (
+                                            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: C.g500, fontFamily: "'DM Sans'", marginBottom: 4 }}>
+                                                {Icons.phone(11, C.g400)}
+                                                <span>{ceba.celular}</span>
+                                            </div>
+                                        )}
+
+                                        {/* Address */}
+                                        {ceba.direccion && (
+                                            <div style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: "0.72rem", color: C.g500, fontFamily: "'DM Sans'", marginBottom: 12 }}>
+                                                {Icons.mapPin(11, C.g400)}
+                                                <span style={{ lineHeight: 1.3 }}>{ceba.direccion}</span>
+                                            </div>
+                                        )}
+
+                                        {/* Mini Stats */}
+                                        <div style={{ display: "flex", gap: 0, borderTop: `1px solid ${C.g100}`, paddingTop: 10 }}>
+                                            {[
+                                                { label: "Estudiantes", value: ceba.alumnosCenso || 0, color: C.green },
+                                                { label: "Docentes", value: totalDocentes, color: C.indigo },
+                                                { label: "Aulas", value: totalAulas, color: C.amber },
+                                                { label: "Perifericos", value: ceba.cantidadPerifericos || 0, color: C.teal },
+                                            ].map((st, i) => (
+                                                <div key={i} style={{ flex: 1, textAlign: "center", borderRight: i < 3 ? `1px solid ${C.g100}` : "none" }}>
+                                                    <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1rem", fontWeight: 700, color: st.color }}>{st.value}</div>
+                                                    <div style={{ fontSize: "0.58rem", color: C.g500, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", fontFamily: "'DM Sans'" }}>{st.label}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {filtered.length === 0 && data.length > 0 && (
+                            <div style={{ textAlign: "center", padding: 48, color: C.g400, fontSize: "0.9rem", fontFamily: "'DM Sans'" }}>
+                                No se encontraron resultados con los filtros aplicados.
+                            </div>
+                        )}
                     </div>
-                )}
-            </div>
+                </>
+            )}
 
             {/* ═══════════════════════════════════════════════════
                DETAIL MODAL
@@ -1167,16 +1190,34 @@ export default function DirectorioCEBA() {
                                 </table>
                             </div>
 
-                            {/* Section 6: Personal Administrativo */}
-                            <SectionTitle>Personal Administrativo</SectionTitle>
+                            {/* Section 6: Personal Docente y Administrativo */}
+                            <SectionTitle>Personal Docente y Administrativo</SectionTitle>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
-                                <div style={{ background: C.g50, border: `1px solid ${C.g100}`, borderRadius: 8, padding: "14px 18px", textAlign: "center" }}>
-                                    <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1.6rem", fontWeight: 700, color: C.navy4 }}>{selectedCEBA.adminNombrados || 0}</div>
-                                    <div style={{ fontSize: "0.7rem", fontWeight: 600, color: C.g500, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: "'DM Sans'" }}>Nombrados</div>
+                                <div style={{ background: C.g50, border: `1px solid ${C.g100}`, borderRadius: 8, padding: "14px 18px" }}>
+                                    <div style={{ fontSize: "0.75rem", fontWeight: 700, color: C.g500, textTransform: "uppercase", marginBottom: 8, textAlign: "center" }}>Docentes</div>
+                                    <div style={{ display: "flex", justifyContent: "space-around" }}>
+                                        <div>
+                                            <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1.3rem", fontWeight: 700, color: C.navy4, textAlign: "center" }}>{selectedCEBA.docentesNombrados || 0}</div>
+                                            <div style={{ fontSize: "0.6rem", color: C.g500, textAlign: "center" }}>Nombrados</div>
+                                        </div>
+                                        <div>
+                                            <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1.3rem", fontWeight: 700, color: C.amber, textAlign: "center" }}>{selectedCEBA.docentesContratados || 0}</div>
+                                            <div style={{ fontSize: "0.6rem", color: C.g500, textAlign: "center" }}>Contratados</div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div style={{ background: C.g50, border: `1px solid ${C.g100}`, borderRadius: 8, padding: "14px 18px", textAlign: "center" }}>
-                                    <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1.6rem", fontWeight: 700, color: C.amber }}>{selectedCEBA.adminContratados || 0}</div>
-                                    <div style={{ fontSize: "0.7rem", fontWeight: 600, color: C.g500, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: "'DM Sans'" }}>Contratados</div>
+                                <div style={{ background: C.g50, border: `1px solid ${C.g100}`, borderRadius: 8, padding: "14px 18px" }}>
+                                    <div style={{ fontSize: "0.75rem", fontWeight: 700, color: C.g500, textTransform: "uppercase", marginBottom: 8, textAlign: "center" }}>Administrativos</div>
+                                    <div style={{ display: "flex", justifyContent: "space-around" }}>
+                                        <div>
+                                            <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1.3rem", fontWeight: 700, color: C.navy4, textAlign: "center" }}>{selectedCEBA.adminNombrados || 0}</div>
+                                            <div style={{ fontSize: "0.6rem", color: C.g500, textAlign: "center" }}>Nombrados</div>
+                                        </div>
+                                        <div>
+                                            <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1.3rem", fontWeight: 700, color: C.amber, textAlign: "center" }}>{selectedCEBA.adminContratados || 0}</div>
+                                            <div style={{ fontSize: "0.6rem", color: C.g500, textAlign: "center" }}>Contratados</div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1418,6 +1459,17 @@ export default function DirectorioCEBA() {
 
                                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, borderTop: `1px solid ${C.g100}`, paddingTop: 14 }}>
                                         <div>
+                                            <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Docentes Nombrados</label>
+                                            <input type="number" min="0" value={formData.docentesNombrados || 0} onChange={e => setFormData({ ...formData, docentesNombrados: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Docentes Contratados</label>
+                                            <input type="number" min="0" value={formData.docentesContratados || 0} onChange={e => setFormData({ ...formData, docentesContratados: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, borderTop: `1px solid ${C.g100}`, paddingTop: 14 }}>
+                                        <div>
                                             <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase", marginBottom: 6 }}>Admin. Nombrados</label>
                                             <input type="number" min="0" value={formData.adminNombrados} onChange={e => setFormData({ ...formData, adminNombrados: e.target.value })} style={{ ...S.input, width: "100%", boxSizing: "border-box" }} />
                                         </div>
@@ -1492,13 +1544,21 @@ export default function DirectorioCEBA() {
                                         </div>
                                     ) : (
                                         <div style={{ display: "flex", flexDirection: "column", gap: 14, maxHeight: "40vh", overflowY: "auto", paddingRight: 4 }}>
+                                            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.5fr 1fr 1fr 1.2fr auto", gap: 10, padding: "0 12px 6px", borderBottom: `1px solid ${C.g200}`, marginBottom: -6 }}>
+                                                <span style={{ fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase" }}>Tipo / Nombre Sede</span>
+                                                <span style={{ fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase" }}>Dirección Sede</span>
+                                                <span style={{ fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase" }}>Forma Atención</span>
+                                                <span style={{ fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase" }}>Días Atención</span>
+                                                <span style={{ fontSize: "0.7rem", fontWeight: 700, color: C.g600, textTransform: "uppercase" }}>Horario</span>
+                                                <span style={{ width: 16 }}></span>
+                                            </div>
                                             {formData.sedes.map((s, idx) => (
                                                 <div key={idx} style={{ display: "grid", gridTemplateColumns: "1.2fr 1.5fr 1fr 1fr 1.2fr auto", gap: 10, background: C.g50, padding: 12, borderRadius: 6, border: `1px solid ${C.g200}`, alignItems: "center" }}>
-                                                    <input type="text" placeholder="Sede/Nombre" value={s.sede} onChange={e => updateSedeRow(idx, "sede", e.target.value)} style={{ ...S.input, padding: "6px 10px" }} />
-                                                    <input type="text" placeholder="Dirección" value={s.direccion} onChange={e => updateSedeRow(idx, "direccion", e.target.value)} style={{ ...S.input, padding: "6px 10px" }} />
-                                                    <input type="text" placeholder="Forma Atención" value={s.formaAtencion} onChange={e => updateSedeRow(idx, "formaAtencion", e.target.value)} style={{ ...S.input, padding: "6px 10px" }} />
-                                                    <input type="text" placeholder="Días" value={s.dias} onChange={e => updateSedeRow(idx, "dias", e.target.value)} style={{ ...S.input, padding: "6px 10px" }} />
-                                                    <input type="text" placeholder="Horario" value={s.horario} onChange={e => updateSedeRow(idx, "horario", e.target.value)} style={{ ...S.input, padding: "6px 10px" }} />
+                                                    <input type="text" placeholder="Ej: REFERENCIAL o Periférico 1" value={s.sede} onChange={e => updateSedeRow(idx, "sede", e.target.value)} style={{ ...S.input, padding: "6px 10px" }} />
+                                                    <input type="text" placeholder="Dirección de la Sede" value={s.direccion} onChange={e => updateSedeRow(idx, "direccion", e.target.value)} style={{ ...S.input, padding: "6px 10px" }} />
+                                                    <input type="text" placeholder="Ej: Presencial / Semipresencial" value={s.formaAtencion} onChange={e => updateSedeRow(idx, "formaAtencion", e.target.value)} style={{ ...S.input, padding: "6px 10px" }} />
+                                                    <input type="text" placeholder="Ej: Lunes a viernes" value={s.dias} onChange={e => updateSedeRow(idx, "dias", e.target.value)} style={{ ...S.input, padding: "6px 10px" }} />
+                                                    <input type="text" placeholder="Ej: 5:30 pm a 10:00 pm" value={s.horario} onChange={e => updateSedeRow(idx, "horario", e.target.value)} style={{ ...S.input, padding: "6px 10px" }} />
                                                     <button type="button" onClick={() => removeSedeRow(idx)} style={{ background: "none", border: "none", color: C.red, fontSize: 16, cursor: "pointer" }}>&times;</button>
                                                 </div>
                                             ))}

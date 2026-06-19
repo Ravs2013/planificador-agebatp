@@ -270,6 +270,26 @@ export default function EsinadExpedientes() {
                                     {doc.expediente && <div><span style={{ fontWeight: 600, color: C.g600 }}>Expediente:</span> {doc.expediente}</div>}
                                     {doc.remiteOficina && <div><span style={{ fontWeight: 600, color: C.g600 }}>Oficina:</span> {doc.remiteOficina}</div>}
                                     {doc.fechaDerivacion && <div><span style={{ fontWeight: 600, color: C.g600 }}>Fecha:</span> {formatDateDMY(doc.fechaDerivacion)}</div>}
+                                    {(doc.carpetaUrl || doc.linkDrive || doc.linkOnedrive) && (
+                                        <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                                            {doc.linkDrive && (
+                                                <a href={doc.linkDrive} target="_blank" rel="noopener noreferrer"
+                                                    onClick={e => e.stopPropagation()}
+                                                    style={{ color: C.navy5, fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.68rem' }}
+                                                    onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+                                                    onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+                                                >📁 Drive</a>
+                                            )}
+                                            {doc.linkOnedrive && (
+                                                <a href={doc.linkOnedrive} target="_blank" rel="noopener noreferrer"
+                                                    onClick={e => e.stopPropagation()}
+                                                    style={{ color: C.teal, fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.68rem' }}
+                                                    onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+                                                    onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+                                                >📁 OneDrive</a>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Specialist */}
@@ -336,6 +356,31 @@ export default function EsinadExpedientes() {
                                         <div style={{ fontSize: 13, fontWeight: 600, color: C.navy1, marginTop: 2, fontFamily: "'DM Sans'" }}>{val || '--'}</div>
                                     </div>
                                 ))}
+                            </div>
+
+                            {/* Carpeta de documentos */}
+                            <div style={{ marginBottom: 16, padding: '12px 16px', background: C.g50, borderRadius: 8, border: `1px solid ${C.g100}` }}>
+                                <div style={{ fontSize: 10, color: C.g500, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, fontFamily: "'DM Sans'" }}>Carpeta de Documentos</div>
+                                {(selectedDoc.linkDrive || selectedDoc.linkOnedrive) ? (
+                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                        {selectedDoc.linkDrive && (
+                                            <a href={selectedDoc.linkDrive} target="_blank" rel="noopener noreferrer"
+                                                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, background: C.white, border: `1px solid ${C.navy5}30`, color: C.navy5, fontWeight: 600, fontSize: 12, textDecoration: 'none', fontFamily: "'DM Sans'", transition: 'all 0.15s' }}
+                                                onMouseEnter={e => { e.currentTarget.style.background = `${C.navy5}10`; }}
+                                                onMouseLeave={e => { e.currentTarget.style.background = C.white; }}
+                                            >📁 Abrir en Drive</a>
+                                        )}
+                                        {selectedDoc.linkOnedrive && (
+                                            <a href={selectedDoc.linkOnedrive} target="_blank" rel="noopener noreferrer"
+                                                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, background: C.white, border: `1px solid ${C.teal}30`, color: C.teal, fontWeight: 600, fontSize: 12, textDecoration: 'none', fontFamily: "'DM Sans'", transition: 'all 0.15s' }}
+                                                onMouseEnter={e => { e.currentTarget.style.background = `${C.teal}10`; }}
+                                                onMouseLeave={e => { e.currentTarget.style.background = C.white; }}
+                                            >📁 Abrir en OneDrive</a>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div style={{ fontSize: 12, color: C.g400, fontStyle: 'italic', fontFamily: "'DM Sans'" }}>Sin carpeta vinculada</div>
+                                )}
                             </div>
 
                             {/* Asunto expediente */}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { subscribeActividades, subscribeReuniones, subscribeEsinadSemanas } from "../firebase/db";
+import { subscribeActividades, subscribeReuniones, subscribeEsinadSemanas, subscribeDirectorioCeba, subscribeDirectorioCetpro, subscribeMonitoreoDocente } from "../firebase/db";
 import { getChatModel } from "../firebase/config";
 
 const C = {
@@ -9,6 +9,15 @@ const C = {
     g200: "#E2E8F0", g100: "#F1F5F9", g50: "#F8FAFC",
     white: "#FFFFFF",
 };
+
+const SparkIcon = ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+        {/* Spark 1 (Larger) */}
+        <path d="M10 3C10 6.86599 6.86599 10 3 10C6.86599 10 10 13.134 10 17C10 13.134 13.134 10 17 10C13.134 10 10 6.86599 10 3Z" fill="#CA8A04" />
+        {/* Spark 2 (Smaller, Offset) */}
+        <path d="M18 12C18 14.2091 16.2091 16 14 16C16 16 18 17.7909 18 20C18 17.7909 19.7909 16 22 16C19.7909 16 18 14.2091 18 12Z" fill="#EAB308" />
+    </svg>
+);
 
 export default function ChatbotIA() {
     const [isOpen, setIsOpen] = useState(false);
@@ -24,16 +33,28 @@ export default function ChatbotIA() {
     const [activities, setActivities] = useState([]);
     const [meetings, setMeetings] = useState([]);
     const [esinadWeeks, setEsinadWeeks] = useState([]);
+    const [cebas, setCebas] = useState([]);
+    const [cetpros, setCetpros] = useState([]);
+    const [monitoreosEba, setMonitoreosEba] = useState([]);
+    const [monitoreosEtp, setMonitoreosEtp] = useState([]);
 
     // Subscriptions
     useEffect(() => {
         const unsubAct = subscribeActividades(setActivities);
         const unsubMeet = subscribeReuniones(setMeetings);
         const unsubSinad = subscribeEsinadSemanas(setEsinadWeeks);
+        const unsubCeba = subscribeDirectorioCeba(setCebas);
+        const unsubCetpro = subscribeDirectorioCetpro(setCetpros);
+        const unsubEba = subscribeMonitoreoDocente("EBA", setMonitoreosEba);
+        const unsubEtp = subscribeMonitoreoDocente("ETP", setMonitoreosEtp);
         return () => {
             unsubAct();
             unsubMeet();
             unsubSinad();
+            unsubCeba();
+            unsubCetpro();
+            unsubEba();
+            unsubEtp();
         };
     }, []);
 
@@ -54,6 +75,38 @@ export default function ChatbotIA() {
 
         const totalSinadRows = esinadWeeks.reduce((acc, w) => acc + (w.totalFilas || 0), 0);
 
+        // Format Cebas Directory (compact)
+        const cebasFormatted = cebas.map(c => {
+            const dirName = [c.nombres, c.apellidoPaterno, c.apellidoMaterno].filter(Boolean).join(" ");
+            return `- CEBA: ${c.nombre || "Sin Nombre"} (CodMod: ${c.codigoModularInicialIntermedio || c.codigoModularAvanzado || "N/A"}, local: ${c.codigoLocal || "N/A"}, Distrito: ${c.distrito || "N/A"}). Dir: ${dirName || "N/A"}, Cel: ${c.celular || "N/A"}, Alumnos: ${c.alumnosCenso || 0}`;
+        }).join("\n");
+
+        // Format Cetpros Directory (compact)
+        const cetprosFormatted = cetpros.map(c => {
+            const dirName = [c.nombres, c.apellidoPaterno, c.apellidoMaterno].filter(Boolean).join(" ");
+            return `- CETPRO: ${c.nombre || "Sin Nombre"} (CodMod: ${c.codigoModular || "N/A"}, local: ${c.codigoLocal || "N/A"}, Distrito: ${c.distrito || "N/A"}). Dir: ${dirName || "N/A"}, Cel: ${c.celular || "N/A"}, Alumnos: ${c.alumnosCenso || 0}`;
+        }).join("\n");
+
+        // Format Monitoreos EBA (compact)
+        const ebaFormatted = monitoreosEba.map(m => {
+            const r1 = m.desempeno?.regulaComportamiento?.nivel || m.desempeno?.regulaComportamiento || "N/A";
+            const r2 = m.desempeno?.involucraEstudiantes?.nivel || m.desempeno?.involucraEstudiantes || "N/A";
+            const r3 = m.desempeno?.promueveRazonamiento?.nivel || m.desempeno?.promueveRazonamiento || "N/A";
+            const r4 = m.desempeno?.evaluaProgreso?.nivel || m.desempeno?.evaluaProgreso || "N/A";
+            const r5 = m.desempeno?.ambienteRespeto?.nivel || m.desempeno?.ambienteRespeto || "N/A";
+            return `- EBA Docente: ${m.docenteNombre || "Sin Nombre"} en CEBA ${m.institucionNombre || "N/A"} el ${m.fechaEjecucion || "N/A"}. Promedio: ${m.promedioGeneral || 0}. Rúbricas: Regula=${r1}, Involucra=${r2}, Razonamiento=${r3}, Evalúa=${r4}, Respeto=${r5}`;
+        }).join("\n");
+
+        // Format Monitoreos ETP (compact)
+        const etpFormatted = monitoreosEtp.map(m => {
+            const r1 = m.desempeno?.regulaComportamiento?.nivel || m.desempeno?.regulaComportamiento || "N/A";
+            const r2 = m.desempeno?.involucraEstudiantes?.nivel || m.desempeno?.involucraEstudiantes || "N/A";
+            const r3 = m.desempeno?.promueveRazonamiento?.nivel || m.desempeno?.promueveRazonamiento || "N/A";
+            const r4 = m.desempeno?.evaluaProgreso?.nivel || m.desempeno?.evaluaProgreso || "N/A";
+            const r5 = m.desempeno?.ambienteRespeto?.nivel || m.desempeno?.ambienteRespeto || "N/A";
+            return `- ETP Docente: ${m.docenteNombre || "Sin Nombre"} en CETPRO ${m.institucionNombre || "N/A"} el ${m.fechaEjecucion || "N/A"}. Promedio: ${m.promedioGeneral || 0}. Rúbricas (ETP): Planificación/Regula=${r1}, Involucra=${r2}, Razonamiento=${r3}, Evalúa=${r4}, Respeto=${r5}`;
+        }).join("\n");
+
         return `Eres el Asistente IA del Planificador Mensual de AGEBATP (UGEL 03).
 Tu objetivo es responder de forma profesional, clara y concisa en español a los miembros del equipo educativo.
 El usuario está autenticado y tiene acceso a la plataforma.
@@ -70,9 +123,23 @@ Aquí tienes el estado actual del sistema en tiempo real:
   * Semanas de expedientes registradas: ${esinadWeeks.length}
   * Total de expedientes cargados e investigados en el sistema: ${totalSinadRows}
 
-Responde de forma amigable y basándote en esta información cuando te pregunten sobre estadísticas, tareas, reuniones o expedientes. Si el usuario te pregunta por un detalle específico que no tienes (como nombres de expedientes particulares no mostrados en este resumen), indícale amablemente cómo buscarlo en los módulos correspondientes de la aplicación.
-Responde de manera muy breve, no más de 3 o 4 líneas por respuesta si es posible, a menos que se requiera un desglose ordenado.`;
-    }, [activities, meetings, esinadWeeks]);
+Responde a preguntas específicas sobre docentes, directores, cantidad de alumnos, distritos, celulares, correos o promedios generales y por criterios utilizando la información detallada de los directorios y monitoreos provistos abajo. Si te preguntan por un docente o institución que no figure en los listados, indícalo amablemente.
+Responde de manera muy breve, no más de 3 o 4 líneas por respuesta si es posible, a menos que se requiera un desglose ordenado.
+
+--- DATOS EN TIEMPO REAL ---
+
+DIRECTORIO CEBA:
+${cebasFormatted || "No hay registros."}
+
+DIRECTORIO CETPRO:
+${cetprosFormatted || "No hay registros."}
+
+MONITOREO DOCENTE EBA (Fichas de Monitoreo):
+${ebaFormatted || "No hay registros."}
+
+MONITOREO DOCENTE ETP (Fichas de Monitoreo):
+${etpFormatted || "No hay registros."}`;
+    }, [activities, meetings, esinadWeeks, cebas, cetpros, monitoreosEba, monitoreosEtp]);
 
     const handleSend = async (e) => {
         e.preventDefault();
@@ -88,7 +155,11 @@ Responde de manera muy breve, no más de 3 o 4 líneas por respuesta si es posib
             
             // Format history for Vertex AI / Gemini SDK standard:
             // SDK expects history elements with { role: 'user'|'model', parts: [{ text: '...' }] }
-            const historyFormatted = messages.map(msg => ({
+            // History MUST start with a 'user' turn.
+            const firstUserIndex = messages.findIndex(msg => msg.role === "user");
+            const historyMessages = firstUserIndex !== -1 ? messages.slice(firstUserIndex) : [];
+
+            const historyFormatted = historyMessages.map(msg => ({
                 role: msg.role === "assistant" ? "model" : msg.role,
                 parts: [{ text: msg.text }]
             }));
@@ -161,7 +232,7 @@ Responde de manera muy breve, no más de 3 o 4 líneas por respuesta si es posib
                     onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.08)"; }}
                     onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
                 >
-                    🤖
+                    <SparkIcon size={24} />
                 </button>
             )}
 
@@ -184,7 +255,7 @@ Responde de manera muy breve, no más de 3 o 4 líneas por respuesta si es posib
                     {/* Header */}
                     <div style={{ background: C.navy1, padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${C.gold2}` }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <span style={{ fontSize: "1.2rem" }}>🤖</span>
+                            <SparkIcon size={20} />
                             <div>
                                 <div style={{ color: C.white, fontSize: "0.85rem", fontWeight: 700, fontFamily: "'DM Serif Display', serif", letterSpacing: "0.02em" }}>Asistente IA AGEBATP</div>
                                 <div style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.68rem" }}>En línea · Gemini 2.5</div>

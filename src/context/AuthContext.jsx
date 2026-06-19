@@ -206,7 +206,7 @@ export function AuthProvider({ children }) {
         return user.rol === rol;
     };
 
-    const mustChangePassword = user?.debeCambiarPassword === true;
+    const mustChangePassword = false; // Desactivado por solicitud del usuario para evitar cambio obligatorio de contraseña
 
     return (
         <AuthContext.Provider value={{ user, loading, login, register, logout, can, isRole, mustChangePassword, changePassword }}>

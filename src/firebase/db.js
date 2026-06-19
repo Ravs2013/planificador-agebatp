@@ -2,7 +2,9 @@
    Firestore Data Access Layer — AGEBATP UGEL 03
    ════════════════════════════════════════════════════════════════ */
 
-import { db } from "./config";
+import { db, firebaseConfig } from "./config";
+import { initializeApp, deleteApp } from "firebase/app";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import {
   collection,
   doc,
@@ -17,8 +19,10 @@ import {
   orderBy,
   where,
   writeBatch,
-  serverTimestamp
+  serverTimestamp,
+  runTransaction
 } from "firebase/firestore";
+import { computePersonas, claveDoc } from "../utils/esinadHelpers";
 
 // Helper to safely convert Firestore timestamps to ISO strings for compatibility
 export function mapDoc(docSnap) {
@@ -197,11 +201,245 @@ export async function addEsinadSemana(data) {
   return id;
 }
 
-export async function deleteEsinadSemana(id) {
-  const ref = doc(db, "esinadSemanas", id);
-  await deleteDoc(ref);
+/**
+ * Fusión transaccional idempotente a esinadSemanas.
+ * Lee el documento existente → fusiona documentos (por tipoDocumento)
+ * y movimientos (por hash) → recalcula personas → escribe con merge.
+ * Re-ejecutar con los mismos datos da el mismo resultado (idempotente).
+ */
+export async function mergeEsinadSemana(weekId, nuevosDocs, nuevosMov, meta = {}) {
+  const ref = doc(db, "esinadSemanas", weekId);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const prev = snap.exists() ? snap.data() : {};
+    // documentos: fusiona por tipoDocumento (clave única)
+    const dMap = new Map();
+    (prev.documentos || []).forEach(d => dMap.set(claveDoc(d), d));
+    nuevosDocs.forEach(d => {
+      const { semana, ...rest } = d;
+      dMap.set(claveDoc(d), { ...(dMap.get(claveDoc(d)) || {}), ...rest });
+    });
+    const documentos = [...dMap.values()];
+    // movimientos: fusiona por hash
+    const mMap = new Map();
+    (prev.movimientos || []).forEach(m => mMap.set(m.hash, m));
+    nuevosMov.forEach(m => mMap.set(m.hash, { personId: m.personId, hash: m.hash }));
+    const movimientos = [...mMap.values()];
+    const payload = {
+      id: weekId,
+      semana: weekId,
+      documentos,
+      movimientos,
+      personas: computePersonas(documentos, movimientos),
+      totalFilas: movimientos.length,
+      fechaCarga: new Date().toISOString(),
+      nombreArchivo: meta.nombreArchivo || "Carga manual",
+      origen: meta.origen || "manual",
+    };
+    if (!snap.exists()) payload.createdAt = serverTimestamp();
+    tx.set(ref, payload, { merge: true });
+  });
 }
 
+export async function uploadEsinadExcelData(weekRecords, monitoreoRecords, acumuladoData) {
+  const BATCH_SIZE = 450;
+
+  // 1. Clear all existing esinadSemanas
+  const esinadSnap = await getDocs(collection(db, "esinadSemanas"));
+  const esinadDocs = esinadSnap.docs;
+  for (let i = 0; i < esinadDocs.length; i += BATCH_SIZE) {
+    const chunk = esinadDocs.slice(i, i + BATCH_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  }
+
+  // 2. Clear all existing monitoreoSemanal
+  const monitoreoSnap = await getDocs(collection(db, "monitoreoSemanal"));
+  const monitoreoDocs = monitoreoSnap.docs;
+  for (let i = 0; i < monitoreoDocs.length; i += BATCH_SIZE) {
+    const chunk = monitoreoDocs.slice(i, i + BATCH_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  }
+
+  // 3. Write new weekRecords to esinadSemanas
+  for (let i = 0; i < weekRecords.length; i += BATCH_SIZE) {
+    const chunk = weekRecords.slice(i, i + BATCH_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach(record => {
+      const id = record.semana || `SINAD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+      const ref = doc(db, "esinadSemanas", id);
+      batch.set(ref, {
+        ...record,
+        id,
+        createdAt: serverTimestamp()
+      });
+    });
+    await batch.commit();
+  }
+
+  // 4. Write new monitoreoRecords to monitoreoSemanal
+  for (let i = 0; i < monitoreoRecords.length; i += BATCH_SIZE) {
+    const chunk = monitoreoRecords.slice(i, i + BATCH_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach(record => {
+      const ref = doc(db, "monitoreoSemanal", record.semana);
+      batch.set(ref, {
+        ...record,
+        updatedAt: serverTimestamp()
+      });
+    });
+    await batch.commit();
+  }
+
+  // 5. Update monitoreoAcumulado resumen
+  const resumenRef = doc(db, "monitoreoAcumulado", "resumen");
+  await setDoc(resumenRef, {
+    values: acumuladoData,
+    id: "resumen",
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteEsinadSemanaAndSync(semana, newAcumuladoData) {
+  // 1. Delete from esinadSemanas
+  const esinadRef = doc(db, "esinadSemanas", semana);
+  await deleteDoc(esinadRef);
+
+  // 2. Delete from monitoreoSemanal
+  const monitoreoRef = doc(db, "monitoreoSemanal", semana);
+  await deleteDoc(monitoreoRef);
+
+  // 3. Update monitoreoAcumulado
+  const resumenRef = doc(db, "monitoreoAcumulado", "resumen");
+  await setDoc(resumenRef, {
+    values: newAcumuladoData,
+    id: "resumen",
+    updatedAt: serverTimestamp()
+  });
+}
+
+// ── AUXILIAR: CREAR CREDENCIALES PARA DIRECTORES (E-mail + DNI) ──
+export async function crearCredencialesDirector(email, dni, nombre, institucionId, institucionTipo, cargo) {
+  if (!email || !dni || dni.trim().length < 6 || !email.includes("@")) {
+    console.warn(`No se pueden crear credenciales para ${nombre}: correo o DNI no válido.`, { email, dni });
+    return;
+  }
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanDni = dni.trim();
+
+  let uid = null;
+  const secondaryAppName = `TempSec-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  let secondaryApp = null;
+  try {
+    secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+    const secondaryAuth = getAuth(secondaryApp);
+    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, cleanEmail, cleanDni);
+    uid = userCredential.user.uid;
+    console.log(`[Auth] Usuario creado exitosamente: ${cleanEmail}`);
+  } catch (error) {
+    if (error.code === 'auth/email-already-in-use') {
+      console.log(`[Auth] El correo ${cleanEmail} ya está en uso.`);
+    } else {
+      console.error(`[Auth] Error al registrar ${cleanEmail}:`, error);
+    }
+  } finally {
+    if (secondaryApp) {
+      await deleteApp(secondaryApp).catch(e => console.error("Error al destruir app secundaria:", e));
+    }
+  }
+
+  try {
+    let finalUid = uid;
+    if (!finalUid) {
+      const q = query(collection(db, "usuarios"), where("email", "==", cleanEmail));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        finalUid = snap.docs[0].id;
+      }
+    }
+
+    if (finalUid) {
+      const userRef = doc(db, "usuarios", finalUid);
+      await setDoc(userRef, {
+        nombre: nombre.trim(),
+        email: cleanEmail,
+        rol: "director",
+        institucionId: institucionId,
+        institucionTipo: institucionTipo,
+        cargo: cargo || "Director",
+        dni: cleanDni,
+        debeCambiarPassword: true,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      console.log(`[Firestore] Registro de usuario guardado para ${cleanEmail}`);
+    }
+  } catch (err) {
+    console.error(`[Firestore] Error al registrar datos de usuario para ${cleanEmail}:`, err);
+  }
+}
+
+export async function crearCredencialesDirectorBatch(directores) {
+  const validDirectores = directores.filter(d => d.email && d.dni && d.dni.trim().length >= 6 && d.email.includes("@"));
+  if (validDirectores.length === 0) return;
+
+  const secondaryAppName = `TempSecBatch-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  let secondaryApp = null;
+  try {
+    secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+    const secondaryAuth = getAuth(secondaryApp);
+
+    for (const d of validDirectores) {
+      const cleanEmail = d.email.trim().toLowerCase();
+      const cleanDni = d.dni.trim();
+      let uid = null;
+
+      try {
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, cleanEmail, cleanDni);
+        uid = userCredential.user.uid;
+        console.log(`[Batch-Auth] Usuario creado: ${cleanEmail}`);
+      } catch (error) {
+        if (error.code === 'auth/email-already-in-use') {
+          const q = query(collection(db, "usuarios"), where("email", "==", cleanEmail));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            uid = snap.docs[0].id;
+          }
+        } else {
+          console.error(`[Batch-Auth] Error para ${cleanEmail}:`, error);
+        }
+      }
+
+      if (uid) {
+        try {
+          const userRef = doc(db, "usuarios", uid);
+          await setDoc(userRef, {
+            nombre: d.nombre.trim(),
+            email: cleanEmail,
+            rol: "director",
+            institucionId: d.institucionId,
+            institucionTipo: d.institucionTipo,
+            cargo: d.cargo || "Director",
+            dni: cleanDni,
+            debeCambiarPassword: true,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+          console.log(`[Batch-Firestore] Guardado: ${cleanEmail}`);
+        } catch (err) {
+          console.error(`[Batch-Firestore] Error para ${cleanEmail}:`, err);
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`[Batch] Error general en proceso por lote:`, err);
+  } finally {
+    if (secondaryApp) {
+      await deleteApp(secondaryApp).catch(e => console.error("Error al destruir app secundaria batch:", e));
+    }
+  }
+}
 
 // ── DIRECTORIO CEBA ──
 export function subscribeDirectorioCeba(callback) {
@@ -219,6 +457,11 @@ export async function addCeba(data) {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   });
+  
+  // Crear credenciales
+  const fullName = [data.nombres, data.apellidoPaterno, data.apellidoMaterno].filter(Boolean).join(" ");
+  await crearCredencialesDirector(data.correoInstitucional, data.dni, fullName || data.nombre, docRef.id, "CEBA", data.cargo);
+
   return docRef.id;
 }
 
@@ -228,6 +471,10 @@ export async function updateCeba(id, data) {
     ...data,
     updatedAt: serverTimestamp()
   });
+
+  // Crear o actualizar credenciales
+  const fullName = [data.nombres, data.apellidoPaterno, data.apellidoMaterno].filter(Boolean).join(" ");
+  await crearCredencialesDirector(data.correoInstitucional, data.dni, fullName || data.nombre, id, "CEBA", data.cargo);
 }
 
 export async function deleteCeba(id) {
@@ -249,6 +496,8 @@ function getCebaId(item) {
 export async function batchSetCebas(items, userId, userName) {
   // Firestore writeBatch max = 500 operations; chunk if needed
   const BATCH_SIZE = 450;
+  const directoresToCreate = [];
+
   for (let i = 0; i < items.length; i += BATCH_SIZE) {
     const chunk = items.slice(i, i + BATCH_SIZE);
     const batch = writeBatch(db);
@@ -262,9 +511,22 @@ export async function batchSetCebas(items, userId, userName) {
         actualizadoEn: serverTimestamp(),
         updatedAt: serverTimestamp()
       }, { merge: true });
+
+      const fullName = [item.nombres, item.apellidoPaterno, item.apellidoMaterno].filter(Boolean).join(" ");
+      directoresToCreate.push({
+        email: item.correoInstitucional,
+        dni: item.dni,
+        nombre: fullName || item.nombre,
+        institucionId: id,
+        institucionTipo: "CEBA",
+        cargo: item.cargo
+      });
     });
     await batch.commit();
   }
+
+  // Crear credenciales en batch
+  await crearCredencialesDirectorBatch(directoresToCreate);
 }
 
 // ── DIRECTORIO CETPRO ──
@@ -283,6 +545,10 @@ export async function addCetpro(data) {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   });
+
+  const fullName = [data.nombres, data.apellidoPaterno, data.apellidoMaterno].filter(Boolean).join(" ");
+  await crearCredencialesDirector(data.correoInstitucional, data.dni, fullName || data.nombre, docRef.id, "CETPRO", data.cargo);
+
   return docRef.id;
 }
 
@@ -292,6 +558,9 @@ export async function updateCetpro(id, data) {
     ...data,
     updatedAt: serverTimestamp()
   });
+
+  const fullName = [data.nombres, data.apellidoPaterno, data.apellidoMaterno].filter(Boolean).join(" ");
+  await crearCredencialesDirector(data.correoInstitucional, data.dni, fullName || data.nombre, id, "CETPRO", data.cargo);
 }
 
 export async function deleteCetpro(id) {
@@ -307,6 +576,8 @@ function getCetproId(item) {
 
 export async function batchSetCetpros(items, userId, userName) {
   const BATCH_SIZE = 450;
+  const directoresToCreate = [];
+
   for (let i = 0; i < items.length; i += BATCH_SIZE) {
     const chunk = items.slice(i, i + BATCH_SIZE);
     const batch = writeBatch(db);
@@ -320,9 +591,22 @@ export async function batchSetCetpros(items, userId, userName) {
         actualizadoEn: serverTimestamp(),
         updatedAt: serverTimestamp()
       }, { merge: true });
+
+      const fullName = [item.nombres, item.apellidoPaterno, item.apellidoMaterno].filter(Boolean).join(" ");
+      directoresToCreate.push({
+        email: item.correoInstitucional,
+        dni: item.dni,
+        nombre: fullName || item.nombre,
+        institucionId: id,
+        institucionTipo: "CETPRO",
+        cargo: item.cargo
+      });
     });
     await batch.commit();
   }
+
+  // Crear credenciales en batch
+  await crearCredencialesDirectorBatch(directoresToCreate);
 }
 
 // ── REQUERIMIENTOS CEBA ──
@@ -463,5 +747,56 @@ export function subscribeReclamaciones(callback) {
     const list = snapshot.docs.map(mapDoc);
     callback(list);
   }, (err) => console.error("Error subscribing to reclamaciones:", err));
+}
+
+// ── MONITOREO DOCENTE (EBA / ETP) ──
+export function colMonitoreoDocente(programa) {
+  return programa === 'ETP' ? 'monitoreoDocenteEtp' : 'monitoreoDocenteEba';
+}
+
+export function subscribeMonitoreoDocente(programa, callback) {
+  const colName = colMonitoreoDocente(programa);
+  const q = query(collection(db, colName), orderBy("fechaEjecucionISO", "desc"));
+  return onSnapshot(q, (snapshot) => {
+    const list = snapshot.docs.map(mapDoc);
+    callback(list);
+  }, (err) => console.error(`Error subscribing to ${colName}:`, err));
+}
+
+export async function batchSetMonitoreoDocente(programa, items, userId, userName) {
+  const colName = colMonitoreoDocente(programa);
+  const BATCH_SIZE = 450;
+  
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const chunk = items.slice(i, i + BATCH_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach(record => {
+      const id = record.id;
+      const ref = doc(db, colName, id);
+      batch.set(ref, {
+        ...record,
+        cargadoPor: userName,
+        cargadoPorUid: userId,
+        createdAt: record.createdAt || serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    });
+    await batch.commit();
+  }
+}
+
+export async function deleteMonitoreoDocente(programa, id) {
+  const colName = colMonitoreoDocente(programa);
+  const ref = doc(db, colName, id);
+  await deleteDoc(ref);
+}
+
+export async function updateMonitoreoDocente(programa, id, data) {
+  const colName = colMonitoreoDocente(programa);
+  const ref = doc(db, colName, id);
+  await updateDoc(ref, {
+    ...data,
+    updatedAt: serverTimestamp()
+  });
 }
 

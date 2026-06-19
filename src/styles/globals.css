@@ -23,6 +23,7 @@ body {
   color: #1E293B;
   background: #F5F6FA;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 ::-webkit-scrollbar {
@@ -166,9 +167,12 @@ button:active {
   header > div > div:first-child {
     width: 100%;
     justify-content: center !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    text-align: center !important;
   }
   header > div > div:first-child > div:last-child > div:first-child {
-    font-size: 15px !important;
+    font-size: 14px !important;
     text-align: center;
   }
   header > div > div:first-child > div:last-child > div:last-child {
@@ -179,11 +183,14 @@ button:active {
     width: 100%;
     justify-content: center !important;
     flex-wrap: wrap !important;
-    gap: 6px !important;
+    gap: 10px !important;
   }
   header > div > div:last-child > button {
     font-size: 11px !important;
     padding: 6px 10px !important;
+  }
+  .hide-mobile {
+    display: none !important;
   }
 
   /* Nav tabs — horizontal scroll */
@@ -251,6 +258,8 @@ button:active {
   }
 
   /* Form grids inside modals */
+  div[style*="grid-template-columns: 1fr 1fr"],
+  div[style*="grid-template-columns: 2fr 1fr"],
   div[style*="gridTemplateColumns: '1fr 1fr'"],
   div[style*="gridTemplateColumns: 1fr 1fr"] {
     grid-template-columns: 1fr !important;

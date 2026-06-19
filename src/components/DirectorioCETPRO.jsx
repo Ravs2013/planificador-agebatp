@@ -700,47 +700,7 @@ export default function DirectorioCETPRO() {
         );
     }
 
-    if (data.length === 0 && !loading) {
-        return (
-            <div style={{ padding: 40, maxWidth: 640, margin: "40px auto" }}>
-                <div 
-                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                    onDragLeave={() => setDragOver(false)}
-                    onDrop={handleDrop}
-                    style={{
-                        border: `2.5px dashed ${dragOver ? C.navy4 : C.g300}`,
-                        background: dragOver ? `${C.navy4}08` : C.white,
-                        borderRadius: 12,
-                        padding: "60px 40px",
-                        textAlign: "center",
-                        transition: "all 0.2s ease",
-                        boxShadow: "0 4px 12px rgba(15,23,42,0.03)"
-                    }}
-                >
-                    <div style={{ marginBottom: 20 }}>
-                        {Ic.school(56, dragOver ? C.navy4 : C.g400)}
-                    </div>
-                    <h3 style={{ color: C.navy1, fontSize: "1.3rem", margin: "0 0 10px", fontFamily: "'DM Serif Display',serif" }}>
-                        Directorio CETPRO - UGEL 03
-                    </h3>
-                    <p style={{ color: C.g500, fontSize: "0.88rem", fontFamily: "'DM Sans'", maxWidth: 440, margin: "0 auto 28px", lineHeight: 1.5 }}>
-                        Arrastra y suelta tu archivo Excel del Directorio CETPRO aquí, o haz click en el botón para explorar tus archivos locales.
-                    </p>
-                    <div style={{ display: "flex", gap: 12, justifyContent: "center", alignItems: "center" }}>
-                        <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFileUpload} />
-                        <button onClick={() => fileRef.current?.click()} style={{ ...S.btn(C.navy4, C.white, C.navy5), padding: "12px 28px", fontSize: 13 }}>
-                            {Ic.upload(15, C.white)} Seleccionar Archivo Excel
-                        </button>
-                        {(isRole('admin') || isRole('jefatura')) && (
-                            <button onClick={openAddCETPRO} style={{ ...S.btn(C.gold2, C.white, C.gold1), padding: "12px 28px", fontSize: 13 }}>
-                                + Cargar Manualmente
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </div>
-        );
-    }
+
 
     return (
         <div onDragEnter={(e) => { e.preventDefault(); setDragOver(true); }}>
@@ -775,85 +735,126 @@ export default function DirectorioCETPRO() {
                 </div>
             </div>
 
-            {/* SEARCH & FILTERS */}
-            <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-                <div style={{ position: "relative", flex: "1 1 280px", maxWidth: 400 }}>
-                    <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>{Ic.search(14, C.g400)}</div>
-                    <input placeholder="Buscar por nombre, distrito, director, correo, oferta..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ ...S.input, width: "100%", paddingLeft: 34, boxSizing: "border-box" }} />
-                </div>
-                <select value={distritoFilter} onChange={e => setDistritoFilter(e.target.value)} style={{ ...S.input, minWidth: 170 }}>
-                    <option value="todos">Todos los distritos</option>
-                    {distritos.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-                <select value={gestionFilter} onChange={e => setGestionFilter(e.target.value)} style={{ ...S.input, minWidth: 150 }}>
-                    <option value="todos">Toda gestion</option>
-                    {gestionTypes.map(g => <option key={g} value={g}>{g}</option>)}
-                </select>
-            </div>
-
-            {/* KPIs */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 14, marginBottom: 24 }}>
-                <StatCard icon={Ic.school(20, C.navy4)} label="Total CETPRO" value={kpis.total} sub="Instituciones registradas" border={C.navy4} />
-                <StatCard icon={Ic.users(20, C.green)} label="Total Estudiantes" value={kpis.totalEstudiantes.toLocaleString()} sub="Alumnos censo" border={C.green} />
-                <StatCard icon={Ic.book(20, C.teal)} label="Total Docentes" value={kpis.totalDocentes.toLocaleString()} sub="Docentes censo" border={C.teal} />
-                <StatCard icon={Ic.grid(20, C.indigo)} label="Total Talleres" value={kpis.totalTalleres.toLocaleString()} sub="Talleres censo" border={C.indigo} />
-                <StatCard icon={Ic.briefcase(20, C.purple)} label="Personal Admin" value={kpis.totalAdmin.toLocaleString()} sub="Nombrados + Contratados" border={C.purple} />
-                <StatCard icon={Ic.mapPin(20, C.amber)} label="Distritos" value={kpis.distritosUnicos} sub="Distritos atendidos" border={C.amber} />
-            </div>
-
-            {/* CHARTS */}
-            {data.length > 0 && (
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 24 }} className="grid-calendar">
-                    <div style={S.card}>
-                        <h3 style={{ color: C.navy1, fontSize: "1rem", margin: "0 0 16px", fontFamily: "'DM Serif Display',serif" }}>Estudiantes por CETPRO</h3>
-                        <ResponsiveContainer width="100%" height={Math.max(300, barData.length * 32)}>
-                            <BarChart data={barData} layout="vertical" barSize={16} margin={{ left: 20 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis type="number" tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><YAxis type="category" dataKey="nombre" width={190} tick={{ fill: C.g600, fontSize: 9.5, fontFamily: "'DM Sans'" }} /><Tooltip content={<CTip />} /><Bar dataKey="Estudiantes" fill={C.navy4} radius={[0, 4, 4, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <div style={S.card}>
-                        <h3 style={{ color: C.navy1, fontSize: "1rem", margin: "0 0 16px", fontFamily: "'DM Serif Display',serif" }}>Distribucion por Distrito</h3>
-                        <ResponsiveContainer width="100%" height={300}>
-                            <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2} dataKey="value" label={({ name, value }) => `${name} (${value})`} labelLine={{ stroke: C.g300 }}>{pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}</Pie><Tooltip content={<CTip />} /></PieChart>
-                        </ResponsiveContainer>
+            {data.length === 0 ? (
+                <div style={{ padding: 40, maxWidth: 640, margin: "40px auto" }}>
+                    <div 
+                        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                        onDragLeave={() => setDragOver(false)}
+                        onDrop={handleDrop}
+                        style={{
+                            border: `2.5px dashed ${dragOver ? C.navy4 : C.g300}`,
+                            background: dragOver ? `${C.navy4}08` : C.white,
+                            borderRadius: 12,
+                            padding: "60px 40px",
+                            textAlign: "center",
+                            transition: "all 0.2s ease",
+                            boxShadow: "0 4px 12px rgba(15,23,42,0.03)"
+                        }}
+                    >
+                        <div style={{ marginBottom: 20 }}>
+                            {Ic.school(56, dragOver ? C.navy4 : C.g400)}
+                        </div>
+                        <h3 style={{ color: C.navy1, fontSize: "1.3rem", margin: "0 0 10px", fontFamily: "'DM Serif Display',serif" }}>
+                            Directorio CETPRO - UGEL 03
+                        </h3>
+                        <p style={{ color: C.g500, fontSize: "0.88rem", fontFamily: "'DM Sans'", maxWidth: 440, margin: "0 auto 28px", lineHeight: 1.5 }}>
+                            Arrastra y suelta tu archivo Excel del Directorio CETPRO aquí, o haz click en el botón para explorar tus archivos locales.
+                        </p>
+                        <div style={{ display: "flex", gap: 12, justifyContent: "center", alignItems: "center" }}>
+                            <button onClick={() => fileRef.current?.click()} style={{ ...S.btn(C.navy4, C.white, C.navy5), padding: "12px 28px", fontSize: 13 }}>
+                                {Ic.upload(15, C.white)} Seleccionar Archivo Excel
+                            </button>
+                            {(isRole('admin') || isRole('jefatura')) && (
+                                <button onClick={openAddCETPRO} style={{ ...S.btn(C.gold2, C.white, C.gold1), padding: "12px 28px", fontSize: 13 }}>
+                                    + Cargar Manualmente
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
-            )}
+            ) : (
+                <>
+                    {/* SEARCH & FILTERS */}
+                    <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+                        <div style={{ position: "relative", flex: "1 1 280px", maxWidth: 400 }}>
+                            <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>{Ic.search(14, C.g400)}</div>
+                            <input placeholder="Buscar por nombre, distrito, director, correo, oferta..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ ...S.input, width: "100%", paddingLeft: 34, boxSizing: "border-box" }} />
+                        </div>
+                        <select value={distritoFilter} onChange={e => setDistritoFilter(e.target.value)} style={{ ...S.input, minWidth: 170 }}>
+                            <option value="todos">Todos los distritos</option>
+                            {distritos.map(d => <option key={d} value={d}>{d}</option>)}
+                        </select>
+                        <select value={gestionFilter} onChange={e => setGestionFilter(e.target.value)} style={{ ...S.input, minWidth: 150 }}>
+                            <option value="todos">Toda gestion</option>
+                            {gestionTypes.map(g => <option key={g} value={g}>{g}</option>)}
+                        </select>
+                    </div>
 
-            {/* CARD GRID */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 16 }}>
-                {filtered.map((c, idx) => (
-                    <div key={idx} onClick={() => setSelectedItem(c)} style={{ ...S.card, cursor: "pointer", transition: "all 0.2s" }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(15,23,42,0.12)"; }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(15,23,42,0.06)"; }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 12 }}>
-                            <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Sans'", lineHeight: 1.3, flex: 1 }}>{c.nombre}</h4>
-                            <div style={{ display: "flex", gap: 4, flexShrink: 0, flexWrap: "wrap" }}>
-                                <span style={gestionBadgeStyle(c.tipoGestion)}>{gestionLabel(c.tipoGestion)}</span>
-                                <span style={S.badge(`${C.navy5}15`, C.navy5, `${C.navy5}30`)}>{c.distrito}</span>
+                    {/* KPIs */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 14, marginBottom: 24 }}>
+                        <StatCard icon={Ic.school(20, C.navy4)} label="Total CETPRO" value={kpis.total} sub="Instituciones registradas" border={C.navy4} />
+                        <StatCard icon={Ic.users(20, C.green)} label="Total Estudiantes" value={kpis.totalEstudiantes.toLocaleString()} sub="Alumnos censo" border={C.green} />
+                        <StatCard icon={Ic.book(20, C.teal)} label="Total Docentes" value={kpis.totalDocentes.toLocaleString()} sub="Docentes censo" border={C.teal} />
+                        <StatCard icon={Ic.grid(20, C.indigo)} label="Total Talleres" value={kpis.totalTalleres.toLocaleString()} sub="Talleres censo" border={C.indigo} />
+                        <StatCard icon={Ic.briefcase(20, C.purple)} label="Personal Admin" value={kpis.totalAdmin.toLocaleString()} sub="Nombrados + Contratados" border={C.purple} />
+                        <StatCard icon={Ic.mapPin(20, C.amber)} label="Distritos" value={kpis.distritosUnicos} sub="Distritos atendidos" border={C.amber} />
+                    </div>
+
+                    {/* CHARTS */}
+                    {data.length > 0 && (
+                        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 24 }} className="grid-calendar">
+                            <div style={S.card}>
+                                <h3 style={{ color: C.navy1, fontSize: "1rem", margin: "0 0 16px", fontFamily: "'DM Serif Display',serif" }}>Estudiantes por CETPRO</h3>
+                                <ResponsiveContainer width="100%" height={Math.max(300, barData.length * 32)}>
+                                    <BarChart data={barData} layout="vertical" barSize={16} margin={{ left: 20 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis type="number" tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><YAxis type="category" dataKey="nombre" width={190} tick={{ fill: C.g600, fontSize: 9.5, fontFamily: "'DM Sans'" }} /><Tooltip content={<CTip />} /><Bar dataKey="Estudiantes" fill={C.navy4} radius={[0, 4, 4, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div style={S.card}>
+                                <h3 style={{ color: C.navy1, fontSize: "1rem", margin: "0 0 16px", fontFamily: "'DM Serif Display',serif" }}>Distribucion por Distrito</h3>
+                                <ResponsiveContainer width="100%" height={300}>
+                                    <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2} dataKey="value" label={({ name, value }) => `${name} (${value})`} labelLine={{ stroke: C.g300 }}>{pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}</Pie><Tooltip content={<CTip />} /></PieChart>
+                                </ResponsiveContainer>
                             </div>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                            <div style={{ width: 30, height: 30, borderRadius: 6, background: C.navy3, color: C.white, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 10, flexShrink: 0, fontFamily: "'JetBrains Mono'" }}>{(c.nombres || "D")[0]}{(c.apellidoPaterno || "R")[0]}</div>
-                            <div><div style={{ fontSize: "0.78rem", fontWeight: 600, color: C.navy1, fontFamily: "'DM Sans'" }}>{dirName(c)}</div><div style={{ fontSize: "0.68rem", color: C.g500 }}>{c.cargo}</div></div>
-                        </div>
-                        {c.correoInstitucional && <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: C.g500, marginBottom: 4 }}>{Ic.mail(11, C.g400)}<span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.correoInstitucional}</span></div>}
-                        {c.celular && <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: C.g500, marginBottom: 4 }}>{Ic.phone(11, C.g400)}<span>{c.celular}</span></div>}
-                        {c.direccion && <div style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: "0.72rem", color: C.g500, marginBottom: 4 }}>{Ic.mapPin(11, C.g400)}<span style={{ lineHeight: 1.3 }}>{c.direccion}</span></div>}
-                        {c.turnos && <div style={{ fontSize: "0.68rem", color: C.g400, marginBottom: 8 }}>Turnos: {c.turnos}</div>}
-                        <div style={{ display: "flex", gap: 0, borderTop: `1px solid ${C.g100}`, paddingTop: 10 }}>
-                            {[{ label: "Estudiantes", value: c.alumnosCenso || 0, color: C.green }, { label: "Docentes", value: c.docentesCenso || 0, color: C.teal }, { label: "Talleres", value: c.talleresCenso || 0, color: C.indigo }].map((st, i) => (
-                                <div key={i} style={{ flex: 1, textAlign: "center", borderRight: i < 2 ? `1px solid ${C.g100}` : "none" }}>
-                                    <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1rem", fontWeight: 700, color: st.color }}>{st.value}</div>
-                                    <div style={{ fontSize: "0.58rem", color: C.g500, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{st.label}</div>
+                    )}
+
+                    {/* CARD GRID */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 16 }}>
+                        {filtered.map((c, idx) => (
+                            <div key={idx} onClick={() => setSelectedItem(c)} style={{ ...S.card, cursor: "pointer", transition: "all 0.2s" }}
+                                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(15,23,42,0.12)"; }}
+                                onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(15,23,42,0.06)"; }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 12 }}>
+                                    <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Sans'", lineHeight: 1.3, flex: 1 }}>{c.nombre}</h4>
+                                    <div style={{ display: "flex", gap: 4, flexShrink: 0, flexWrap: "wrap" }}>
+                                        <span style={gestionBadgeStyle(c.tipoGestion)}>{gestionLabel(c.tipoGestion)}</span>
+                                        <span style={S.badge(`${C.navy5}15`, C.navy5, `${C.navy5}30`)}>{c.distrito}</span>
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                                    <div style={{ width: 30, height: 30, borderRadius: 6, background: C.navy3, color: C.white, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 10, flexShrink: 0, fontFamily: "'JetBrains Mono'" }}>{(c.nombres || "D")[0]}{(c.apellidoPaterno || "R")[0]}</div>
+                                    <div><div style={{ fontSize: "0.78rem", fontWeight: 600, color: C.navy1, fontFamily: "'DM Sans'" }}>{dirName(c)}</div><div style={{ fontSize: "0.68rem", color: C.g500 }}>{c.cargo}</div></div>
+                                </div>
+                                {c.correoInstitucional && <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: C.g500, marginBottom: 4 }}>{Ic.mail(11, C.g400)}<span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.correoInstitucional}</span></div>}
+                                {c.celular && <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: C.g500, marginBottom: 4 }}>{Ic.phone(11, C.g400)}<span>{c.celular}</span></div>}
+                                {c.direccion && <div style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: "0.72rem", color: C.g500, marginBottom: 4 }}>{Ic.mapPin(11, C.g400)}<span style={{ lineHeight: 1.3 }}>{c.direccion}</span></div>}
+                                {c.turnos && <div style={{ fontSize: "0.68rem", color: C.g400, marginBottom: 8 }}>Turnos: {c.turnos}</div>}
+                                <div style={{ display: "flex", gap: 0, borderTop: `1px solid ${C.g100}`, paddingTop: 10 }}>
+                                    {[{ label: "Estudiantes", value: c.alumnosCenso || 0, color: C.green }, { label: "Docentes", value: c.docentesCenso || 0, color: C.teal }, { label: "Talleres", value: c.talleresCenso || 0, color: C.indigo }].map((st, i) => (
+                                        <div key={i} style={{ flex: 1, textAlign: "center", borderRight: i < 2 ? `1px solid ${C.g100}` : "none" }}>
+                                            <div style={{ fontFamily: "'JetBrains Mono'", fontSize: "1rem", fontWeight: 700, color: st.color }}>{st.value}</div>
+                                            <div style={{ fontSize: "0.58rem", color: C.g500, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{st.label}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                ))}
-            </div>
-            {filtered.length === 0 && data.length > 0 && <div style={{ textAlign: "center", padding: 48, color: C.g400, fontSize: "0.9rem" }}>No se encontraron resultados con los filtros aplicados.</div>}
+                    {filtered.length === 0 && data.length > 0 && <div style={{ textAlign: "center", padding: 48, color: C.g400, fontSize: "0.9rem" }}>No se encontraron resultados con los filtros aplicados.</div>}
+                </>
+            )}
 
             {/* DETAIL MODAL */}
             {selectedItem && (

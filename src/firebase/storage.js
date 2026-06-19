@@ -99,3 +99,39 @@ export async function uploadEvidencia(actId, personalId, file, onProgress = null
     throw new Error((result && result.message) || "Error al subir evidencia vía webhook de n8n");
   }
 }
+
+/**
+ * Sube una evidencia al endpoint de la Herramienta E-SINAD (Drive/OneDrive).
+ * La herramienta crea la estructura de carpetas:
+ *   EVIDENCIAS-ACTIVIDADES / Año / Mes / Día / NombreActividad / (archivo)
+ * 
+ * @param {object} params
+ * @param {string} params.actividadId - ID de la actividad
+ * @param {string} params.actividadNombre - Nombre/título de la actividad
+ * @param {string} params.fecha - Fecha en formato YYYY-MM-DD
+ * @param {object} params.file - { name, mimeType, base64 }
+ * @returns {Promise<{ ok: boolean, linkDrive: string|null, linkOnedrive: string|null, carpeta: string }>}
+ */
+export async function uploadEvidenciaDrive({ actividadId, actividadNombre, fecha, file }) {
+  const base = import.meta.env.VITE_ESINAD_API;
+  const token = import.meta.env.VITE_EVIDENCIA_TOKEN || "";
+  if (!base) throw new Error("VITE_ESINAD_API no configurado");
+
+  const res = await fetch(`${base.replace(/\/+$/, "")}/api/evidencia`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Evidencia-Token": token,
+    },
+    body: JSON.stringify({
+      actividadId,
+      actividadNombre,
+      fecha,
+      archivo: file,
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Subida a Drive falló: HTTP ${res.status}`);
+  return res.json(); // { ok, linkDrive, linkOnedrive, carpeta }
+}
+

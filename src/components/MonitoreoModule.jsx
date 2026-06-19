@@ -6,7 +6,10 @@ import {
 import html2canvas from "html2canvas";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
-import { subscribeMonitoreoSemanal, setMonitoreoSemanal, subscribeMonitoreoAcumulado, setMonitoreoAcumulado, subscribeEsinadSemanas, addEsinadSemana, deleteEsinadSemana } from "../firebase/db";
+import { subscribeMonitoreoSemanal, setMonitoreoSemanal, subscribeMonitoreoAcumulado, setMonitoreoAcumulado, subscribeEsinadSemanas, addEsinadSemana, uploadEsinadExcelData, deleteEsinadSemanaAndSync, mergeEsinadSemana } from "../firebase/db";
+import { PERSONAL_ESINAD, SKIP_NAMES, matchPerson, classifyDoc, CAT_LABEL, CAT_KEY, isoWeekId, parseFlexibleDate, toYMD, semanaDeFila, movimientoHash } from "../utils/esinadHelpers";
+import { useAuth } from "../context/AuthContext";
+import MonitoreoDocente from "./MonitoreoDocente";
 
 
 /* ═══════════════════════════════════════════════════════════
@@ -47,42 +50,12 @@ const I = {
 };
 
 /* ═══════════════════════════════════════════════════════════
-   E-SINAD HELPERS
+   E-SINAD HELPERS — importados de ../utils/esinadHelpers.js
+   matchPerson, classifyDoc, PERSONAL_ESINAD, SKIP_NAMES,
+   isoWeekId, parseFlexibleDate, toYMD, semanaDeFila, etc.
    ═══════════════════════════════════════════════════════════ */
 
-
-const PERSONAL_ESINAD = [
-    { id: 1, fullNames: ["GUTIERREZ SILVA"], shortName: "Gutierrez S.", nombre: "Gutierrez Silva, Liz M.", rol: "oficinista", tipo: "-" },
-    { id: 2, fullNames: ["QUISPE SOLANO"], shortName: "Quispe S.", nombre: "Quispe Solano, Juan A.", rol: "especialista", tipo: "ETP" },
-    { id: 3, fullNames: ["ALBINO IGREDA"], shortName: "Albino I.", nombre: "Albino Igreda, Nelida", rol: "especialista", tipo: "EBA" },
-    { id: 4, fullNames: ["VILLALOBOS GONZALES"], shortName: "Villalobos G.", nombre: "Villalobos Gonzales, Francisco", rol: "especialista", tipo: "ETP" },
-    { id: 5, fullNames: ["VASQUEZ ALIAGA"], shortName: "Vasquez A.", nombre: "Vasquez Aliaga, Lucy A.", rol: "oficinista", tipo: "-" },
-    { id: 6, fullNames: ["CUELLAR CORNELIO"], shortName: "Cuellar C.", nombre: "Cuellar Cornelio, Beronica O.", rol: "oficinista", tipo: "-" },
-];
-
-const SKIP_NAMES = ["NINAMANGO", "FBRC UGEL", "FBRC"];
-
-function matchPerson(excelName) {
-    if (!excelName) return null;
-    const upper = excelName.toUpperCase().trim();
-    if (SKIP_NAMES.some(s => upper.includes(s))) return null;
-    for (const p of PERSONAL_ESINAD) {
-        if (p.fullNames.some(fn => upper.includes(fn))) return p;
-    }
-    return null;
-}
-
-function classifyDoc(tipoDoc) {
-    if (!tipoDoc || typeof tipoDoc !== "string") return null;
-    const t = tipoDoc.trim().toUpperCase();
-    if (t.startsWith("EXPEDIENTE")) return null;
-    if (t.startsWith("INFORME")) return "informes";
-    if (t.startsWith("OFICIO MULT") || t.startsWith("OFICIO MÚLT")) return "oficiosMultiples";
-    if (t.startsWith("OFICIO")) return "oficios";
-    if (t.startsWith("MEMORANDUM") || t.startsWith("MEMORÁNDUM")) return "memorandums";
-    return null;
-}
-
+/* catLabel: helper para display de categoría */
 function catLabel(cat) {
     if (cat === "informes") return "Informes";
     if (cat === "oficios") return "Oficios";
@@ -91,13 +64,17 @@ function catLabel(cat) {
     return cat;
 }
 
+/* formatExcelDate: convierte serial Excel o string a YYYY-MM-DD usando parseFlexibleDate */
 function formatExcelDate(val) {
     if (!val) return "";
-    if (typeof val === "number") {
-        const d = new Date(Math.round((val - 25569) * 86400 * 1000));
-        if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
-    }
-    return String(val).trim();
+    return toYMD(val);
+}
+
+/* getISOWeekFromDate: wrapper sobre isoWeekId para compatibilidad con la UI */
+function getISOWeekFromDate(dateOrSerial) {
+    const d = parseFlexibleDate(dateOrSerial);
+    if (!d) return null;
+    return isoWeekId(d);
 }
 
 const IEsinad = {
@@ -186,6 +163,16 @@ function CTip({ active, payload, label }) {
    COMPONENTE PRINCIPAL
    ═══════════════════════════════════════════════════════════ */
 export default function MonitoreoModule() {
+    const { isRole } = useAuth();
+    const esStaffPleno = isRole('admin') || isRole('jefatura');
+    const [subTab, setSubTab] = useState('docente');
+
+    useEffect(() => {
+        if (!esStaffPleno) {
+            setSubTab('docente');
+        }
+    }, [esStaffPleno]);
+
     const [view, setView] = useState("semanal");
     const [showForm, setShowForm] = useState(false);
     const [showEditAcumulado, setShowEditAcumulado] = useState(false);
@@ -244,6 +231,8 @@ export default function MonitoreoModule() {
         });
         return () => unsubscribe();
     }, []);
+
+
 
     /* ── Recalcular acumulado ── */
     const recalcAcumulado = useCallback(async (data) => {
@@ -485,8 +474,26 @@ export default function MonitoreoModule() {
             {/* TOAST */}
             {toast && <div style={{ position: "fixed", top: 80, right: 28, zIndex: 200, padding: "10px 20px", borderRadius: 8, fontSize: "0.82rem", fontWeight: 600, color: toast.type === "success" ? C.green : C.red, background: toast.type === "success" ? "#F0FDF4" : "#FEF2F2", border: `1px solid ${toast.type === "success" ? "#BBF7D0" : "#FECACA"}`, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", fontFamily: "'DM Sans'", animation: "fadeIn 0.2s ease" }}>{toast.msg}</div>}
 
-            {/* HEADER CONTROLS */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 14 }}>
+            {/* SUB-TABS SELECTOR FOR STAFF */}
+            {esStaffPleno && (
+                <div style={{ display: "flex", borderBottom: `2px solid ${C.g200}`, marginBottom: 24, gap: 16 }}>
+                    <button onClick={() => setSubTab('docente')} style={{ padding: "10px 16px", fontSize: 13, fontWeight: subTab === 'docente' ? 700 : 500, border: "none", background: "transparent", color: subTab === 'docente' ? C.navy5 : C.g500, borderBottom: subTab === 'docente' ? `3px solid ${C.navy5}` : "3px solid transparent", cursor: "pointer", fontFamily: "'DM Sans'", transition: "all 0.15s" }}>
+                        Monitoreo Docente
+                    </button>
+                    <button onClick={() => setSubTab('semanal')} style={{ padding: "10px 16px", fontSize: 13, fontWeight: subTab === 'semanal' ? 700 : 500, border: "none", background: "transparent", color: subTab === 'semanal' ? C.navy5 : C.g500, borderBottom: subTab === 'semanal' ? `3px solid ${C.navy5}` : "3px solid transparent", cursor: "pointer", fontFamily: "'DM Sans'", transition: "all 0.15s" }}>
+                        Monitoreo Semanal (E-SINAD)
+                    </button>
+                </div>
+            )}
+
+            {subTab === 'docente' && (
+                <MonitoreoDocente />
+            )}
+
+            {subTab === 'semanal' && (
+                <>
+                    {/* HEADER CONTROLS */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 14 }}>
                 <div>
                     <h2 style={{ color: C.navy1, fontSize: "1.4rem", margin: 0, fontFamily: "'DM Serif Display',serif" }}>Monitoreo Semanal — AGEBATP</h2>
                     <p style={{ color: C.g500, fontSize: "0.82rem", margin: "4px 0 0", fontFamily: "'DM Sans'" }}>Periodo {new Date().getFullYear()} · <span style={{ color: C.navy5 }}>{nEspecialistas} especialistas</span> · <span style={{ color: C.gold1 }}>{nOficinistas} oficinistas</span> · <span style={{ color: C.g400 }}>{kpis.semanasRegistradas} semanas registradas</span></p>
@@ -543,7 +550,7 @@ export default function MonitoreoModule() {
                         ) : (
                             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
                                 {/* Fila 1: Barras principales + Pie */}
-                                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }} className="grid-calendar">
                                     <div style={card}>
                                         <h3 style={h3s}>E-SINAD vs Prod. Real vs Pendientes — {formatWeek(selectedWeek)}</h3>
                                         <ResponsiveContainer width="100%" height={300}>
@@ -624,7 +631,7 @@ export default function MonitoreoModule() {
                             </div>
                         ) : (
                             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
-                                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }} className="grid-calendar">
                                     <div style={card}>
                                         <h3 style={h3s}>E-SINAD vs Prod. Real vs Pendientes — Acumulado {new Date().getFullYear()}</h3>
                                         <ResponsiveContainer width="100%" height={300}>
@@ -758,11 +765,15 @@ export default function MonitoreoModule() {
                 {view === "esinad" && (() => {
 
 
-                    /* ── Process Excel ── */
+                    /* ── Process Excel — distribución automática por semana ISO con MERGE idempotente ── */
+                    /* NOTA: Una vez que la automatización E-SINAD esté activa, conviene eliminar las
+                       semanas viejas cargadas a mano (botón "Eliminar" de cada semana), porque la
+                       automatización las vuelve a crear ubicando cada documento en su semana correcta
+                       por Fecha de Derivación. Así evitas que un expediente aparezca en dos semanas. */
                     const processExcel = (file) => {
                         setEsinadProcessing(true); setEsinadError("");
                         const reader = new FileReader();
-                        reader.onload = (ev) => {
+                        reader.onload = async (ev) => {
                             try {
                                 const data = new Uint8Array(ev.target.result);
                                 const wb = XLSX.read(data, { type: "array" });
@@ -775,12 +786,17 @@ export default function MonitoreoModule() {
                                 }
                                 if (headerIdx === -1) { setEsinadError('No se encontro la fila de encabezados (debe contener "Especialista" y "Expediente").'); setEsinadProcessing(false); return; }
                                 const dataRows = rows.slice(headerIdx + 1).filter(r => r && r.length > 2 && String(r[1] || "").trim());
-                                const personStats = {};
-                                PERSONAL_ESINAD.forEach(p => { personStats[p.id] = { procesadosSinad: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 }; });
-                                const allDocs = [];
-                                const seenDocs = new Set();
+
+                                /* ── Construir movimientos y documentos por fila ── */
+                                const globalSeenDocs = new Set();
+                                const allMovimientos = [];   // {personId, hash, semana}
+                                const allDocumentos  = [];   // {..., semana}
+
                                 dataRows.forEach(r => {
                                     const especialista = String(r[1] || "").trim();
+                                    const person = matchPerson(especialista);
+                                    if (!person) return;
+
                                     const expediente = String(r[2] || "").trim();
                                     const fechaIngreso = formatExcelDate(r[5]);
                                     const asuntoExpediente = String(r[6] || "").trim();
@@ -789,16 +805,27 @@ export default function MonitoreoModule() {
                                     const tipoDoc = String(r[14] || "").trim();
                                     const fechaDeriv = formatExcelDate(r[20]);
                                     const destino = String(r[21] || "").trim();
-                                    const person = matchPerson(especialista);
-                                    if (!person) return;
-                                    personStats[person.id].procesadosSinad++;
-                                    if (tipoDoc && !seenDocs.has(tipoDoc)) {
+
+                                    // Construir objeto de fila para helpers
+                                    const rowObj = { expediente, tipoDocumento: tipoDoc, fechaDerivacion: fechaDeriv, fechaIngreso, destino, remiteOficina };
+
+                                    // Semana ISO por fecha de derivación (fallback: ingreso, fallback: semana seleccionada)
+                                    let semana = semanaDeFila(rowObj);
+                                    if (!semana) semana = esinadSelectedWeek;
+
+                                    // Movimiento (una fila = un movimiento)
+                                    allMovimientos.push({
+                                        personId: person.id,
+                                        hash: movimientoHash(rowObj),
+                                        semana,
+                                    });
+
+                                    // Documento único clasificado
+                                    if (tipoDoc && !globalSeenDocs.has(tipoDoc)) {
                                         const cat = classifyDoc(tipoDoc);
                                         if (cat) {
-                                            seenDocs.add(tipoDoc);
-                                            personStats[person.id][cat]++;
-                                            personStats[person.id].totalReal++;
-                                            allDocs.push({
+                                            globalSeenDocs.add(tipoDoc);
+                                            allDocumentos.push({
                                                 tipoDocumento: tipoDoc,
                                                 categoria: catLabel(cat),
                                                 especialista: person.nombre,
@@ -813,30 +840,43 @@ export default function MonitoreoModule() {
                                                 fechaIngreso,
                                                 fechaDerivacion: fechaDeriv,
                                                 destino,
+                                                linkDrive: null,
+                                                linkOnedrive: null,
+                                                carpetaUrl: null,
+                                                semana,
                                             });
                                         }
                                     }
                                 });
-                                const weekRecord = {
-                                    id: esinadSelectedWeek,
-                                    semana: esinadSelectedWeek,
-                                    fechaCarga: new Date().toISOString(),
-                                    nombreArchivo: file.name,
-                                    totalFilas: dataRows.length,
-                                    personas: PERSONAL_ESINAD.map(p => ({ personId: p.id, nombreExcel: "", shortName: p.shortName, rol: p.rol, tipo: p.tipo, ...personStats[p.id] })),
-                                    documentos: allDocs,
-                                };
-                                addEsinadSemana(weekRecord)
-                                    .then(() => {
-                                        setEsinadError("");
-                                        showToast("Excel E-SINAD guardado en Firestore");
-                                    })
-                                    .catch(err => {
-                                        setEsinadError(`Error al guardar en Firestore: ${err.message}`);
-                                    })
-                                    .finally(() => {
-                                        setEsinadProcessing(false);
-                                    });
+
+                                /* ── Agrupar por semana ── */
+                                const porSemana = {};
+                                allMovimientos.forEach(m => {
+                                    if (!porSemana[m.semana]) porSemana[m.semana] = { mov: [], docs: [] };
+                                    porSemana[m.semana].mov.push(m);
+                                });
+                                allDocumentos.forEach(d => {
+                                    if (!porSemana[d.semana]) porSemana[d.semana] = { mov: [], docs: [] };
+                                    porSemana[d.semana].docs.push(d);
+                                });
+
+                                const totalWeeks = Object.keys(porSemana).length;
+                                showToast(`Procesando ${dataRows.length} filas en ${totalWeeks} semanas (merge)...`);
+
+                                /* ── Merge transaccional por semana (idempotente, sin borrar) ── */
+                                try {
+                                    for (const [week, g] of Object.entries(porSemana)) {
+                                        await mergeEsinadSemana(week, g.docs, g.mov, {
+                                            nombreArchivo: file.name,
+                                            origen: "manual",
+                                        });
+                                    }
+                                    setEsinadError("");
+                                    showToast(`Excel E-SINAD fusionado en ${totalWeeks} semana(s) — ${allDocumentos.length} docs / ${allMovimientos.length} movimientos`);
+                                } catch (err) {
+                                    setEsinadError(`Error al guardar en Firestore: ${err.message}`);
+                                }
+                                setEsinadProcessing(false);
                             } catch (err) { 
                                 setEsinadError(`Error procesando el archivo: ${err.message}`); 
                                 setEsinadProcessing(false);
@@ -848,11 +888,43 @@ export default function MonitoreoModule() {
 
                     const handleFile = (file) => { if (!file) return; if (!file.name.match(/\.xlsx?$/i)) { setEsinadError("Solo archivos .xlsx o .xls"); return; } processExcel(file); };
                     const handleDrop = (e) => { e.preventDefault(); setEsinadDragOver(false); handleFile(e.dataTransfer.files[0]); };
+                    
                     const deleteWeek = async (sem) => { 
-                        if (confirm(`¿Está seguro de eliminar la semana ${sem} de E-SINAD?`)) {
+                        if (confirm(`¿Está seguro de eliminar la semana ${sem} de E-SINAD y sincronizar?`)) {
                             try {
-                                await deleteEsinadSemana(sem);
-                                showToast("Semana eliminada de Firestore");
+                                const remainingWeeks = esinadWeeks.filter(w => w.semana !== sem);
+                                const allEntriesForAcc = [];
+                                remainingWeeks.forEach(week => {
+                                    const personas = getPersonasFromWeek(week);
+                                    personas.forEach(pe => {
+                                        allEntriesForAcc.push({
+                                            personId: pe.personId,
+                                            procesados: pe.procesadosSinad || 0,
+                                            informes: pe.informes || 0,
+                                            oficios: pe.oficios || 0,
+                                            oficiosMultiples: pe.oficiosMultiples || 0,
+                                            memorandums: pe.memorandums || 0,
+                                            totalReal: pe.totalReal || 0,
+                                        });
+                                    });
+                                });
+
+                                const acc = {};
+                                PERSONAL.forEach(p => {
+                                    acc[p.id] = { procesados: 0, pendientes: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 };
+                                });
+                                allEntriesForAcc.forEach(d => {
+                                    if (!acc[d.personId]) acc[d.personId] = { procesados: 0, pendientes: 0, informes: 0, oficios: 0, oficiosMultiples: 0, memorandums: 0, totalReal: 0 };
+                                    acc[d.personId].procesados += d.procesados;
+                                    acc[d.personId].informes += d.informes;
+                                    acc[d.personId].oficios += d.oficios;
+                                    acc[d.personId].oficiosMultiples += d.oficiosMultiples;
+                                    acc[d.personId].memorandums += d.memorandums;
+                                    acc[d.personId].totalReal += d.totalReal;
+                                });
+
+                                await deleteEsinadSemanaAndSync(sem, acc);
+                                showToast("Semana eliminada y sincronizada correctamente");
                             } catch (err) {
                                 showToast("Error al eliminar: " + err.message, "error");
                             }
@@ -1192,6 +1264,8 @@ export default function MonitoreoModule() {
                         </div>
                     </div>
                 </div>
+            )}
+                </>
             )}
         </div>
     );

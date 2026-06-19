@@ -14,7 +14,7 @@ import ReportesModule from './components/ReportesModule';
 import { STAFF, priorityConfig, statusConfig, typeConfig, monthNames, dayNames, getDaysInMonth, getFirstDayOfMonth, fmtDate, todayStr } from './data/constants';
 import { calcularSLA } from './utils/slaCalculator';
 import { subscribeActividades, addActividad, updateActividad, deleteActividad, subscribeEvidencias, addEvidencia, subscribeUsuarios, subscribeReuniones } from './firebase/db';
-import { uploadEvidencia } from './firebase/storage';
+import { uploadEvidencia, uploadEvidenciaDrive } from './firebase/storage';
 
 import ChatbotIA from './components/ChatbotIA';
 import ChangePasswordScreen from './components/ChangePasswordScreen';
@@ -233,13 +233,39 @@ export default function App() {
         try {
             const uploadPromises = [];
             for (const file of evidenceFiles) {
-                const url = await uploadEvidencia(activity.id, user?.uid || 'admin', file);
-                uploadPromises.push(addEvidencia(activity.id, {
-                    url,
-                    name: file.name || 'Evidencia',
-                    uploadedBy: user?.nombre || 'Personal',
-                    uploadedById: user?.uid || 'admin'
-                }));
+                let evidenciaData = null;
+
+                // Intentar subida a Drive/OneDrive primero
+                try {
+                    const r = await uploadEvidenciaDrive({
+                        actividadId: activity.id,
+                        actividadNombre: activity.title,
+                        fecha: activity.date || new Date().toISOString().slice(0, 10),
+                        file,
+                    });
+                    evidenciaData = {
+                        url: r.linkDrive || r.linkOnedrive,
+                        name: file.name || 'Evidencia',
+                        linkDrive: r.linkDrive || null,
+                        linkOnedrive: r.linkOnedrive || null,
+                        carpeta: r.carpeta,
+                        uploadedBy: user?.nombre || 'Personal',
+                        uploadedById: user?.uid || 'admin',
+                    };
+                } catch (driveErr) {
+                    // Fallback: usar Firebase Storage / n8n como antes
+                    console.warn('Subida a Drive falló, usando respaldo:', driveErr.message);
+                    const url = await uploadEvidencia(activity.id, user?.uid || 'admin', file);
+                    evidenciaData = {
+                        url,
+                        name: file.name || 'Evidencia',
+                        uploadedBy: user?.nombre || 'Personal',
+                        uploadedById: user?.uid || 'admin',
+                    };
+                    addToast('Evidencia guardada en respaldo (Storage). Drive no disponible.', 'info');
+                }
+
+                uploadPromises.push(addEvidencia(activity.id, evidenciaData));
             }
             await Promise.all(uploadPromises);
 
@@ -277,7 +303,7 @@ export default function App() {
     const ROLE_PERMS = {
         admin: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio", "reportes"],
         jefatura: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio", "reportes"],
-        personal: ["calendario", "actividades", "expedientes", "reuniones", "directorio", "reportes"],
+        personal: ["calendario", "actividades", "expedientes", "reuniones", "monitoreo", "directorio", "reportes"],
         director: ["directorio"],
         publico: ["calendario", "reuniones"]
     };
@@ -360,7 +386,7 @@ export default function App() {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div style={{ width: 32, height: 32, borderRadius: 6, background: '#1B3A5C', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{(user.nombre || '').split(' ').map(n => n[0] || '').slice(0, 2).join('')}</div>
-                            <div><div style={{ fontSize: 11, color: '#E2E8F0', fontWeight: 600 }}>{(user.nombre || '').split(' ').slice(0, 2).join(' ')}</div><div style={{ fontSize: 9, color: '#94A3B8', textTransform: 'uppercase' }}>{user.rol}</div></div>
+                            <div className="hide-mobile"><div style={{ fontSize: 11, color: '#E2E8F0', fontWeight: 600 }}>{(user.nombre || '').split(' ').slice(0, 2).join(' ')}</div><div style={{ fontSize: 9, color: '#94A3B8', textTransform: 'uppercase' }}>{user.rol}</div></div>
                             <button onClick={logout} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: '#E2E8F0', cursor: 'pointer' }}><Icon name="logOut" size={14} /></button>
                         </div>
                     </div>
@@ -399,9 +425,38 @@ export default function App() {
                     <div style={{ ...S.card, padding: 36, textAlign: 'center', animation: 'fadeIn 0.2s ease', maxWidth: 340 }} onClick={e => e.stopPropagation()}>
                         <h3 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 18, color: '#122240', marginBottom: 20 }}>Acceso Movil al Planificador</h3>
                         <div style={{ background: '#F8FAFC', padding: 20, borderRadius: 8, display: 'inline-block', border: '1px solid #D6DCE8' }}><QRCode size={220} /></div>
-                        <div style={{ marginTop: 16 }}>
-                            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 8 }}>Escanee el codigo o acceda directamente:</div>
-                            <a href="https://ravsbot-planificador.xv74e4.easypanel.host" target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, fontWeight: 600, color: '#1E4D7B', textDecoration: 'none', padding: '6px 14px', borderRadius: 6, border: '1px solid #DBEAFE', background: '#EFF6FF', display: 'inline-block' }}>ravsbot-planificador.xv74e4.easypanel.host</a>
+                        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <div style={{ fontSize: 12, color: '#64748B', marginBottom: 8 }}>Escanee el codigo o haga clic abajo para copiar el enlace:</div>
+                            <div
+                                onClick={() => {
+                                    navigator.clipboard.writeText("https://planificador-agebatp.web.app/");
+                                    addToast("¡Enlace copiado al portapapeles!", "success");
+                                }}
+                                style={{
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    color: '#1E4D7B',
+                                    padding: '8px 14px',
+                                    borderRadius: 6,
+                                    border: '1px solid #DBEAFE',
+                                    background: '#EFF6FF',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    userSelect: 'none',
+                                    justifyContent: 'center',
+                                    width: '100%',
+                                    boxSizing: 'border-box'
+                                }}
+                                title="Haga clic para copiar el enlace"
+                                onMouseEnter={e => { e.currentTarget.style.background = '#DBEAFE'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = '#EFF6FF'; }}
+                            >
+                                <span>planificador-agebatp.web.app</span>
+                                <Icon name="clipboard" size={14} color="#1E4D7B" />
+                            </div>
                         </div>
                         <button onClick={() => setShowQR(false)} style={{ marginTop: 20, ...S.btn('#F8FAFC', '#475569', '#D6DCE8') }}>Cerrar</button>
                     </div>
