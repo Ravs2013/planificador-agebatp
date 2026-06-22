@@ -10,6 +10,8 @@ import { subscribeMonitoreoSemanal, setMonitoreoSemanal, subscribeMonitoreoAcumu
 import { PERSONAL_ESINAD, SKIP_NAMES, matchPerson, classifyDoc, CAT_LABEL, CAT_KEY, isoWeekId, parseFlexibleDate, toYMD, semanaDeFila, movimientoHash } from "../utils/esinadHelpers";
 import { useAuth } from "../context/AuthContext";
 import MonitoreoDocente from "./MonitoreoDocente";
+import MonitoreoDirector from "./MonitoreoDirector";
+import InformesOficios from "./InformesOficios";
 
 
 /* ═══════════════════════════════════════════════════════════
@@ -481,13 +483,27 @@ export default function MonitoreoModule() {
                         Monitoreo Docente
                     </button>
                     <button onClick={() => setSubTab('semanal')} style={{ padding: "10px 16px", fontSize: 13, fontWeight: subTab === 'semanal' ? 700 : 500, border: "none", background: "transparent", color: subTab === 'semanal' ? C.navy5 : C.g500, borderBottom: subTab === 'semanal' ? `3px solid ${C.navy5}` : "3px solid transparent", cursor: "pointer", fontFamily: "'DM Sans'", transition: "all 0.15s" }}>
-                        Monitoreo Semanal (E-SINAD)
+                        Monitoreo Personal (AGEBATP)
+                    </button>
+                    <button onClick={() => setSubTab('director')} style={{ padding: "10px 16px", fontSize: 13, fontWeight: subTab === 'director' ? 700 : 500, border: "none", background: "transparent", color: subTab === 'director' ? C.gold2 : C.g500, borderBottom: subTab === 'director' ? `3px solid ${C.gold2}` : "3px solid transparent", cursor: "pointer", fontFamily: "'DM Sans'", transition: "all 0.15s" }}>
+                        Monitoreo Director
+                    </button>
+                    <button onClick={() => setSubTab('informes')} style={{ padding: "10px 16px", fontSize: 13, fontWeight: subTab === 'informes' ? 700 : 500, border: "none", background: "transparent", color: subTab === 'informes' ? C.green : C.g500, borderBottom: subTab === 'informes' ? `3px solid ${C.green}` : "3px solid transparent", cursor: "pointer", fontFamily: "'DM Sans'", transition: "all 0.15s" }}>
+                        Informes y Oficios
                     </button>
                 </div>
             )}
 
             {subTab === 'docente' && (
                 <MonitoreoDocente />
+            )}
+
+            {subTab === 'director' && (
+                <MonitoreoDirector />
+            )}
+
+            {subTab === 'informes' && (
+                <InformesOficios />
             )}
 
             {subTab === 'semanal' && (

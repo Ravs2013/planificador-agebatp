@@ -69,3 +69,52 @@ export function todayStr() {
     const d = new Date();
     return fmtDate(d.getFullYear(), d.getMonth(), d.getDate());
 }
+
+/* ═══ Especialistas autorizados para monitoreo — AGEBATP ═══ */
+export const ESPECIALISTAS_MONITOREO = [
+  {
+    id: 'nelida-albino',
+    nombre: 'Nélida Albino Igreda',
+    email: 'nalbinoi@ugel03.gob.pe',
+    cargo: 'Especialista de Educación Básica Alternativa',
+    cargoCorto: 'Especialista de EBA',
+    programa: 'EBA',
+    institucionTipo: 'CEBA',
+    puedeElegirPrograma: false
+  },
+  {
+    id: 'juan-quispe',
+    nombre: 'Juan Alberto Quispe Solano',
+    email: 'jaquispes@ugel03.gob.pe',
+    cargo: 'Especialista de Educación Técnico-Productiva',
+    cargoCorto: 'Especialista de ETP',
+    programa: 'ETP',
+    institucionTipo: 'CETPRO',
+    puedeElegirPrograma: false
+  },
+  {
+    id: 'francisco-villalobos',
+    nombre: 'Francisco Villalobos Gonzales',
+    email: 'fvillalobosg@ugel03.gob.pe',
+    cargo: 'Especialista de Educación Técnico-Productiva',
+    cargoCorto: 'Especialista de ETP',
+    programa: 'ETP',
+    institucionTipo: 'CETPRO',
+    puedeElegirPrograma: false
+  },
+  {
+    id: 'rosa-ninamango',
+    nombre: 'Rosa Isabel Ninamango Baldeon',
+    email: 'rninamango@ugel03.gob.pe',
+    cargo: 'Jefa del Área de Gestión de la Educación Básica Alternativa y Técnico Productiva',
+    cargoCorto: 'Jefa de AGEBATP',
+    programa: null,
+    institucionTipo: null,
+    puedeElegirPrograma: true
+  }
+];
+
+export const JEFATURA_AGEBATP = {
+  nombre: 'Rosa Isabel Ninamango Baldeon',
+  cargo: 'Jefa del Área de Gestión de la Educación Básica Alternativa y Técnico Productiva'
+};

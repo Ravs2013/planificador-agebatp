@@ -800,3 +800,94 @@ export async function updateMonitoreoDocente(programa, id, data) {
   });
 }
 
+// ── MONITOREO DIRECTOR (EBA / ETP) ──
+export function colMonitoreoDirector(programa) {
+  return programa === 'ETP' ? 'monitoreoDirectorEtp' : 'monitoreoDirectorEba';
+}
+
+export function subscribeMonitoreoDirector(programa, callback) {
+  const colName = colMonitoreoDirector(programa);
+  const q = query(collection(db, colName), orderBy("fechaEjecucionISO", "desc"));
+  return onSnapshot(q, (snapshot) => {
+    const list = snapshot.docs.map(mapDoc);
+    callback(list);
+  }, (err) => console.error(`Error subscribing to ${colName}:`, err));
+}
+
+export async function batchSetMonitoreoDirector(programa, items, userId, userName) {
+  const colName = colMonitoreoDirector(programa);
+  const BATCH_SIZE = 450;
+  
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const chunk = items.slice(i, i + BATCH_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach(record => {
+      const id = record.id;
+      const ref = doc(db, colName, id);
+      batch.set(ref, {
+        ...record,
+        cargadoPor: userName,
+        cargadoPorUid: userId,
+        createdAt: record.createdAt || serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    });
+    await batch.commit();
+  }
+}
+
+export async function deleteMonitoreoDirector(programa, id) {
+  const colName = colMonitoreoDirector(programa);
+  const ref = doc(db, colName, id);
+  await deleteDoc(ref);
+}
+
+export async function updateMonitoreoDirector(programa, id, data) {
+  const colName = colMonitoreoDirector(programa);
+  const ref = doc(db, colName, id);
+  await updateDoc(ref, {
+    ...data,
+    updatedAt: serverTimestamp()
+  });
+}
+
+// ── INFORMES Y OFICIOS DE MONITOREO ──
+export function subscribeInformesMonitoreo(callback) {
+  const q = query(collection(db, "informesMonitoreo"), orderBy("createdAt", "desc"));
+  return onSnapshot(q, (snapshot) => {
+    const list = snapshot.docs.map(mapDoc);
+    callback(list);
+  }, (err) => console.error("Error subscribing to informesMonitoreo:", err));
+}
+
+export async function addInformeMonitoreo(data) {
+  const id = data.id || `INF-${Date.now()}`;
+  const ref = doc(db, "informesMonitoreo", id);
+  const docData = {
+    ...data,
+    id,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+  await setDoc(ref, docData);
+  return id;
+}
+
+export async function updateInformeMonitoreo(id, data) {
+  const ref = doc(db, "informesMonitoreo", id);
+  await updateDoc(ref, {
+    ...data,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteInformeMonitoreo(id) {
+  const ref = doc(db, "informesMonitoreo", id);
+  await deleteDoc(ref);
+}
+
+export async function getInformeMonitoreo(id) {
+  const docSnap = await getDoc(doc(db, "informesMonitoreo", id));
+  return mapDoc(docSnap);
+}
+
