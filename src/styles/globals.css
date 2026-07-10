@@ -158,6 +158,11 @@ button:active {
 
 /* ═══ MOBILE RESPONSIVE ═══ */
 @media (max-width: 640px) {
+  html, body, #root {
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+
   /* Header */
   header > div {
     padding: 10px 14px !important;
@@ -172,8 +177,9 @@ button:active {
     text-align: center !important;
   }
   header > div > div:first-child > div:last-child > div:first-child {
-    font-size: 14px !important;
+    font-size: 13px !important;
     text-align: center;
+    line-height: 1.3;
   }
   header > div > div:first-child > div:last-child > div:last-child {
     font-size: 9px !important;
@@ -196,6 +202,8 @@ button:active {
   /* Nav tabs — horizontal scroll */
   header > nav {
     padding: 0 8px !important;
+    display: flex !important;
+    overflow-x: auto !important;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
@@ -211,6 +219,13 @@ button:active {
   /* Main content */
   main {
     padding: 12px 10px !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Action Cards Informes */
+  .grid-informes {
+    grid-template-columns: 1fr !important;
   }
 
   /* Stats grid */
@@ -245,15 +260,18 @@ button:active {
   }
 
   /* Modals — full-screen on mobile */
-  div[style*="position: fixed"][style*="alignItems: center"] > div {
+  div[style*="position: fixed"][style*="alignItems: center"] > div,
+  div[style*="position: fixed"][style*="justifyContent: center"] > div {
     max-width: 100vw !important;
     width: 100% !important;
     max-height: 100vh !important;
     border-radius: 0 !important;
     margin: 0 !important;
     padding: 16px !important;
+    overflow-y: auto !important;
   }
-  div[style*="position: fixed"][style*="alignItems: center"] {
+  div[style*="position: fixed"][style*="alignItems: center"],
+  div[style*="position: fixed"][style*="justifyContent: center"] {
     padding: 0 !important;
   }
 
@@ -293,6 +311,14 @@ button:active {
   .toast {
     max-width: 100% !important;
     font-size: 12px !important;
+  }
+
+  /* Scrollable tables container */
+  .table-responsive, 
+  .responsive-table-container {
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 }
 

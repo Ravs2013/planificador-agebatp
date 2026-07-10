@@ -177,8 +177,8 @@ export default function App() {
         
         await updateActividad(activityId, {
             checklist,
-            progreso: progress,
-            estado: status
+            progress, progreso: progress,
+            status, estado: status
         });
     };
 
@@ -233,37 +233,21 @@ export default function App() {
         try {
             const uploadPromises = [];
             for (const file of evidenceFiles) {
-                let evidenciaData = null;
-
-                // Intentar subida a Drive/OneDrive primero
-                try {
-                    const r = await uploadEvidenciaDrive({
-                        actividadId: activity.id,
-                        actividadNombre: activity.title,
-                        fecha: activity.date || new Date().toISOString().slice(0, 10),
-                        file,
-                    });
-                    evidenciaData = {
-                        url: r.linkDrive || r.linkOnedrive,
-                        name: file.name || 'Evidencia',
-                        linkDrive: r.linkDrive || null,
-                        linkOnedrive: r.linkOnedrive || null,
-                        carpeta: r.carpeta,
-                        uploadedBy: user?.nombre || 'Personal',
-                        uploadedById: user?.uid || 'admin',
-                    };
-                } catch (driveErr) {
-                    // Fallback: usar Firebase Storage / n8n como antes
-                    console.warn('Subida a Drive falló, usando respaldo:', driveErr.message);
-                    const url = await uploadEvidencia(activity.id, user?.uid || 'admin', file);
-                    evidenciaData = {
-                        url,
-                        name: file.name || 'Evidencia',
-                        uploadedBy: user?.nombre || 'Personal',
-                        uploadedById: user?.uid || 'admin',
-                    };
-                    addToast('Evidencia guardada en respaldo (Storage). Drive no disponible.', 'info');
-                }
+                const r = await uploadEvidenciaDrive({
+                    actividadId: activity.id,
+                    actividadNombre: activity.title,
+                    fecha: activity.date || new Date().toISOString().slice(0, 10),
+                    file,
+                });
+                const evidenciaData = {
+                    url: r.linkDrive || r.linkOnedrive,
+                    name: file.name || 'Evidencia',
+                    linkDrive: r.linkDrive || null,
+                    linkOnedrive: r.linkOnedrive || null,
+                    carpeta: r.carpeta,
+                    uploadedBy: user?.nombre || 'Personal',
+                    uploadedById: user?.uid || 'admin',
+                };
 
                 uploadPromises.push(addEvidencia(activity.id, evidenciaData));
             }
@@ -283,7 +267,7 @@ export default function App() {
 
     const updateProgress = async (actId, progress) => {
         const status = progress >= 100 ? 'completado' : progress > 0 ? 'en_proceso' : 'pendiente';
-        await updateActividad(actId, { progreso: progress, estado: status });
+        await updateActividad(actId, { progress, progreso: progress, status, estado: status });
     };
 
     const exportToCSV = () => {
@@ -676,7 +660,7 @@ export default function App() {
                                                         addToast('Error al eliminar personal: ' + err.message, 'error');
                                                     }
                                                 }
-                                            }} style={{ background: 'none', border: 'none', color: '#B91C1C', cursor: 'pointer', fontSize: 16, padding: '4px 8px', borderRadius: 4 }} title="Eliminar personal">✕</button>
+                                            }} style={{ background: 'none', border: 'none', color: '#B91C1C', cursor: 'pointer', fontSize: 16, padding: '4px 8px', borderRadius: 4, display: 'inline-flex', alignItems: 'center' }} title="Eliminar personal"><Icon name="x" size={14} /></button>
                                         )}
                                     </div>
                                 );
@@ -690,7 +674,7 @@ export default function App() {
                                     <div style={{ fontSize: 12, fontWeight: 700, color: '#122240', marginBottom: 10 }}>Panel de Administracion</div>
                                     <div style={{ fontSize: 11, color: '#64748B', lineHeight: 1.6 }}>
                                         <p>• Usa el boton "+ Agregar Personal" para anadir miembros</p>
-                                        <p>• Click en ✕ para eliminar un miembro del equipo</p>
+                                        <p>• Click en x para eliminar un miembro del equipo</p>
                                         <p>• Los cambios se reflejan en la Google Sheet de Personal</p>
                                         <p>• Recuerda sincronizar con la hoja "Personal" en Sheets</p>
                                     </div>

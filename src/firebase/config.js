@@ -79,4 +79,14 @@ export async function getChatModel() {
   return _chatModel;
 }
 
+export async function getVisionModel(modelName = "gemini-2.5-pro") {
+  const ai = await getAIInstance();
+  const { getGenerativeModel } = await import("firebase/ai");
+  // gemini-2.5-pro is the default for high quality OCR; can swap to gemini-2.5-flash
+  return getGenerativeModel(ai, {
+    model: modelName,
+    generationConfig: { responseMimeType: "application/json" }
+  });
+}
+
 

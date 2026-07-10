@@ -2,11 +2,13 @@
    Firebase Storage / Webhook File Upload — AGEBATP UGEL 03
    ════════════════════════════════════════════════════════════════ */
 
-import { storage } from "./config";
+import { storage, app } from "./config";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { API } from "../api/endpoints";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 /**
+ * @deprecated para evidencias de actividades — usar uploadEvidenciaDrive
  * Uploads a file to Firebase Storage or falls back to n8n webhook upload.
  * Supports both JS File objects and custom { name, base64, mimeType } objects.
  * 
@@ -113,25 +115,36 @@ export async function uploadEvidencia(actId, personalId, file, onProgress = null
  * @returns {Promise<{ ok: boolean, linkDrive: string|null, linkOnedrive: string|null, carpeta: string }>}
  */
 export async function uploadEvidenciaDrive({ actividadId, actividadNombre, fecha, file }) {
-  const base = import.meta.env.VITE_ESINAD_API;
-  const token = import.meta.env.VITE_EVIDENCIA_TOKEN || "";
-  if (!base) throw new Error("VITE_ESINAD_API no configurado");
+  const functions = getFunctions(app);
+  const subirEvidenciaActividadCall = httpsCallable(functions, "subirEvidenciaActividad");
 
-  const res = await fetch(`${base.replace(/\/+$/, "")}/api/evidencia`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Evidencia-Token": token,
-    },
-    body: JSON.stringify({
-      actividadId,
-      actividadNombre,
-      fecha,
-      archivo: file,
-    }),
+  let base64 = "";
+  let filename = "evidencia";
+  if (file instanceof File) {
+    base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result.split(",")[1]);
+      reader.onerror = reject;
+    });
+    filename = file.name;
+  } else if (file && file.base64) {
+    base64 = file.base64;
+    filename = file.name || "evidencia";
+  }
+
+  const res = await subirEvidenciaActividadCall({
+    actividadNombre,
+    fecha,
+    base64,
+    filename
   });
 
-  if (!res.ok) throw new Error(`Subida a Drive falló: HTTP ${res.status}`);
-  return res.json(); // { ok, linkDrive, linkOnedrive, carpeta }
+  return {
+    ok: res.data.ok,
+    linkDrive: res.data.linkDrive || null,
+    linkOnedrive: null,
+    carpeta: ""
+  };
 }
 

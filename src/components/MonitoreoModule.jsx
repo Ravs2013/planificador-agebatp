@@ -166,7 +166,7 @@ function CTip({ active, payload, label }) {
    ═══════════════════════════════════════════════════════════ */
 export default function MonitoreoModule() {
     const { isRole } = useAuth();
-    const esStaffPleno = isRole('admin') || isRole('jefatura');
+    const esStaffPleno = isRole('admin') || isRole('jefatura') || isRole('personal');
     const [subTab, setSubTab] = useState('docente');
 
     useEffect(() => {
@@ -570,13 +570,13 @@ export default function MonitoreoModule() {
                                     <div style={card}>
                                         <h3 style={h3s}>E-SINAD vs Prod. Real vs Pendientes — {formatWeek(selectedWeek)}</h3>
                                         <ResponsiveContainer width="100%" height={300}>
-                                            <BarChart data={barDataSemanal} barGap={4}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="E-SINAD" fill={C.green} radius={[4, 4, 0, 0]} /><Bar dataKey="Prod. Real" fill={C.realNavy} radius={[4, 4, 0, 0]} /><Bar dataKey="Pendientes" fill={C.red} radius={[4, 4, 0, 0]} /></BarChart>
+                                            <BarChart data={barDataSemanal} barGap={4}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="E-SINAD" fill={C.green} radius={[4, 4, 0, 0]} isAnimationActive={false} /><Bar dataKey="Prod. Real" fill={C.realNavy} radius={[4, 4, 0, 0]} isAnimationActive={false} /><Bar dataKey="Pendientes" fill={C.red} radius={[4, 4, 0, 0]} isAnimationActive={false} /></BarChart>
                                         </ResponsiveContainer>
                                     </div>
                                     <div style={card}>
                                         <h3 style={h3s}>Estado General — Semana</h3>
                                         <ResponsiveContainer width="100%" height={200}>
-                                            <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value"><Cell fill={C.green} /><Cell fill={C.red} /></Pie><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /></PieChart>
+                                            <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value" isAnimationActive={false}><Cell fill={C.green} /><Cell fill={C.red} /></Pie><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /></PieChart>
                                         </ResponsiveContainer>
                                         <div style={{ display: "flex", justifyContent: "center", gap: 20, marginTop: 8 }}>
                                             <div style={{ textAlign: "center" }}><p style={{ color: C.green, fontSize: "1.3rem", fontFamily: "'DM Serif Display'", margin: 0 }}>{kpis.totalProcSemana + kpis.totalPendSemana > 0 ? Math.round(kpis.totalProcSemana / (kpis.totalProcSemana + kpis.totalPendSemana) * 100) : 0}%</p><p style={{ color: C.g500, fontSize: "0.68rem", fontFamily: "'DM Sans'", margin: 0 }}>Resolucion</p></div>
@@ -590,7 +590,7 @@ export default function MonitoreoModule() {
                                 <div style={card}>
                                     <h3 style={h3s}>Desglose Produccion Real — {formatWeek(selectedWeek)}</h3>
                                     <ResponsiveContainer width="100%" height={280}>
-                                        <BarChart data={barDataSemanal} barGap={2}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="Informes" stackId="real" fill={DOC_COLORS.informes} radius={[0, 0, 0, 0]} /><Bar dataKey="Oficios" stackId="real" fill={DOC_COLORS.oficios} /><Bar dataKey="Of. Multiples" stackId="real" fill={DOC_COLORS.oficiosMultiples} /><Bar dataKey="Memorandums" stackId="real" fill={DOC_COLORS.memorandums} radius={[4, 4, 0, 0]} /></BarChart>
+                                        <BarChart data={barDataSemanal} barGap={2}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="Informes" stackId="real" fill={DOC_COLORS.informes} radius={[0, 0, 0, 0]} isAnimationActive={false} /><Bar dataKey="Oficios" stackId="real" fill={DOC_COLORS.oficios} isAnimationActive={false} /><Bar dataKey="Of. Multiples" stackId="real" fill={DOC_COLORS.oficiosMultiples} isAnimationActive={false} /><Bar dataKey="Memorandums" stackId="real" fill={DOC_COLORS.memorandums} radius={[4, 4, 0, 0]} isAnimationActive={false} /></BarChart>
                                     </ResponsiveContainer>
                                 </div>
 
@@ -651,13 +651,13 @@ export default function MonitoreoModule() {
                                     <div style={card}>
                                         <h3 style={h3s}>E-SINAD vs Prod. Real vs Pendientes — Acumulado {new Date().getFullYear()}</h3>
                                         <ResponsiveContainer width="100%" height={300}>
-                                            <BarChart data={barDataAcumulado} barGap={4}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="E-SINAD" fill={C.green} radius={[4, 4, 0, 0]} /><Bar dataKey="Prod. Real" fill={C.realNavy} radius={[4, 4, 0, 0]} /><Bar dataKey="Pendientes" fill={C.red} radius={[4, 4, 0, 0]} /></BarChart>
+                                            <BarChart data={barDataAcumulado} barGap={4}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="E-SINAD" fill={C.green} radius={[4, 4, 0, 0]} isAnimationActive={false} /><Bar dataKey="Prod. Real" fill={C.realNavy} radius={[4, 4, 0, 0]} isAnimationActive={false} /><Bar dataKey="Pendientes" fill={C.red} radius={[4, 4, 0, 0]} isAnimationActive={false} /></BarChart>
                                         </ResponsiveContainer>
                                     </div>
                                     <div style={card}>
                                         <h3 style={h3s}>Estado General — Acumulado</h3>
                                         <ResponsiveContainer width="100%" height={200}>
-                                            <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value"><Cell fill={C.green} /><Cell fill={C.red} /></Pie><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /></PieChart>
+                                            <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value" isAnimationActive={false}><Cell fill={C.green} /><Cell fill={C.red} /></Pie><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /></PieChart>
                                         </ResponsiveContainer>
                                         <div style={{ display: "flex", justifyContent: "center", gap: 20, marginTop: 8 }}>
                                             <div style={{ textAlign: "center" }}><p style={{ color: C.green, fontSize: "1.3rem", fontFamily: "'DM Serif Display'", margin: 0 }}>{kpis.totalProcAcum + kpis.totalPendAcum > 0 ? Math.round(kpis.totalProcAcum / (kpis.totalProcAcum + kpis.totalPendAcum) * 100) : 0}%</p><p style={{ color: C.g500, fontSize: "0.68rem", fontFamily: "'DM Sans'", margin: 0 }}>Resolucion</p></div>
@@ -670,7 +670,7 @@ export default function MonitoreoModule() {
                                 <div style={card}>
                                     <h3 style={h3s}>Desglose Produccion Real — Acumulado {new Date().getFullYear()}</h3>
                                     <ResponsiveContainer width="100%" height={280}>
-                                        <BarChart data={barDataAcumulado} barGap={2}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="Informes" stackId="real" fill={DOC_COLORS.informes} /><Bar dataKey="Oficios" stackId="real" fill={DOC_COLORS.oficios} /><Bar dataKey="Of. Multiples" stackId="real" fill={DOC_COLORS.oficiosMultiples} /><Bar dataKey="Memorandums" stackId="real" fill={DOC_COLORS.memorandums} radius={[4, 4, 0, 0]} /></BarChart>
+                                        <BarChart data={barDataAcumulado} barGap={2}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="Informes" stackId="real" fill={DOC_COLORS.informes} isAnimationActive={false} /><Bar dataKey="Oficios" stackId="real" fill={DOC_COLORS.oficios} isAnimationActive={false} /><Bar dataKey="Of. Multiples" stackId="real" fill={DOC_COLORS.oficiosMultiples} isAnimationActive={false} /><Bar dataKey="Memorandums" stackId="real" fill={DOC_COLORS.memorandums} radius={[4, 4, 0, 0]} isAnimationActive={false} /></BarChart>
                                     </ResponsiveContainer>
                                 </div>
 
@@ -723,7 +723,7 @@ export default function MonitoreoModule() {
                                     <AreaChart data={trendData}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="semana" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'JetBrains Mono'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} />
                                         {PERSONAL.map((p, idx) => {
                                             const key = p.shortName + (p.rol === "oficinista" ? " *" : "");
-                                            return <Area key={key} type="monotone" dataKey={key} stroke={SPEC_COLORS[idx % SPEC_COLORS.length]} fill={`${SPEC_COLORS[idx % SPEC_COLORS.length]}15`} strokeWidth={p.rol === "oficinista" ? 1.5 : 2} strokeDasharray={p.rol === "oficinista" ? "5 3" : undefined} />;
+                                            return <Area key={key} type="monotone" dataKey={key} stroke={SPEC_COLORS[idx % SPEC_COLORS.length]} fill={`${SPEC_COLORS[idx % SPEC_COLORS.length]}15`} strokeWidth={p.rol === "oficinista" ? 1.5 : 2} strokeDasharray={p.rol === "oficinista" ? "5 3" : undefined} isAnimationActive={false} />;
                                         })}
                                     </AreaChart>
                                 </ResponsiveContainer>
@@ -738,7 +738,7 @@ export default function MonitoreoModule() {
                                     <AreaChart data={trendDataReal}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="semana" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'JetBrains Mono'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} />
                                         {PERSONAL.map((p, idx) => {
                                             const key = p.shortName + (p.rol === "oficinista" ? " *" : "");
-                                            return <Area key={key} type="monotone" dataKey={key} stroke={SPEC_COLORS[idx % SPEC_COLORS.length]} fill={`${SPEC_COLORS[idx % SPEC_COLORS.length]}15`} strokeWidth={p.rol === "oficinista" ? 1.5 : 2} strokeDasharray={p.rol === "oficinista" ? "5 3" : undefined} />;
+                                            return <Area key={key} type="monotone" dataKey={key} stroke={SPEC_COLORS[idx % SPEC_COLORS.length]} fill={`${SPEC_COLORS[idx % SPEC_COLORS.length]}15`} strokeWidth={p.rol === "oficinista" ? 1.5 : 2} strokeDasharray={p.rol === "oficinista" ? "5 3" : undefined} isAnimationActive={false} />;
                                         })}
                                     </AreaChart>
                                 </ResponsiveContainer>
@@ -753,7 +753,7 @@ export default function MonitoreoModule() {
                                     <AreaChart data={cumulativeTrendData}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="semana" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'JetBrains Mono'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} />
                                         {PERSONAL.map((p, idx) => {
                                             const key = p.shortName + (p.rol === "oficinista" ? " *" : "");
-                                            return <Area key={key} type="monotone" dataKey={key} stroke={SPEC_COLORS[idx % SPEC_COLORS.length]} fill={`${SPEC_COLORS[idx % SPEC_COLORS.length]}15`} strokeWidth={p.rol === "oficinista" ? 1.5 : 2} strokeDasharray={p.rol === "oficinista" ? "5 3" : undefined} />;
+                                            return <Area key={key} type="monotone" dataKey={key} stroke={SPEC_COLORS[idx % SPEC_COLORS.length]} fill={`${SPEC_COLORS[idx % SPEC_COLORS.length]}15`} strokeWidth={p.rol === "oficinista" ? 1.5 : 2} strokeDasharray={p.rol === "oficinista" ? "5 3" : undefined} isAnimationActive={false} />;
                                         })}
                                     </AreaChart>
                                 </ResponsiveContainer>
@@ -768,7 +768,7 @@ export default function MonitoreoModule() {
                                     <AreaChart data={cumulativeTrendDataReal}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="semana" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'JetBrains Mono'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} />
                                         {PERSONAL.map((p, idx) => {
                                             const key = p.shortName + (p.rol === "oficinista" ? " *" : "");
-                                            return <Area key={key} type="monotone" dataKey={key} stroke={SPEC_COLORS[idx % SPEC_COLORS.length]} fill={`${SPEC_COLORS[idx % SPEC_COLORS.length]}15`} strokeWidth={p.rol === "oficinista" ? 1.5 : 2} strokeDasharray={p.rol === "oficinista" ? "5 3" : undefined} />;
+                                            return <Area key={key} type="monotone" dataKey={key} stroke={SPEC_COLORS[idx % SPEC_COLORS.length]} fill={`${SPEC_COLORS[idx % SPEC_COLORS.length]}15`} strokeWidth={p.rol === "oficinista" ? 1.5 : 2} strokeDasharray={p.rol === "oficinista" ? "5 3" : undefined} isAnimationActive={false} />;
                                         })}
                                     </AreaChart>
                                 </ResponsiveContainer>
@@ -1094,7 +1094,7 @@ export default function MonitoreoModule() {
                                     <div style={card}>
                                         <h3 style={h3s}>E-SINAD vs Produccion Real -- {esinadViewMode === "semana" ? fmtEWeek(esinadSelectedWeek) : "Acumulado"}</h3>
                                         <ResponsiveContainer width="100%" height={300}>
-                                            <BarChart data={eBarData} barGap={4}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="E-SINAD" fill={C.green} radius={[4, 4, 0, 0]} /><Bar dataKey="Prod. Real" fill={C.realNavy} radius={[4, 4, 0, 0]} /></BarChart>
+                                            <BarChart data={eBarData} barGap={4}><CartesianGrid strokeDasharray="3 3" stroke={C.g200} /><XAxis dataKey="nombre" tick={{ fill: C.g500, fontSize: 10, fontFamily: "'DM Sans'" }} /><YAxis tick={{ fill: C.g500, fontSize: 11, fontFamily: "'JetBrains Mono'" }} /><Tooltip content={<CTip />} /><Legend wrapperStyle={{ fontSize: 11, fontFamily: "'DM Sans'" }} /><Bar dataKey="E-SINAD" fill={C.green} radius={[4, 4, 0, 0]} isAnimationActive={false} /><Bar dataKey="Prod. Real" fill={C.realNavy} radius={[4, 4, 0, 0]} isAnimationActive={false} /></BarChart>
                                         </ResponsiveContainer>
                                     </div>
                                     <div style={card}>

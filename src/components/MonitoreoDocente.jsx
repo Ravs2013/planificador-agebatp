@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
   subscribeMonitoreoDocente, 
   batchSetMonitoreoDocente, 
   deleteMonitoreoDocente, 
-  updateMonitoreoDocente 
+  updateMonitoreoDocente,
+  subscribeDirectorioCeba,
+  subscribeDirectorioCetpro
 } from '../firebase/db';
 import { extraerTextoPdf, parsearFicha, generateSlug } from '../utils/parseFichaMonitoreo';
 import Icon from './Icon';
@@ -70,6 +72,10 @@ export default function MonitoreoDocente() {
   const [selectedFicha, setSelectedFicha] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(null);
+  const [cebas, setCebas] = useState([]);
+  const [cetpros, setCetpros] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionsRef = useRef(null);
 
   // Upload Panel States
   const [dragOver, setDragOver] = useState(false);
@@ -83,6 +89,76 @@ export default function MonitoreoDocente() {
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
+  };
+
+  // Subscribe to directories
+  useEffect(() => {
+    const unsubCeba = subscribeDirectorioCeba(setCebas);
+    const unsubCetpro = subscribeDirectorioCetpro(setCetpros);
+    return () => {
+      unsubCeba();
+      unsubCetpro();
+    };
+  }, []);
+
+  // Handle click outside suggestions to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const filteredInstitutions = useMemo(() => {
+    if (programa === 'EBA') return cebas;
+    if (programa === 'ETP') return cetpros;
+    return [
+      ...cebas.map(c => ({ ...c, type: 'CEBA' })),
+      ...cetpros.map(c => ({ ...c, type: 'CETPRO' }))
+    ];
+  }, [cebas, cetpros, programa]);
+
+  const suggestions = useMemo(() => {
+    if (!editForm) return [];
+    const query = (editForm.institucionNombre || '').trim().toLowerCase();
+    if (!query) return filteredInstitutions;
+    return filteredInstitutions.filter(item => 
+      item.nombre.toLowerCase().includes(query)
+    );
+  }, [filteredInstitutions, editForm?.institucionNombre, editForm]);
+
+  const handleSelectInstitution = (item) => {
+    const nombres = item.nombres || '';
+    const apePat = item.apellidoPaterno || '';
+    const apeMat = item.apellidoMaterno || '';
+    const fullName = `${nombres} ${apePat} ${apeMat}`.trim();
+    
+    setEditForm(p => {
+      const updated = {
+        ...p,
+        institucionNombre: item.nombre,
+        directorNombre: fullName,
+        directorDNI: item.dni || ''
+      };
+      if (p.programa === 'ETP' || programa === 'ETP') {
+        updated.institucionCodigo = item.codigoModular || '';
+        updated.codigoModular = item.codigoModular || '';
+        updated.codigoModularInicialIntermedio = '';
+        updated.codigoModularAvanzado = '';
+      } else {
+        updated.institucionCodigo = item.codigoModularInicialIntermedio || item.codigoModularAvanzado || '';
+        updated.codigoModular = '';
+        updated.codigoModularInicialIntermedio = item.codigoModularInicialIntermedio || '';
+        updated.codigoModularAvanzado = item.codigoModularAvanzado || '';
+      }
+      return updated;
+    });
+    setShowSuggestions(false);
   };
 
   // Subscribe to EBA or ETP records
@@ -474,9 +550,30 @@ export default function MonitoreoDocente() {
 
   const handleUpdateFicha = async () => {
     try {
-      await updateMonitoreoDocente(programa, selectedFicha.id, editForm);
+      const finalForm = { ...editForm };
+      if (programa === 'ETP') {
+        if (!finalForm.ficha) finalForm.ficha = {};
+        if (!finalForm.ficha.datosGeneralesCETPRO) finalForm.ficha.datosGeneralesCETPRO = {};
+        finalForm.ficha.datosGeneralesCETPRO.codigoModular = finalForm.institucionCodigo || finalForm.codigoModular || '';
+        finalForm.ficha.datosGeneralesCETPRO.nombreCETPRO = finalForm.institucionNombre || '';
+        finalForm.ficha.datosGeneralesCETPRO.docenteNombre = finalForm.docenteNombre || '';
+      } else {
+        if (!finalForm.ficha) finalForm.ficha = {};
+        if (!finalForm.ficha.datosGenerales) finalForm.ficha.datosGenerales = {};
+        finalForm.ficha.datosGenerales.institucionEducativa = finalForm.institucionNombre || '';
+        finalForm.ficha.datosGenerales.docenteObservado = finalForm.docenteNombre || '';
+        
+        const normCycle = (finalForm.grado || '').trim().toLowerCase();
+        const autoCode = normCycle.includes('avanzado') ? finalForm.codigoModularAvanzado : finalForm.codigoModularInicialIntermedio;
+        if (!finalForm.ficha.datosGenerales.codigoModular || finalForm.ficha.datosGenerales.codigoModular === finalForm.codigoModularInicialIntermedio || finalForm.ficha.datosGenerales.codigoModular === finalForm.codigoModularAvanzado || finalForm.ficha.datosGenerales.codigoModular === '') {
+          finalForm.ficha.datosGenerales.codigoModular = autoCode || '';
+          finalForm.institucionCodigo = autoCode || '';
+        }
+      }
+
+      await updateMonitoreoDocente(programa, selectedFicha.id, finalForm);
       showToast("Ficha de monitoreo actualizada correctamente.");
-      setSelectedFicha(prev => ({ ...prev, ...editForm }));
+      setSelectedFicha(prev => ({ ...prev, ...finalForm }));
       setIsEditing(false);
     } catch (err) {
       showToast(`Error al actualizar la ficha: ${err.message}`, "error");
@@ -1097,13 +1194,83 @@ export default function MonitoreoDocente() {
                     <label style={S.label}>Nombre Monitor</label>
                     <input type="text" value={editForm.monitorNombre || ''} onChange={e => setEditForm(p => ({ ...p, monitorNombre: e.target.value }))} style={S.input} />
                   </div>
-                  <div>
+                  <div style={{ position: "relative" }}>
                     <label style={S.label}>Nombre IE</label>
-                    <input type="text" value={editForm.institucionNombre || ''} onChange={e => setEditForm(p => ({ ...p, institucionNombre: e.target.value }))} style={S.input} />
+                    <input 
+                      type="text" 
+                      value={editForm.institucionNombre || ''} 
+                      onChange={e => {
+                        const val = e.target.value;
+                        setEditForm(p => ({ ...p, institucionNombre: val }));
+                        setShowSuggestions(true);
+                      }} 
+                      onFocus={() => setShowSuggestions(true)}
+                      style={S.input} 
+                    />
+                    {showSuggestions && suggestions.length > 0 && (
+                      <div 
+                        ref={suggestionsRef}
+                        style={{
+                          position: "absolute",
+                          top: "100%",
+                          left: 0,
+                          right: 0,
+                          zIndex: 1000,
+                          maxHeight: 180,
+                          overflowY: "auto",
+                          background: C.white,
+                          border: `1px solid ${C.g200}`,
+                          boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)",
+                          borderRadius: 4,
+                          marginTop: 2
+                        }}
+                      >
+                        {suggestions.map((item) => (
+                          <div 
+                            key={item.id} 
+                            onClick={() => handleSelectInstitution(item)}
+                            style={{ 
+                              padding: "8px 12px", 
+                              cursor: "pointer", 
+                              fontSize: 12.5, 
+                              borderBottom: `1px solid ${C.g100}`,
+                              background: C.white,
+                              color: C.navy1,
+                              textAlign: "left"
+                            }}
+                            onMouseEnter={e => e.target.style.background = C.g50}
+                            onMouseLeave={e => e.target.style.background = C.white}
+                          >
+                            <strong>{item.nombre}</strong> {item.distrito ? `— ${item.distrito}` : ''}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {programa === 'ETP' ? (
+                    <div>
+                      <label style={S.label}>Código Modular CETPRO</label>
+                      <input type="text" value={editForm.institucionCodigo || editForm.codigoModular || ''} onChange={e => setEditForm(p => ({ ...p, institucionCodigo: e.target.value, codigoModular: e.target.value }))} style={S.input} />
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label style={S.label}>Cód. Modular Inicial-Intermedio</label>
+                        <input type="text" value={editForm.codigoModularInicialIntermedio || ''} onChange={e => setEditForm(p => ({ ...p, codigoModularInicialIntermedio: e.target.value }))} style={S.input} />
+                      </div>
+                      <div>
+                        <label style={S.label}>Cód. Modular Avanzado</label>
+                        <input type="text" value={editForm.codigoModularAvanzado || ''} onChange={e => setEditForm(p => ({ ...p, codigoModularAvanzado: e.target.value }))} style={S.input} />
+                      </div>
+                    </>
+                  )}
+                  <div>
+                    <label style={S.label}>Director(a)</label>
+                    <input type="text" value={editForm.directorNombre || ''} onChange={e => setEditForm(p => ({ ...p, directorNombre: e.target.value }))} style={S.input} />
                   </div>
                   <div>
-                    <label style={S.label}>Codigo IE</label>
-                    <input type="text" value={editForm.institucionCodigo || ''} onChange={e => setEditForm(p => ({ ...p, institucionCodigo: e.target.value }))} style={S.input} />
+                    <label style={S.label}>DNI Director(a)</label>
+                    <input type="text" value={editForm.directorDNI || ''} onChange={e => setEditForm(p => ({ ...p, directorDNI: e.target.value }))} style={S.input} />
                   </div>
                   <div>
                     <label style={S.label}>Grado</label>
@@ -1165,6 +1332,12 @@ export default function MonitoreoDocente() {
                       <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.g500 }}>Estudiantes Matriculados:</span><span style={{ fontWeight: 600 }}>{selectedFicha.estudiantesMatriculados ?? "—"}</span></div>
                       <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.g500 }}>Estudiantes Asistentes:</span><span style={{ fontWeight: 600 }}>{selectedFicha.estudiantesAsistentes ?? "—"}</span></div>
                       <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.g500 }}>Estudiantes Discapacidad:</span><span style={{ fontWeight: 600 }}>{selectedFicha.estudiantesDiscapacidad ?? "—"}</span></div>
+                      {selectedFicha.directorNombre && (
+                        <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.g500 }}>Director(a):</span><span style={{ fontWeight: 600 }}>{selectedFicha.directorNombre}</span></div>
+                      )}
+                      {selectedFicha.directorDNI && (
+                        <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.g500 }}>DNI Director(a):</span><span style={{ fontWeight: 600 }}>{selectedFicha.directorDNI}</span></div>
+                      )}
                     </div>
                   </div>
 

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { subscribeInformesMonitoreo, deleteInformeMonitoreo } from '../firebase/db';
 import WizardInformeIndividual from './WizardInformeIndividual';
+import WizardInformeDirector from './WizardInformeDirector';
+import InformeAsistenciaTecnica from './InformeAsistenciaTecnica';
 import InformeConsolidado from './InformeConsolidado';
 import Icon from './Icon';
 
@@ -33,7 +35,9 @@ export default function InformesOficios() {
   // Modals
   const [showWizardDocente, setShowWizardDocente] = useState(false);
   const [showWizardDirector, setShowWizardDirector] = useState(false);
+  const [showInformeAT, setShowInformeAT] = useState(false);
   const [showConsolidado, setShowConsolidado] = useState(false);
+  const [editingInforme, setEditingInforme] = useState(null);
   
   const [toast, setToast] = useState(null);
   const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3500); };
@@ -78,17 +82,17 @@ export default function InformesOficios() {
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ color: C.navy1, fontSize: "1.45rem", margin: 0, fontFamily: "'DM Serif Display',serif" }}>Informes y Oficios de Monitoreo</h2>
         <p style={{ color: C.g500, fontSize: "0.82rem", margin: "4px 0 0" }}>
-          Genere informes individuales (docente/director) y consolidados mensuales con asistencia de IA. Edite antes de exportar a PDF.
+          Genere informes (docente/director) y consolidados mensuales con asistencia de IA. Edite antes de exportar a PDF.
         </p>
       </div>
 
       {/* Action Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, marginBottom: 32 }}>
+      <div className="grid-informes" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, marginBottom: 32 }}>
         {/* Individual Docente */}
         <div style={{ ...S.card, borderTop: `4px solid ${C.navy5}`, display: "flex", flexDirection: "column" }}>
           <div style={{ flex: 1 }}>
             <h3 style={{ fontSize: "1rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Serif Display',serif", marginBottom: 8 }}>
-              📋 Informe Individual — Docente
+              <Icon name="clipboard" size={16} color={C.navy5} style={{marginRight: 6}} /> Informe — Docente
             </h3>
             <p style={{ fontSize: "0.82rem", color: C.g500, marginBottom: 16, lineHeight: 1.5 }}>
               Wizard de 4 pasos: Acta de Inicio → Sección de Clase → Ficha OCR por IA → Informe + Oficio generados por IA.
@@ -103,7 +107,7 @@ export default function InformesOficios() {
         <div style={{ ...S.card, borderTop: `4px solid ${C.gold2}`, display: "flex", flexDirection: "column" }}>
           <div style={{ flex: 1 }}>
             <h3 style={{ fontSize: "1rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Serif Display',serif", marginBottom: 8 }}>
-              🏫 Informe Individual — Director
+              <Icon name="building" size={16} color={C.gold2} style={{marginRight: 6}} /> Informe — Director
             </h3>
             <p style={{ fontSize: "0.82rem", color: C.g500, marginBottom: 16, lineHeight: 1.5 }}>
               Mismo wizard adaptado para monitoreo de gestión directiva (CEBA/CETPRO).
@@ -118,14 +122,29 @@ export default function InformesOficios() {
         <div style={{ ...S.card, borderTop: `4px solid ${C.green}`, display: "flex", flexDirection: "column" }}>
           <div style={{ flex: 1 }}>
             <h3 style={{ fontSize: "1rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Serif Display',serif", marginBottom: 8 }}>
-              📊 Informe Consolidado Mensual
+              <Icon name="chart" size={16} color={C.green} style={{marginRight: 6}} /> Informe Consolidado Mensual
             </h3>
             <p style={{ fontSize: "0.82rem", color: C.g500, marginBottom: 16, lineHeight: 1.5 }}>
               Genera un informe consolidado para EBA o ETP por mes, con gráficos y tabla de promedios por criterio.
             </p>
           </div>
           <button onClick={() => setShowConsolidado(true)} style={S.btn(C.green, C.white, C.green)}>
-            <Icon name="chart" size={14} /> Generar Consolidado
+            <Icon name="plus" size={14} /> Generar Consolidado
+          </button>
+        </div>
+
+        {/* Informe Asistencia Técnica */}
+        <div style={{ ...S.card, borderTop: `4px solid ${C.blue}`, display: "flex", flexDirection: "column" }}>
+          <div style={{ flex: 1 }}>
+            <h3 style={{ fontSize: "1rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Serif Display',serif", marginBottom: 8 }}>
+              <Icon name="barChart" size={16} color={C.blue} style={{marginRight: 6}} /> Informe Asistencia Técnica
+            </h3>
+            <p style={{ fontSize: "0.82rem", color: C.g500, marginBottom: 16, lineHeight: 1.5 }}>
+              Cargue el Excel de Microsoft Forms para procesar satisfacción, promedios y generar reporte con gráficas.
+            </p>
+          </div>
+          <button onClick={() => setShowInformeAT(true)} style={S.btn(C.blue, C.white, C.blue)}>
+            <Icon name="plus" size={14} /> Nuevo Informe AT
           </button>
         </div>
       </div>
@@ -142,9 +161,9 @@ export default function InformesOficios() {
             <p style={{ marginTop: 12, fontSize: "0.85rem" }}>Aún no se han generado informes. Use los botones superiores para crear uno.</p>
           </div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
+          <div className="table-responsive" style={{ overflowX: "auto" }}>
             {/* Table Header */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 100px 100px 80px 120px 80px", padding: "10px 14px", gap: 8, borderBottom: `2px solid ${C.g200}`, background: C.g50, minWidth: 700 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px 80px 100px 160px", padding: "10px 14px", gap: 8, borderBottom: `2px solid ${C.g200}`, background: C.g50, minWidth: 700 }}>
               {["Descripción", "Tipo", "Programa", "Estado", "Fecha", "Acciones"].map(h =>
                 <p key={h} style={{ color: C.g500, fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", margin: 0, fontFamily: "'DM Sans'" }}>{h}</p>
               )}
@@ -152,28 +171,79 @@ export default function InformesOficios() {
             {/* Table Rows */}
             {informes.map(inf => {
               const estado = ESTADO_BADGE[inf.estado] || ESTADO_BADGE.borrador;
-              const desc = inf.tipo === 'individual'
-                ? `${inf.tipoMonitoreo === 'director' ? 'Director' : 'Docente'} — ${inf.institucionNombre || 'Sin IE'}`
-                : `Consolidado — ${inf.programa} ${inf.periodo?.mes || ''} ${inf.periodo?.anio || ''}`;
+              let desc = "";
+              try {
+                if (inf.tipoMonitoreo === 'asistencia_tecnica') {
+                  let monthLabel = "Mes";
+                  if (inf.fecha) {
+                    let dateParsed = new Date(inf.fecha);
+                    if (isNaN(dateParsed.getTime()) && String(inf.fecha).includes('/')) {
+                      const parts = String(inf.fecha).split('/');
+                      if (parts.length === 3) {
+                        dateParsed = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                      }
+                    }
+                    if (!isNaN(dateParsed.getTime())) {
+                      monthLabel = monthNames[dateParsed.getMonth()];
+                    }
+                  }
+                  desc = `Informe Mensual AT — ${monthLabel} 2026`;
+                } else if (inf.tipo === 'consolidado_ie' || inf.tipo === 'individual') {
+                  desc = `${inf.tipoMonitoreo === 'director' ? 'Director' : 'Docente'} — ${inf.institucionNombre || 'Sin IE'}`;
+                } else {
+                  desc = `Consolidado — ${inf.programa} ${inf.periodo?.mes || ''} ${inf.periodo?.anio || ''}`;
+                }
+              } catch (e) {
+                console.error("Error formatting description:", e);
+                desc = "Informe de Asistencia Técnica";
+              }
               
               return (
-                <div key={inf.id} style={{ display: "grid", gridTemplateColumns: "1fr 100px 100px 80px 120px 80px", padding: "12px 14px", gap: 8, borderBottom: `1px solid ${C.g100}`, alignItems: "center", minWidth: 700 }}>
+                <div key={inf.id} style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px 80px 100px 160px", padding: "12px 14px", gap: 8, borderBottom: `1px solid ${C.g100}`, alignItems: "center", minWidth: 700 }}>
                   <div>
                     <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: C.navy1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{desc}</p>
                     <p style={{ margin: "2px 0 0", fontSize: 11, color: C.g400 }}>{inf.especialistaNombre || ''}</p>
                   </div>
-                  <span style={{ fontSize: 11, color: C.g500 }}>{inf.tipo === 'individual' ? 'Individual' : 'Consolidado'}</span>
+                  <span style={{ fontSize: 11, color: C.g500 }}>
+                    {inf.tipoMonitoreo === 'asistencia_tecnica' ? 'Asistencia Técnica' : inf.tipo === 'individual' ? 'Individual' : inf.tipo === 'consolidado_ie' ? 'Visita IE' : 'Consolidado'}
+                  </span>
                   <span style={{ fontSize: 11, fontWeight: 600, color: C.navy3 }}>{inf.programa || '—'}</span>
                   <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 4, background: estado.bg, color: estado.color, textAlign: "center" }}>{estado.label}</span>
                   <span style={{ fontSize: 11, color: C.g500, fontFamily: "'JetBrains Mono'" }}>
-                    {inf.createdAt?.toDate ? inf.createdAt.toDate().toLocaleDateString('es-PE') : inf.acta?.fecha || '—'}
+                    {(() => {
+                      if (inf.createdAt) {
+                        const d = new Date(inf.createdAt);
+                        if (!isNaN(d.getTime())) return d.toLocaleDateString('es-PE');
+                      }
+                      const rawF = inf.acta?.fecha || inf.fecha;
+                      if (rawF) {
+                        const d = new Date(rawF);
+                        if (!isNaN(d.getTime())) return d.toLocaleDateString('es-PE');
+                        return String(rawF);
+                      }
+                      return '—';
+                    })()}
                   </span>
-                  <button onClick={() => handleDelete(inf.id, desc)} style={{ background: "none", border: `1px solid ${C.redBorder}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 11, color: C.red, fontWeight: 600 }}>
-                    Eliminar
-                  </button>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {(inf.tipo === 'individual' || inf.tipo === 'consolidado_ie' || inf.tipo === 'asistencia_tecnica_mensual') && (
+                      inf.estado === 'borrador' ? (
+                        <button onClick={() => setEditingInforme(inf)} style={{ background: "none", border: `1px solid ${C.navy5}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 11, color: C.navy5, fontWeight: 600 }}>
+                          Continuar
+                        </button>
+                      ) : (
+                        <button onClick={() => setEditingInforme(inf)} style={{ background: "none", border: `1px solid ${C.green}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 11, color: C.green, fontWeight: 600 }}>
+                          Ver
+                        </button>
+                      )
+                    )}
+                    <button onClick={() => handleDelete(inf.id, desc)} style={{ background: "none", border: `1px solid ${C.redBorder}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 11, color: C.red, fontWeight: 600 }}>
+                      Eliminar
+                    </button>
+                  </div>
                 </div>
               );
             })}
+
           </div>
         )}
       </div>
@@ -187,14 +257,50 @@ export default function InformesOficios() {
         />
       )}
       {showWizardDirector && (
-        <WizardInformeIndividual
-          tipoMonitoreo="director"
+        <WizardInformeDirector
           onClose={() => setShowWizardDirector(false)}
           onSaved={() => showToast('Informe director guardado exitosamente.')}
         />
       )}
+      {editingInforme && (
+        editingInforme.tipoMonitoreo === 'director' ? (
+          <WizardInformeDirector
+            initialData={editingInforme}
+            onClose={() => setEditingInforme(null)}
+            onSaved={() => {
+              showToast('Informe actualizado exitosamente.');
+              setEditingInforme(null);
+            }}
+          />
+        ) : editingInforme.tipoMonitoreo === 'asistencia_tecnica' ? (
+          <InformeAsistenciaTecnica
+            initialData={editingInforme}
+            onClose={() => setEditingInforme(null)}
+            onSaved={() => {
+              showToast('Informe actualizado exitosamente.');
+              setEditingInforme(null);
+            }}
+          />
+        ) : (
+          <WizardInformeIndividual
+            tipoMonitoreo={editingInforme.tipoMonitoreo}
+            initialData={editingInforme}
+            onClose={() => setEditingInforme(null)}
+            onSaved={() => {
+              showToast('Informe actualizado exitosamente.');
+              setEditingInforme(null);
+            }}
+          />
+        )
+      )}
       {showConsolidado && (
         <InformeConsolidado onClose={() => setShowConsolidado(false)} />
+      )}
+      {showInformeAT && (
+        <InformeAsistenciaTecnica
+          onClose={() => setShowInformeAT(false)}
+          onSaved={() => showToast('Informe de Asistencia Técnica guardado.')}
+        />
       )}
     </div>
   );

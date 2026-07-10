@@ -1,14 +1,26 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { ESPECIALISTAS_MONITOREO, JEFATURA_AGEBATP, monthNames } from '../data/constants';
-import { ocrFicha, generarInforme, generarOficio, subirDocumento, fileToBase64 } from '../api/monitoreoApi';
-import { addInformeMonitoreo, updateInformeMonitoreo } from '../firebase/db';
-import { recalcularPromedios, exportContainerToPDF } from '../utils/pdfGenerator';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Icon from './Icon';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell
-} from 'recharts';
+import FirmaDigital from './FirmaDigital';
+import FichaDigitalForm from './FichaDigitalForm';
+import FichaDigitalFormETP from './FichaDigitalFormETP';
+import { generarFichaPDF } from '../pdf/generarFichaPDF';
+import { generarFichaETPPDF } from '../pdf/generarFichaETPPDF';
+import { generarInformePDF } from '../pdf/generarInformePDF';
+import { generarOficioPDF } from '../pdf/generarOficioPDF';
+import { generarActaMonitoreoPDF } from '../pdf/generarActaPDF';
+import { loadImageDataURL } from '../pdf/membrete';
+import bannerAgebatpUrl from '../assets/membrete/banner_agebatp.jpeg';
+import * as pdfjsLib from 'pdfjs-dist';
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { useAuth } from '../context/AuthContext';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { app } from '../firebase/config';
+import { addInformeMonitoreo, updateInformeMonitoreo, subscribeDirectorioCeba, subscribeDirectorioCetpro } from '../firebase/db';
+import { getVisionModel, getChatModel } from '../firebase/config';
+import { ESPECIALISTAS_MONITOREO, JEFATURA_AGEBATP, monthNames } from '../data/constants';
+import { ANTECEDENTES_2026, ANALISIS_BOILERPLATE_2026 } from '../data/antecedentes2026';
+import html2canvas from 'html2canvas';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, Cell } from 'recharts';
 
 const C = {
   navy1: "#0C1929", navy2: "#122240", navy3: "#1B3A5C", navy4: "#1E4D7B", navy5: "#2563A0",
@@ -16,31 +28,388 @@ const C = {
   g500: "#64748B", g400: "#94A3B8", g300: "#CBD5E1", g200: "#E2E8F0",
   g100: "#F1F5F9", g50: "#F8FAFC",
   red: "#B91C1C", redBg: "#FEF2F2", redBorder: "#FECACA",
-  amber: "#B45309", amberBg: "#FFFBEB", amberBorder: "#FDE68A",
+  amber: "#B45309", amberBg: "#FFFBEB",
   green: "#15803D", greenBg: "#F0FDF4", greenBorder: "#BBF7D0",
-  blue: "#2563A0", blueBg: "#EFF6FF",
+  blue: "#2563A0", blueBg: "#EFF6FF", blueBorder: "#DBEAFE",
   white: "#FFFFFF",
 };
 
-const LEVEL_COLORS = { 1: C.red, 2: C.amber, 3: C.blue, 4: C.green };
+const LEVEL_COLORS = {
+  1: C.red,
+  2: C.amber,
+  3: C.blue,
+  4: C.green
+};
 
-const ACTA_DOCENTE_TEMPLATE = (data) => `ACTA DE INICIO DE MONITOREO Y ACOMPAÑAMIENTO PEDAGÓGICO
+function formatLevel(lvl) {
+  if (lvl === 1) return 'I';
+  if (lvl === 2) return 'II';
+  if (lvl === 3) return 'III';
+  if (lvl === 4) return 'IV';
+  return '—';
+}
 
-En el ${data.institucionTipo} "${data.institucionNombre}", siendo las ${data.horaInicio} horas del ${data.fecha}, el(la) especialista ${data.especialistaNombre}, ${data.especialistaCargo} del Área de Gestión de la Educación Básica Alternativa y Técnico Productiva (AGEBATP) de la UGEL 03, da inicio a la aplicación del instrumento de recojo de información (ficha de monitoreo y acompañamiento pedagógico), con una duración prevista desde las ${data.horaInicio} hasta las ${data.horaFin} horas.
+function getNivelesIndividualesText(doc, programa) {
+  if (!doc || !doc.ficha) return '—';
+  if (programa === 'ETP') {
+    const rubricas = doc.ficha.rubricasETP || [];
+    return rubricas.map((r, i) => `R${i + 1}:${formatLevel(r.nivel)}`).join('  ');
+  } else {
+    const criterios = doc.ficha.instrumento1?.criterios || [];
+    return criterios.map((c, i) => `R${i + 1}:${formatLevel(c.nivel)}`).join('  ');
+  }
+}
 
-La selección del aula/taller a ser acompañado(a) se realiza de manera ALEATORIA (por sorteo), en presencia y con la conformidad del(de la) ${data.cargoDirector || 'Director(a)'} ${data.directorNombre}, quien da fe del presente acto.
+if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+}
 
-Al concluir la intervención, el(la) especialista elaborará un informe cuyas conclusiones y recomendaciones —o felicitaciones, de ser el caso— serán remitidas mediante oficio a la dirección de la institución educativa.
+const functions = getFunctions(app);
+const subirDocumentoMonitoreoCall = httpsCallable(functions, 'subirDocumentoMonitoreo');
 
-OBSERVACIONES: ${data.observaciones || '(Sin observaciones)'}`;
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+  });
+}
 
-const ACTA_DIRECTOR_TEMPLATE = (data) => `ACTA DE INICIO DE MONITOREO DE LA GESTIÓN Y ACOMPAÑAMIENTO AL DIRECTIVO
+async function pdfToImages(file, onProgress) {
+  if (file.type !== "application/pdf") {
+    if (onProgress) onProgress("Leyendo archivo de imagen...", 30);
+    const base64 = await fileToBase64(file);
+    return [base64];
+  }
+  
+  if (onProgress) onProgress("Cargando archivo PDF...", 10);
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const images = [];
+  
+  for (let i = 1; i <= pdf.numPages; i++) {
+    if (onProgress) onProgress(`Renderizando página ${i} de ${pdf.numPages}...`, 10 + Math.floor((i / pdf.numPages) * 40));
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 2.0 });
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    const imgBase64 = canvas.toDataURL('image/png').split(',')[1];
+    images.push(imgBase64);
+  }
+  
+  return images;
+}
 
-En el ${data.institucionTipo} "${data.institucionNombre}", siendo las ${data.horaInicio} horas del ${data.fecha}, el(la) especialista ${data.especialistaNombre}, ${data.especialistaCargo} del AGEBATP de la UGEL 03, da inicio al monitoreo de la gestión mediante la aplicación de la ficha correspondiente, seguido de una hora de reflexión crítica y reflexiva como parte del acompañamiento al(a la) directivo(a) ${data.directorNombre}.
+async function extraerFichaConIA(images, tipoMonitoreo, programa, onProgress) {
+  const model = await getVisionModel("gemini-2.5-pro");
+  if (onProgress) onProgress("Iniciando extracción con Gemini 2.5 Pro...", 55);
+  
+  const prompt = programa === 'ETP'
+    ? `Eres un extractor de datos de fichas oficiales de monitoreo/acompañamiento pedagógico de la UGEL 03 (CETPRO/ETP, Perú).
+Devuelve EXCLUSIVAMENTE un JSON válido (sin markdown, sin bloques de código \`\`\`json) con el esquema detallado abajo. Si un campo no aparece o está vacío, usa null. No inventes valores.
 
-Al concluir, se elaborará un informe cuyas recomendaciones —de ser el caso— serán remitidas mediante oficio a la instancia correspondiente.
+Esquema de salida JSON:
+{
+  "datosGeneralesCETPRO": {
+    "nombreCETPRO": string,
+    "codigoModular": string,
+    "ugel": string,
+    "rei": string,
+    "docenteNombre": string,
+    "docenteDNI": string,
+    "docenteTelefono": string,
+    "docenteCorreo": string,
+    "monitorNombre": string,
+    "monitorDNI": string,
+    "monitorTelefono": string,
+    "instancia": string,
+    "observadorNombre": string,
+    "observadorDNI": string,
+    "observadorTelefono": string,
+    "observadorCargo": string
+  },
+  "datosSesion": {
+    "ciclo": string,
+    "opcionOcupacional": string,
+    "programaEstudio": string,
+    "especialidad": string,
+    "moduloFormativo": string,
+    "unidadDidactica": string,
+    "nombreActividad": string,
+    "matriculados": number,
+    "presentes": number,
+    "turno": string,
+    "fechaObservacion": string,
+    "horaInicio": string,
+    "horaTermino": string
+  },
+  "documentosPedagogicos": {
+    "planEstudios": boolean,
+    "unidadDidactica": boolean,
+    "sesionAprendizaje": boolean,
+    "silabo": boolean
+  },
+  "rubricasETP": [
+    {
+      "titulo": "Planifica el proceso de enseñanza y aprendizaje.",
+      "nivel": number (1, 2, 3, o 4. Busca una marca X, círculo o checkmark en los casilleros de nivel I, II, III o IV para esta rúbrica),
+      "evidencias": string
+    },
+    {
+      "titulo": "Promueve el involucramiento de los estudiantes en el proceso de aprendizaje.",
+      "nivel": number (1-4),
+      "evidencias": string
+    },
+    {
+      "titulo": "Promueve el dominio de procedimientos para la realización de trabajos técnicos.",
+      "nivel": number (1-4),
+      "evidencias": string
+    },
+    {
+      "titulo": "Acompaña el proceso de aprendizaje de los estudiantes.",
+      "nivel": number (1-4),
+      "evidencias": string
+    },
+    {
+      "titulo": "Promueve un clima propicio para el aprendizaje.",
+      "nivel": number (1-4),
+      "evidencias": string
+    }
+  ],
+  "compromisosMejora": [
+    {
+      "desempenoPorMejorar": string,
+      "compromisoMejora": string
+    }
+  ],
+  "observacionesFicha": string,
+  "declaracion": {
+    "hora": string,
+    "dia": string,
+    "mes": string,
+    "anio": string
+  },
+  "firmas": {
+    "docente": { "nombre": string, "dni": string },
+    "observador": { "nombre": string, "dni": string }
+  }
+}`
+    : `Eres un extractor de datos de fichas oficiales de monitoreo/acompañamiento pedagógico de la UGEL 03 (Perú).
+Devuelve EXCLUSIVAMENTE un JSON válido (sin markdown, sin bloques de código \`\`\`json) con el esquema detallado abajo. Si un campo no aparece, usa null. No inventes valores.
+Tipo de monitoreo: ${tipoMonitoreo} (${programa}).
 
-OBSERVACIONES: ${data.observaciones || '(Sin observaciones)'}`;
+Esquema de salida JSON:
+{
+  "datosGenerales": {
+    "institucionEducativa": string,
+    "codigoModular": string,
+    "rei": string,
+    "docenteObservado": string,
+    "nivelEducativo": string,
+    "grado": string,
+    "seccion": string,
+    "areaCurricular": string,
+    "fecha": string,
+    "horaInicio": string,
+    "horaFin": string,
+    "estudiantesMatriculados": number,
+    "estudiantesAsistentes": number,
+    "estudiantesDiscapacidad": number,
+    "nombreMonitor": string
+  },
+  "documentosPedagogicos": {
+    "planEstudios": boolean,
+    "unidadDidactica": boolean,
+    "sesionAprendizaje": boolean,
+    "silabo": boolean
+  },
+  "instrumento1": {
+    "criterios": [
+      {
+        "titulo": "Involucra activamente a los estudiantes en el proceso de aprendizaje.",
+        "nivel": number (1, 2, 3, o 4. Busca marcas como X, círculos o checkmarks en los casilleros de los niveles I, II, III o IV),
+        "conductasObservables": string
+      },
+      {
+        "titulo": "Promueve el razonamiento, la creatividad y/o el pensamiento crítico.",
+        "nivel": number (1-4),
+        "conductasObservables": string
+      },
+      {
+        "titulo": "Evalúa el progreso de los aprendizajes para retroalimentar a los estudiantes y adecuar su enseñanza.",
+        "nivel": number (1-4),
+        "conductasObservables": string
+      },
+      {
+        "titulo": "Propicia un ambiente de respeto y proximidad.",
+        "nivel": number (1-4),
+        "conductasObservables": string
+      },
+      {
+        "titulo": "Regula positivamente la conducta de los estudiantes.",
+        "nivel": number (1-4),
+        "conductasObservables": string
+      }
+    ]
+  },
+  "compromisosMejora": [
+    {
+      "desempenoPorMejorar": string,
+      "compromisoMejora": string
+    }
+  ],
+  "declaracion": {
+    "hora": string,
+    "dia": string,
+    "mes": string,
+    "anio": string
+  },
+  "firmas": {
+    "docente": {
+      "nombre": string,
+      "dni": string
+    },
+    "observador": {
+      "nombre": string,
+      "dni": string
+    }
+  }
+}`;
+
+  const contents = [
+    prompt,
+    ...images.map(b64 => ({ inlineData: { mimeType: "image/png", data: b64 } }))
+  ];
+  
+  if (onProgress) onProgress("Gemini 2.5 Pro procesando OCR e interpretando el manuscrito...", 70);
+  
+  const result = await model.generateContent(contents);
+  const text = typeof result.response.text === "function" ? result.response.text() : result.response.text;
+  
+  if (onProgress) onProgress("Procesando respuesta JSON...", 90);
+  const cleanedText = text.replace(/```json\s*/i, '').replace(/```\s*$/, '').trim();
+  const parsed = JSON.parse(cleanedText);
+  
+  if (onProgress) onProgress("Ficha procesada exitosamente.", 100);
+  return parsed;
+}
+
+async function generarInformeIA(payload, onProgress) {
+  const model = await getChatModel();
+  const prompt = `Eres un especialista pedagógico del Área de Gestión de la Educación Básica Alternativa y Técnico Productiva (AGEBATP) de la UGEL 03 (Perú).
+Genera un informe detallado e institucional en base a los siguientes datos de monitoreo pedagógico realizado a una Institución Educativa.
+Especialista: ${payload.especialista.nombre} (${payload.especialista.cargo})
+Institución: ${payload.acta.institucion}
+Director: ${payload.acta.director} (${payload.acta.directorCargo})
+Fecha: ${payload.acta.fecha}
+Docentes Monitoreados: ${JSON.stringify(payload.docentes)}
+
+REGLAS OBLIGATORIAS:
+- En la sección "antecedentes", utiliza EXACTAMENTE las bases legales vigentes para el año 2026. No inventes otras leyes, usa la siguiente lista:
+${ANTECEDENTES_2026.map((a, i) => `  * ${a}`).join('\n')}
+- En la sección "analisis" (II. ANÁLISIS), los primeros párrafos deben explicar el marco normativo de monitoreo como labor permanente (basado en: ${ANALISIS_BOILERPLATE_2026.join('\n')}).
+- Luego, debes detallar los hallazgos para cada uno de los docentes monitoreados.
+- Dejar constancia del estado de su documentación pedagógica obligatoria (Plan de estudios, Unidad didáctica, Sesión de aprendizaje y Sílabo sellado).
+- Redacta de forma formal y justificada.
+- Si algún docente no cuenta con sesión de aprendizaje, indícalo expresamente.
+- NO incluyas referencias al Buen Inicio del Año Escolar (BIAE) ni a Memorándums Múltiples antiguos, ya que el monitoreo es permanente en 2026.
+
+Devuelve EXCLUSIVAMENTE un JSON válido (sin markdown, sin bloques de código \`\`\`json) con el siguiente esquema:
+{
+  "asunto": "MONITOREO Y ACOMPAÑAMIENTO PEDAGÓGICO A LA INSTITUCIÓN EDUCATIVA...",
+  "referencia": "Plan de Trabajo AGEBATP 2026",
+  "antecedentes": [
+    "Párrafo 1 de antecedentes...",
+    "Párrafo 2 de antecedentes..."
+  ],
+  "analisis": [
+    "Párrafo 1 de análisis...",
+    "Párrafo 2 de análisis..."
+  ],
+  "conclusionesTabla": [
+    { "docente": "Nombre Docente", "nudoCritico": "Descripción del nudo crítico...", "alternativa": "Descripción de la alternativa de solución..." }
+  ],
+  "recomendaciones": [
+    "Recomendación 1...",
+    "Recomendación 2..."
+  ]
+}
+Usa un lenguaje formal, técnico, administrativo, de acuerdo a las normas de la UGEL 03 (MINEDU). Redacta íntegramente en español formal peruano; no incluyas palabras en inglés.`;
+
+  if (onProgress) onProgress("Iniciando generación con IA...", 10);
+
+  const resultStream = await model.generateContentStream({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: 'application/json' }
+  });
+
+  let text = '';
+  for await (const chunk of resultStream.stream) {
+    const chunkText = typeof chunk.text === 'function' ? chunk.text() : (chunk.text || '');
+    text += chunkText;
+    if (onProgress) {
+      const progressPercent = Math.min(90, 15 + Math.floor(text.length / 50));
+      onProgress(`Recibiendo contenido (${text.length} caracteres)...`, progressPercent);
+    }
+  }
+
+  if (onProgress) onProgress("Estructurando informe...", 95);
+  const cleanedText = text.replace(/```json\s*/i, '').replace(/```\s*$/, '').trim();
+  const parsed = JSON.parse(cleanedText);
+  if (onProgress) onProgress("Informe completado.", 100);
+  return parsed;
+}
+
+async function generarOficioIA(payload, onProgress) {
+  const model = await getChatModel();
+  const prompt = `Eres un especialista del AGEBATP de la UGEL 03.
+Genera un Oficio de ${payload.tono} en base a los siguientes datos:
+Destinatario: ${payload.destinatario.nombre} (${payload.destinatario.cargo}) del ${payload.destinatario.institucion}
+Remitente: ${payload.remitente.nombre} (${payload.remitente.cargo})
+Docentes Monitoreados: ${JSON.stringify(payload.docentes)}
+Conclusiones: ${JSON.stringify(payload.conclusiones)}
+Recomendaciones: ${JSON.stringify(payload.recomendaciones)}
+
+Devuelve EXCLUSIVAMENTE un JSON válido (sin markdown, sin bloques de código \`\`\`json) con el siguiente esquema:
+{
+  "asunto": "RECOMENDACIÓN O FELICITACIÓN...",
+  "cuerpo": [
+    "Párrafo 1 del cuerpo...",
+    "Párrafo 2 del cuerpo..."
+  ],
+  "despedida": "Hago propicia la ocasión para expresarle los sentimientos de mi especial consideración y estima."
+}
+Usa un tono formal, de acuerdo a las directivas de la UGEL 03 (MINEDU). Redacta íntegramente en español formal peruano; no incluyas palabras en inglés.`;
+
+  if (onProgress) onProgress("Iniciando generación de oficio...", 10);
+
+  const resultStream = await model.generateContentStream({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: 'application/json' }
+  });
+
+  let text = '';
+  for await (const chunk of resultStream.stream) {
+    const chunkText = typeof chunk.text === 'function' ? chunk.text() : (chunk.text || '');
+    text += chunkText;
+    if (onProgress) {
+      const progressPercent = Math.min(90, 15 + Math.floor(text.length / 30));
+      onProgress(`Recibiendo oficio (${text.length} caracteres)...`, progressPercent);
+    }
+  }
+
+  if (onProgress) onProgress("Estructurando oficio...", 95);
+  const cleanedText = text.replace(/```json\s*/i, '').replace(/```\s*$/, '').trim();
+  const parsed = JSON.parse(cleanedText);
+  if (onProgress) onProgress("Oficio completado.", 100);
+  return parsed;
+}
 
 function calcDuracion(hi, hf) {
   if (!hi || !hf) return '';
@@ -53,30 +422,92 @@ function calcDuracion(hi, hf) {
   return `${h}h ${m}m`;
 }
 
-export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onClose, onSaved }) {
+function ProgresoIA({ porcentaje, estado, detail }) {
+  return (
+    <div style={{ margin: "16px 0", padding: "16px", borderRadius: 10, background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12, fontWeight: 700, color: "#1B3A5C" }}>
+        <span>{estado}</span>
+        <span>{porcentaje}%</span>
+      </div>
+      <div style={{ width: "100%", height: 8, background: "#E2E8F0", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ width: `${porcentaje}%`, height: "100%", background: "#2563A0", transition: "width 0.3s ease" }} />
+      </div>
+      {detail && <div style={{ marginTop: 6, fontSize: 11, color: "#64748B" }}>{detail}</div>}
+    </div>
+  );
+}
+
+export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onClose, onSaved, initialData = null }) {
   const { user } = useAuth();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(initialData?.paso || 1);
   const [saving, setSaving] = useState(false);
-  const [informeId, setInformeId] = useState(null);
+  const [informeId, setInformeId] = useState(initialData?.id || null);
   const [toast, setToast] = useState(null);
-  const informeRef = useRef(null);
-  const oficioRef = useRef(null);
 
   const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 4000); };
 
-  // ── Paso 1: Acta ──
-  const [especialistaId, setEspecialistaId] = useState('');
-  const [programaSeleccionado, setProgramaSeleccionado] = useState('');
-  const [institucionNombre, setInstitucionNombre] = useState('');
-  const [directorNombre, setDirectorNombre] = useState('');
-  const [cargoDirector, setCargoDirector] = useState('Director(a)');
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
-  const [horaInicio, setHoraInicio] = useState('09:00');
-  const [horaFin, setHoraFin] = useState('12:00');
-  const [observaciones, setObservaciones] = useState('');
-  const [actaTexto, setActaTexto] = useState('');
+  // ── Paso 1: Datos IE ──
+  const [especialistaId, setEspecialistaId] = useState(initialData?.especialistaId || '');
+  const [programaSeleccionado, setProgramaSeleccionado] = useState(initialData?.programa || '');
+  const [institucionNombre, setInstitucionNombre] = useState(initialData?.institucionNombre || '');
+  const [directorNombre, setDirectorNombre] = useState(initialData?.directorNombre || '');
+  const [cargoDirector, setCargoDirector] = useState(initialData?.cargoDirector || 'Director(a)');
+  const [fecha, setFecha] = useState(initialData?.fecha || new Date().toISOString().split('T')[0]);
+  const [horaInicio, setHoraInicio] = useState(initialData?.horaInicio || '09:00');
+  const [horaFin, setHoraFin] = useState(initialData?.horaFin || '12:00');
+
+  const [cebas, setCebas] = useState([]);
+  const [cetpros, setCetpros] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionsRef = useRef(null);
+  const chartAttendanceRef = useRef(null);
+  const chartLevelsRef = useRef(null);
+
+  const [codigoModular, setCodigoModular] = useState(initialData?.codigoModular || '');
+  const [codigoModularInicialIntermedio, setCodigoModularInicialIntermedio] = useState(initialData?.codigoModularInicialIntermedio || '');
+  const [codigoModularAvanzado, setCodigoModularAvanzado] = useState(initialData?.codigoModularAvanzado || '');
+
+  // ── Paso 2: Docentes ──
+  const [docentes, setDocentes] = useState(initialData?.docentes || []);
+  const [editingDocente, setEditingDocente] = useState(null);
+  const [currentDocenteIdx, setCurrentDocenteIdx] = useState(null);
+  const [docenteModalTab, setDocenteModalTab] = useState('datos');
+  const [docenteFile, setDocenteFile] = useState(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState({ percent: 0, status: "", detail: "" });
+
+  // ── Paso 3: Acta Consolidada ──
+  const [actaObservaciones, setActaObservaciones] = useState(initialData?.acta?.observaciones || '');
+  const [actaHoraCierre, setActaHoraCierre] = useState(initialData?.acta?.horaCierre || initialData?.horaFin || '12:00');
+  const [especialistaDNI, setEspecialistaDNI] = useState(initialData?.acta?.especialistaDNI || '');
+  const [directorDNI, setDirectorDNI] = useState(initialData?.acta?.directorDNI || '');
+  const [firmaMonitorDataUrl, setFirmaMonitorDataUrl] = useState(initialData?.acta?.firmaMonitorDataUrl || null);
+  const [firmaDirectorDataUrl, setFirmaDirectorDataUrl] = useState(initialData?.acta?.firmaDirectorDataUrl || null);
+  const [actaCompromisosGenerales, setActaCompromisosGenerales] = useState(() => {
+    if (initialData?.acta?.compromisosGenerales) {
+      return initialData.acta.compromisosGenerales;
+    }
+    return [
+      "El docente se compromete a implementar las recomendaciones brindadas por el monitor en la sesión de aprendizaje."
+    ];
+  });
+
+  // ── Paso 4: Informe + Oficio ──
+  const [informeData, setInformeData] = useState(initialData?.informe || null);
+  const [oficioData, setOficioData] = useState(initialData?.oficio || null);
+  const [informeLoading, setInformeLoading] = useState(false);
+  const [informeProgress, setInformeProgress] = useState({ percent: 0, status: "", detail: "" });
+  const [oficioLoading, setOficioLoading] = useState(false);
+  const [oficioProgress, setOficioProgress] = useState({ percent: 0, status: "", detail: "" });
+  const [linkEvidencias, setLinkEvidencias] = useState(initialData?.links?.evidenciasOnedrive || '');
+  const [uploading, setUploading] = useState(false);
+  const [informeNumero, setInformeNumero] = useState(initialData?.informe?.numero || '');
+  const [bannerDataURL, setBannerDataURL] = useState(null);
+  const [qrDataURL, setQrDataURL] = useState(null);
+  const [exportProgress, setExportProgress] = useState(null);
 
   const especialistaSeleccionado = ESPECIALISTAS_MONITOREO.find(e => e.id === especialistaId);
+
   const institucionTipo = useMemo(() => {
     if (!especialistaSeleccionado) return '';
     if (especialistaSeleccionado.puedeElegirPrograma) return programaSeleccionado === 'EBA' ? 'CEBA' : 'CETPRO';
@@ -89,187 +520,554 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
     return especialistaSeleccionado.programa;
   }, [especialistaSeleccionado, programaSeleccionado]);
 
-  // Auto-generate acta text when fields change
+  // Subscribe to directories
   useEffect(() => {
-    if (!especialistaSeleccionado || !institucionNombre) return;
-    const templateFn = tipoMonitoreo === 'director' ? ACTA_DIRECTOR_TEMPLATE : ACTA_DOCENTE_TEMPLATE;
-    setActaTexto(templateFn({
-      institucionTipo: institucionTipo || 'CEBA',
-      institucionNombre: institucionNombre || '[NOMBRE_INSTITUCIÓN]',
-      horaInicio: horaInicio || '[HORA_INICIO]',
-      horaFin: horaFin || '[HORA_FIN]',
-      fecha: fecha ? new Date(fecha + 'T12:00:00').toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' }) : '[FECHA]',
-      especialistaNombre: especialistaSeleccionado.nombre,
-      especialistaCargo: especialistaSeleccionado.cargo,
-      directorNombre: directorNombre || '[NOMBRE_DIRECTOR]',
-      cargoDirector: cargoDirector,
-      observaciones
-    }));
-  }, [especialistaSeleccionado, institucionNombre, directorNombre, cargoDirector, fecha, horaInicio, horaFin, observaciones, tipoMonitoreo, institucionTipo]);
+    const unsubCeba = subscribeDirectorioCeba(setCebas);
+    const unsubCetpro = subscribeDirectorioCetpro(setCetpros);
+    return () => {
+      unsubCeba();
+      unsubCetpro();
+    };
+  }, []);
 
-  // ── Paso 2: Sección de clase ──
-  const [seccionPresente, setSeccionPresente] = useState(true);
-  const [seccionNoDisponible, setSeccionNoDisponible] = useState(false);
-  const [seccionFile, setSeccionFile] = useState(null);
-
-  // ── Paso 3: Ficha OCR ──
-  const [fichaFile, setFichaFile] = useState(null);
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const [ocrResult, setOcrResult] = useState(null);
-  const [fichaConfirmada, setFichaConfirmada] = useState(false);
-
-  // ── Paso 4: Informe + Oficio ──
-  const [informeData, setInformeData] = useState(null);
-  const [oficioData, setOficioData] = useState(null);
-  const [informeLoading, setInformeLoading] = useState(false);
-  const [oficioLoading, setOficioLoading] = useState(false);
-  const [linkEvidencias, setLinkEvidencias] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [informeNumero, setInformeNumero] = useState('');
-
-  // Handle OCR upload
-  const handleFichaUpload = async (file) => {
-    setFichaFile(file);
-    setOcrLoading(true);
-    setOcrResult(null);
-    setFichaConfirmada(false);
-    try {
-      const archivo = await fileToBase64(file);
-      const result = await ocrFicha({
-        tipoFicha: tipoMonitoreo,
-        programa: programaFinal,
-        archivo
-      });
-      if (result.ok) {
-        setOcrResult(result.data);
-        showToast('Ficha extraída por IA exitosamente. Revise y corrija los datos.');
-      } else {
-        showToast(`Error en OCR: ${result.error}`, 'error');
+  // Handle click outside suggestions to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target)) {
+        setShowSuggestions(false);
       }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const filteredInstitutions = useMemo(() => {
+    if (programaFinal === 'EBA') return cebas;
+    if (programaFinal === 'ETP') return cetpros;
+    return [
+      ...cebas.map(c => ({ ...c, type: 'CEBA' })),
+      ...cetpros.map(c => ({ ...c, type: 'CETPRO' }))
+    ];
+  }, [cebas, cetpros, programaFinal]);
+
+  const suggestions = useMemo(() => {
+    const query = (institucionNombre || '').trim().toLowerCase();
+    if (!query) return filteredInstitutions;
+    return filteredInstitutions.filter(item => 
+      item.nombre.toLowerCase().includes(query)
+    );
+  }, [filteredInstitutions, institucionNombre]);
+
+  const handleSelectInstitution = (item) => {
+    setInstitucionNombre(item.nombre);
+    const nombres = item.nombres || '';
+    const apePat = item.apellidoPaterno || '';
+    const apeMat = item.apellidoMaterno || '';
+    const fullName = `${nombres} ${apePat} ${apeMat}`.trim();
+    setDirectorNombre(fullName);
+    setCargoDirector('Director(a)');
+    if (item.dni) {
+      setDirectorDNI(item.dni);
+    }
+
+    if (programaFinal === 'ETP') {
+      setCodigoModular(item.codigoModular || '');
+      setCodigoModularInicialIntermedio('');
+      setCodigoModularAvanzado('');
+    } else {
+      setCodigoModular('');
+      setCodigoModularInicialIntermedio(item.codigoModularInicialIntermedio || '');
+      setCodigoModularAvanzado(item.codigoModularAvanzado || '');
+    }
+
+    setShowSuggestions(false);
+  };
+
+  useEffect(() => {
+    loadImageDataURL(bannerAgebatpUrl).then(url => {
+      setBannerDataURL(url);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (especialistaSeleccionado?.dni) {
+      setEspecialistaDNI(especialistaSeleccionado.dni);
+    }
+  }, [especialistaSeleccionado]);
+
+  const parseFechaPartes = (fechaStr) => {
+    if (!fechaStr) return { dia: '', mes: '', anio: '' };
+    const parts = fechaStr.split('-');
+    if (parts.length !== 3) return { dia: '', mes: '', anio: '' };
+    const [yyyy, mm, dd] = parts;
+    const mesNombre = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][parseInt(mm, 10) - 1] || '';
+    return { dia: dd, mes: mesNombre, anio: yyyy };
+  };
+
+  const initBlankFichaEBA = () => {
+    const fechaPartes = parseFechaPartes(fecha);
+    return {
+      datosGenerales: {
+        institucionEducativa: institucionNombre,
+        codigoModular: codigoModularInicialIntermedio || codigoModularAvanzado || '',
+        rei: '',
+        docenteObservado: '',
+        nivelEducativo: 'Educación Básica Alternativa',
+        grado: '',
+        seccion: '',
+        areaCurricular: '',
+        fecha: fecha,
+        horaInicio: '09:00',
+        horaFin: '12:00',
+        estudiantesMatriculados: 0,
+        estudiantesAsistentes: 0,
+        estudiantesDiscapacidad: 0,
+        nombreMonitor: especialistaSeleccionado?.nombre || ''
+      },
+      documentosPedagogicos: { planEstudios: false, unidadDidactica: false, sesionAprendizaje: false, silabo: false },
+      instrumento1: {
+        criterios: [
+          { titulo: 'Involucra activamente a los estudiantes en el proceso de aprendizaje.', nivel: null, conductasObservables: '' },
+          { titulo: 'Promueve el razonamiento, la creatividad y/o el pensamiento crítico.', nivel: null, conductasObservables: '' },
+          { titulo: 'Evalúa el progreso de los aprendizajes para retroalimentar a los estudiantes y adecuar su enseñanza.', nivel: null, conductasObservables: '' },
+          { titulo: 'Propicia un ambiente de respeto y proximidad.', nivel: null, conductasObservables: '' },
+          { titulo: 'Regula positivamente el comportamiento de los estudiantes.', nivel: null, conductasObservables: '' }
+        ]
+      },
+      compromisosMejora: [
+        { desempenoPorMejorar: '', compromisoMejora: '' }
+      ],
+      declaracion: { hora: '12:00', dia: fechaPartes.dia, mes: fechaPartes.mes, anio: fechaPartes.anio || '2026' },
+      firmas: {
+        docente: { nombre: '', dni: '' },
+        observador: { nombre: especialistaSeleccionado?.nombre || '', dni: especialistaSeleccionado?.dni || '' }
+      }
+    };
+  };
+
+  const initBlankFichaETP = () => {
+    const fechaPartes = parseFechaPartes(fecha);
+    return {
+      datosGeneralesCETPRO: {
+        nombreCETPRO: institucionNombre,
+        codigoModular: codigoModular || '',
+        ugel: '03',
+        rei: '',
+        docenteNombre: '',
+        docenteDNI: '',
+        docenteTelefono: '',
+        docenteCorreo: '',
+        monitorNombre: especialistaSeleccionado?.nombre || '',
+        monitorDNI: especialistaSeleccionado?.dni || '',
+        monitorTelefono: '',
+        instancia: 'UGEL',
+        observadorNombre: '',
+        observadorDNI: '',
+        observadorTelefono: '',
+        observadorCargo: ''
+      },
+      datosSesion: {
+        ciclo: '',
+        opcionOcupacional: '',
+        programaEstudio: '',
+        especialidad: '',
+        moduloFormativo: '',
+        unidadDidactica: '',
+        nombreActividad: '',
+        matriculados: 0,
+        presentes: 0,
+        turno: '',
+        fechaObservacion: fecha,
+        horaInicio: '09:00',
+        horaTermino: '12:00'
+      },
+      documentosPedagogicos: { planEstudios: false, unidadDidactica: false, sesionAprendizaje: false, silabo: false },
+      rubricasETP: [
+        { titulo: 'Planifica el proceso de enseñanza y aprendizaje.', evidencias: '', nivel: null },
+        { titulo: 'Promueve el involucramiento de los estudiantes en el proceso de aprendizaje.', evidencias: '', nivel: null },
+        { titulo: 'Promueve el dominio de procedimientos para la realización de trabajos técnicos.', evidencias: '', nivel: null },
+        { titulo: 'Acompaña el proceso de aprendizaje de los estudiantes.', evidencias: '', nivel: null },
+        { titulo: 'Promueve un clima propicio para el aprendizaje.', evidencias: '', nivel: null }
+      ],
+      compromisosMejora: [
+        { desempenoPorMejorar: '', compromisoMejora: '' }
+      ],
+      declaracion: { hora: '12:00', dia: fechaPartes.dia, mes: fechaPartes.mes, anio: fechaPartes.anio || '2026' },
+      firmas: {
+        docente: { nombre: '', dni: '' },
+        observador: { nombre: especialistaSeleccionado?.nombre || '', dni: especialistaSeleccionado?.dni || '' }
+      }
+    };
+  };
+
+  const initBlankDocente = () => {
+    const blankFicha = programaFinal === 'ETP' ? initBlankFichaETP() : initBlankFichaEBA();
+    const fechaPartes = parseFechaPartes(fecha);
+    return {
+      id: `docente-${Date.now()}`,
+      nombre: '',
+      dni: '',
+      telefono: '',
+      correo: '',
+      documentosPedagogicos: { planEstudios: false, unidadDidactica: false, sesionAprendizaje: false, silabo: false },
+      datosSesion: {
+        ciclo: '',
+        opcionOcupacional: '',
+        programaEstudio: '',
+        especialidad: '',
+        moduloFormativo: '',
+        unidadDidactica: '',
+        nombreActividad: '',
+        matriculados: 0,
+        presentes: 0,
+        turno: '',
+        fechaObservacion: fecha,
+        horaInicio: '09:00',
+        horaTermino: '12:00'
+      },
+      ficha: blankFicha,
+      compromisosMejora: [
+        { desempenoPorMejorar: '', compromisoMejora: '' }
+      ],
+      firmaDocenteDataUrl: null,
+      firmaMonitorDataUrl: null,
+      observacionesFicha: '',
+      declaracion: { hora: '12:00', dia: fechaPartes.dia, mes: fechaPartes.mes, anio: fechaPartes.anio || '2026' },
+      firmas: {
+        docente: { nombre: '', dni: '' },
+        observador: { nombre: especialistaSeleccionado?.nombre || '', dni: '' }
+      },
+      promedioGeneral: 0,
+      nivelGeneralLabel: 'Nivel I'
+    };
+  };
+
+  const handleAddDocenteOpen = () => {
+    setEditingDocente(initBlankDocente());
+    setCurrentDocenteIdx(null);
+    setDocenteModalTab('datos');
+    setDocenteFile(null);
+  };
+
+  const handleEditDocenteOpen = (idx) => {
+    setEditingDocente(JSON.parse(JSON.stringify(docentes[idx])));
+    setCurrentDocenteIdx(idx);
+    setDocenteModalTab('datos');
+    setDocenteFile(null);
+  };
+
+  const handleRemoveDocente = (idx) => {
+    if (confirm('¿Eliminar este docente del monitoreo?')) {
+      setDocentes(docentes.filter((_, i) => i !== idx));
+    }
+  };
+
+  const handleDocenteFieldChange = (field, val) => {
+    const updated = { ...editingDocente, [field]: val };
+    
+    // Sync with inner Ficha General values
+    if (programaFinal === 'ETP') {
+      if (!updated.ficha.datosGeneralesCETPRO) updated.ficha.datosGeneralesCETPRO = {};
+      if (!updated.ficha.firmas) updated.ficha.firmas = {};
+      if (!updated.ficha.firmas.docente) updated.ficha.firmas.docente = {};
+
+      if (field === 'nombre') {
+        updated.ficha.datosGeneralesCETPRO.docenteNombre = val;
+        updated.ficha.firmas.docente.nombre = val;
+      }
+      if (field === 'dni') {
+        updated.ficha.datosGeneralesCETPRO.docenteDNI = val;
+        updated.ficha.firmas.docente.dni = val;
+      }
+      if (field === 'telefono') updated.ficha.datosGeneralesCETPRO.docenteTelefono = val;
+      if (field === 'correo') updated.ficha.datosGeneralesCETPRO.docenteCorreo = val;
+    } else {
+      if (!updated.ficha.datosGenerales) updated.ficha.datosGenerales = {};
+      if (!updated.ficha.firmas) updated.ficha.firmas = {};
+      if (!updated.ficha.firmas.docente) updated.ficha.firmas.docente = {};
+
+      if (field === 'nombre') {
+        updated.ficha.datosGenerales.docenteObservado = val;
+        updated.ficha.firmas.docente.nombre = val;
+      }
+      if (field === 'dni') {
+        updated.ficha.firmas.docente.dni = val;
+      }
+    }
+    
+    setEditingDocente(updated);
+  };
+
+  const handleEditingDocenteFichaChange = (updatedFicha) => {
+    const updated = { ...editingDocente, ficha: updatedFicha };
+    
+    // Sync fields back to top-level object
+    if (programaFinal === 'ETP') {
+      const dgCETPRO = updatedFicha.datosGeneralesCETPRO || {};
+      if (updated.ficha.datosGeneralesCETPRO) {
+        updated.ficha.datosGeneralesCETPRO.codigoModular = updated.ficha.datosGeneralesCETPRO.codigoModular || codigoModular;
+        updated.ficha.datosGeneralesCETPRO.nombreCETPRO = updated.ficha.datosGeneralesCETPRO.nombreCETPRO || institucionNombre;
+      }
+      updated.nombre = dgCETPRO.docenteNombre || '';
+      updated.dni = dgCETPRO.docenteDNI || '';
+      updated.telefono = dgCETPRO.docenteTelefono || '';
+      updated.correo = dgCETPRO.docenteCorreo || '';
+      updated.documentosPedagogicos = updatedFicha.documentosPedagogicos || {};
+      updated.datosSesion = updatedFicha.datosSesion || {};
+      updated.compromisosMejora = updatedFicha.compromisosMejora || [];
+      updated.observacionesFicha = updatedFicha.observacionesFicha || '';
+      updated.declaracion = updatedFicha.declaracion || {};
+      updated.firmas = updatedFicha.firmas || {};
+      updated.firmaDocenteDataUrl = updatedFicha.firmaDocenteDataUrl || null;
+      updated.firmaMonitorDataUrl = updatedFicha.firmaMonitorDataUrl || null;
+
+      // Calculate level rating averages
+      const rubricVals = (updatedFicha.rubricasETP || [])
+        .map(r => r.nivel)
+        .filter(v => typeof v === 'number' && v >= 1 && v <= 4);
+      const promedio = rubricVals.length > 0
+        ? parseFloat((rubricVals.reduce((s, v) => s + v, 0) / rubricVals.length).toFixed(2))
+        : 0;
+      const rounded = Math.round(promedio);
+      const labels = { 1: 'Nivel I', 2: 'Nivel II', 3: 'Nivel III', 4: 'Nivel IV' };
+      updated.promedioGeneral = promedio;
+      updated.nivelGeneralLabel = labels[rounded] || 'Nivel I';
+    } else {
+      const dgEBA = updatedFicha.datosGenerales || {};
+      
+      const normCycle = (dgEBA.grado || '').trim().toLowerCase();
+      const autoCode = normCycle.includes('avanzado') ? codigoModularAvanzado : codigoModularInicialIntermedio;
+      if (!dgEBA.codigoModular || dgEBA.codigoModular === codigoModularInicialIntermedio || dgEBA.codigoModular === codigoModularAvanzado) {
+        dgEBA.codigoModular = autoCode;
+      }
+      if (!dgEBA.institucionEducativa) {
+        dgEBA.institucionEducativa = institucionNombre;
+      }
+
+      updated.nombre = dgEBA.docenteObservado || '';
+      updated.dni = updatedFicha.firmas?.docente?.dni || '';
+      updated.telefono = '';
+      updated.correo = '';
+      updated.documentosPedagogicos = updatedFicha.documentosPedagogicos || {};
+      
+      const session = {
+        ciclo: dgEBA.grado || '',
+        opcionOcupacional: dgEBA.areaCurricular || '',
+        programaEstudio: dgEBA.areaCurricular || '',
+        especialidad: dgEBA.areaCurricular || '',
+        moduloFormativo: dgEBA.areaCurricular || '',
+        unidadDidactica: dgEBA.areaCurricular || '',
+        nombreActividad: '',
+        matriculados: dgEBA.estudiantesMatriculados || 0,
+        presentes: dgEBA.estudiantesAsistentes || 0,
+        turno: dgEBA.seccion || '',
+        fechaObservacion: dgEBA.fecha || fecha,
+        horaInicio: dgEBA.horaInicio || '09:00',
+        horaTermino: dgEBA.horaFin || '12:00'
+      };
+      updated.datosSesion = session;
+      updated.compromisosMejora = updatedFicha.compromisosMejora || [];
+      updated.observacionesFicha = updatedFicha.observacionesFicha || '';
+      updated.declaracion = updatedFicha.declaracion || {};
+      updated.firmas = updatedFicha.firmas || {};
+      updated.firmaDocenteDataUrl = updatedFicha.firmaDocenteDataUrl || null;
+      updated.firmaMonitorDataUrl = updatedFicha.firmaMonitorDataUrl || null;
+
+      // Calculate level rating averages
+      const desVals = (updatedFicha.instrumento1?.criterios || []).map(c => c.nivel).filter(v => v !== null);
+      const promedio = desVals.length > 0 ? desVals.reduce((s, v) => s + v, 0) / desVals.length : 0;
+      const rounded = Math.round(promedio);
+      const labels = { 1: 'Nivel I', 2: 'Nivel II', 3: 'Nivel III', 4: 'Nivel IV' };
+      updated.promedioGeneral = promedio;
+      updated.nivelGeneralLabel = labels[rounded] || 'Nivel I';
+    }
+
+    setEditingDocente(updated);
+  };
+
+  const handleDocenteFichaUpload = async (file) => {
+    setDocenteFile(file);
+    setOcrLoading(true);
+    setOcrProgress({ percent: 5, status: "Iniciando extracción...", detail: "" });
+    try {
+      const images = await pdfToImages(file, (status, percent) => {
+        setOcrProgress({ percent: Math.floor(percent * 0.5), status, detail: "" });
+      });
+      const parsed = await extraerFichaConIA(images, tipoMonitoreo, programaFinal, (status, percent) => {
+        setOcrProgress({ percent: 50 + Math.floor(percent * 0.5), status, detail: "" });
+      });
+
+      // Recalculate score averages
+      let promedio = 0;
+      let label = 'Nivel I';
+      if (programaFinal === 'ETP') {
+        const rubricVals = (parsed.rubricasETP || [])
+          .map(r => r.nivel)
+          .filter(v => typeof v === 'number' && v >= 1 && v <= 4);
+        promedio = rubricVals.length > 0
+          ? parseFloat((rubricVals.reduce((s, v) => s + v, 0) / rubricVals.length).toFixed(2))
+          : 0;
+        const rounded = Math.round(promedio);
+        const labels = { 1: 'Nivel I', 2: 'Nivel II', 3: 'Nivel III', 4: 'Nivel IV' };
+        label = labels[rounded] || 'Nivel I';
+      } else {
+        const desVals = (parsed.instrumento1?.criterios || []).map(c => c.nivel).filter(v => v !== null);
+        promedio = desVals.length > 0 ? desVals.reduce((s, v) => s + v, 0) / desVals.length : 0;
+        const rounded = Math.round(promedio);
+        const labels = { 1: 'Nivel I', 2: 'Nivel II', 3: 'Nivel III', 4: 'Nivel IV' };
+        label = labels[rounded] || 'Nivel I';
+      }
+
+      setEditingDocente({
+        ...editingDocente,
+        nombre: programaFinal === 'ETP' ? parsed.datosGeneralesCETPRO?.docenteNombre : parsed.datosGenerales?.docenteObservado,
+        dni: programaFinal === 'ETP' ? parsed.datosGeneralesCETPRO?.docenteDNI : parsed.firmas?.docente?.dni,
+        ficha: parsed,
+        promedioGeneral: promedio,
+        nivelGeneralLabel: label
+      });
+      showToast('Ficha procesada exitosamente.');
+      setDocenteModalTab('datos');
     } catch (err) {
-      showToast(`Error: ${err.message}`, 'error');
+      console.error(err);
+      showToast(`Error al procesar: ${err.message}`, 'error');
     }
     setOcrLoading(false);
   };
 
-  const handleConfirmarFicha = () => {
-    if (ocrResult) {
-      const promedios = recalcularPromedios(ocrResult);
-      setOcrResult(prev => ({ ...prev, ...promedios }));
-      setFichaConfirmada(true);
-      showToast('Ficha confirmada. Puede continuar al siguiente paso.');
+  const handleSaveDocenteInList = () => {
+    if (!editingDocente.nombre || !editingDocente.nombre.trim()) {
+      showToast('Por favor ingrese el nombre del docente.', 'error');
+      return;
     }
+    const list = [...docentes];
+    if (currentDocenteIdx !== null) {
+      list[currentDocenteIdx] = editingDocente;
+    } else {
+      list.push(editingDocente);
+    }
+    setDocentes(list);
+    setEditingDocente(null);
+    setCurrentDocenteIdx(null);
+    showToast('Docente guardado en la lista.');
   };
 
-  // Generate Informe
+  // Generate Report consolidated IA text
   const handleGenerarInforme = async () => {
     setInformeLoading(true);
+    setInformeProgress({ percent: 5, status: "Iniciando generación...", detail: "" });
     try {
       const now = new Date();
       const payload = {
-        tipo: 'individual',
-        tipoMonitoreo,
-        programa: programaFinal,
-        especialista: {
-          nombre: especialistaSeleccionado.nombre,
-          cargo: especialistaSeleccionado.cargo
-        },
-        jefatura: JEFATURA_AGEBATP,
-        periodo: {
-          mes: monthNames[now.getMonth()].toLowerCase(),
-          anio: now.getFullYear()
-        },
-        acta: {
-          especialista: especialistaSeleccionado.nombre,
-          institucion: institucionNombre,
-          director: directorNombre,
-          fecha,
-          horaInicio,
-          horaFin,
-          duracion: calcDuracion(horaInicio, horaFin),
-          observaciones,
-          texto: actaTexto
-        },
-        seccionClase: {
-          presente: seccionPresente && !seccionNoDisponible,
-          detalle: seccionNoDisponible ? 'El docente no cuenta con sección de clase' : null
-        },
-        fichas: [ocrResult],
-        linkEvidenciasOnedrive: linkEvidencias || ''
+        especialista: { nombre: especialistaSeleccionado.nombre, cargo: especialistaSeleccionado.cargo },
+        acta: { institucion: institucionNombre, director: directorNombre, directorCargo: cargoDirector, fecha },
+        docentes
       };
 
-      const result = await generarInforme(payload);
-      if (result.ok) {
-        setInformeData(result.informe);
-        showToast('Informe generado exitosamente. Edite y ajuste antes de exportar.');
-      } else {
-        showToast(`Error al generar informe: ${result.error}`, 'error');
+      const data = await generarInformeIA(payload, (status, percent) => {
+        setInformeProgress({ percent, status, detail: "" });
+      });
+      if (data && data.asunto) {
+        data.asunto = data.asunto.replace(/^INFORME DE\s+/i, '').replace(/^INFORME CONSOLIDADO DE\s+/i, '');
       }
+      setInformeData(data);
+      showToast('Informe consolidado generado exitosamente.');
     } catch (err) {
-      showToast(`Error: ${err.message}`, 'error');
+      console.error('Error al generar informe:', err);
+      showToast(`Error al generar informe: ${err.message}`, 'error');
     }
     setInformeLoading(false);
   };
 
-  // Generate Oficio
   const handleGenerarOficio = async () => {
     setOficioLoading(true);
+    setOficioProgress({ percent: 5, status: "Iniciando generación de Oficio...", detail: "" });
     try {
-      const tono = (ocrResult?.promedioGeneral >= 3.5) ? 'felicitacion' : 'recomendacion';
+      // Felicitación only if all teachers scored >= III and have 0 commitments
+      const tieneCompromisos = docentes.some(d => (d.compromisosMejora || []).some(c => c.desempenoPorMejorar?.trim() || c.compromisoMejora?.trim()));
+      const esFelicitacion = docentes.every(d => d.promedioGeneral >= 3) && !tieneCompromisos;
+      const tono = esFelicitacion ? 'felicitacion' : 'recomendacion';
+
       const payload = {
-        programa: programaFinal,
         destinatario: { nombre: directorNombre, cargo: cargoDirector, institucion: `${institucionTipo} ${institucionNombre}` },
         remitente: { nombre: especialistaSeleccionado.nombre, cargo: especialistaSeleccionado.cargo },
         tono,
+        docentes,
         conclusiones: informeData?.conclusionesTabla || [],
-        recomendaciones: informeData?.recomendaciones || [],
-        linkEvidenciasOnedrive: linkEvidencias || ''
+        recomendaciones: informeData?.recomendaciones || []
       };
-      const result = await generarOficio(payload);
-      if (result.ok) {
-        setOficioData(result.oficio);
-        showToast(`Oficio de ${tono} generado exitosamente.`);
-      } else {
-        showToast(`Error al generar oficio: ${result.error}`, 'error');
-      }
+
+      const data = await generarOficioIA(payload, (status, percent) => {
+        setOficioProgress({ percent, status, detail: "" });
+      });
+
+      const asuntoText = `${esFelicitacion ? 'FELICITACIÓN' : 'RECOMENDACIÓN'} PEDAGÓGICA EN EL MARCO DEL MONITOREO Y ACOMPAÑAMIENTO AL ${institucionTipo.toUpperCase()} "${institucionNombre.toUpperCase()}".`;
+      setOficioData({
+        ...data,
+        asunto: asuntoText
+      });
+      showToast('Oficio consolidado generado exitosamente.');
     } catch (err) {
-      showToast(`Error: ${err.message}`, 'error');
+      console.error('Error al generar oficio:', err);
+      showToast(`Error al generar oficio: ${err.message}`, 'error');
     }
     setOficioLoading(false);
   };
 
-  // Save draft to Firestore
-  const saveDraft = async () => {
+  const saveDraft = async (statusOverride = null) => {
     setSaving(true);
     try {
-      const data = {
+      const dataToSave = {
         tipoMonitoreo,
         programa: programaFinal,
-        tipo: 'individual',
-        especialistaId: especialistaSeleccionado?.id,
-        especialistaNombre: especialistaSeleccionado?.nombre,
-        especialistaCargo: especialistaSeleccionado?.cargo,
+        tipo: 'consolidado_ie',
+        especialistaId: especialistaSeleccionado?.id || '',
+        especialistaNombre: especialistaSeleccionado?.nombre || '',
+        especialistaCargo: especialistaSeleccionado?.cargo || '',
         jefaturaNombre: JEFATURA_AGEBATP.nombre,
         jefaturaCargo: JEFATURA_AGEBATP.cargo,
         institucionTipo,
         institucionNombre,
         directorNombre,
-        periodo: { mes: monthNames[new Date().getMonth()].toLowerCase(), anio: new Date().getFullYear() },
-        acta: { especialista: especialistaSeleccionado?.nombre, institucion: institucionNombre, director: directorNombre, fecha, horaInicio, horaFin, duracion: calcDuracion(horaInicio, horaFin), observaciones, texto: actaTexto },
-        seccionClase: { presente: seccionPresente && !seccionNoDisponible, detalle: seccionNoDisponible ? 'No cuenta con sección' : null },
-        ficha: ocrResult || null,
+        cargoDirector,
+        codigoModular,
+        codigoModularInicialIntermedio,
+        codigoModularAvanzado,
+        fecha,
+        horaInicio,
+        horaFin,
+        docentes,
+        acta: {
+          especialista: especialistaSeleccionado?.nombre || '',
+          especialistaCargo: especialistaSeleccionado?.cargo || '',
+          especialistaDNI,
+          director: directorNombre,
+          directorCargo: cargoDirector,
+          directorDNI,
+          fecha,
+          horaInicio,
+          horaFin,
+          horaCierre: actaHoraCierre,
+          observaciones: actaObservaciones,
+          firmaMonitorDataUrl,
+          firmaDirectorDataUrl,
+          compromisosGenerales: actaCompromisosGenerales
+        },
         informe: informeData || null,
         oficio: oficioData || null,
         links: { evidenciasOnedrive: linkEvidencias || '' },
-        estado: informeData ? (oficioData ? 'generado' : 'generado') : 'borrador',
+        estado: statusOverride || (initialData?.estado === 'finalizado' ? 'finalizado' : (informeData ? 'generado' : 'borrador')),
         creadoPor: user?.uid || '',
         paso: step,
+        updatedAt: new Date().toISOString()
       };
 
       if (informeId) {
-        await updateInformeMonitoreo(informeId, data);
+        await updateInformeMonitoreo(informeId, dataToSave);
       } else {
-        const newId = await addInformeMonitoreo(data);
+        const newId = await addInformeMonitoreo(dataToSave);
         setInformeId(newId);
       }
     } catch (err) {
@@ -278,54 +1076,215 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
     setSaving(false);
   };
 
-  // Auto-save on step change
   useEffect(() => {
     if (step > 1 && especialistaSeleccionado) {
       saveDraft();
     }
   }, [step]);
 
-  // Export PDF
-  const handleExportInformePDF = async () => {
-    if (!informeRef.current) return;
+  const handleExportActaPDF = async () => {
     try {
-      const result = await exportContainerToPDF(informeRef.current, `Informe_Monitoreo_${tipoMonitoreo}_${fecha}.pdf`);
-      showToast('Informe PDF descargado correctamente.');
-      
-      // Try uploading to OneDrive
-      try {
-        setUploading(true);
-        const uploadResult = await subirDocumento({
-          categoria: 'informe',
-          tipoMonitoreo,
-          programa: programaFinal,
-          institucionNombre,
-          fecha,
-          archivo: { name: `Informe_${tipoMonitoreo}_${fecha}.pdf`, mimeType: 'application/pdf', base64: result.base64 }
-        });
-        if (uploadResult.ok && uploadResult.linkOnedrive) {
-          setLinkEvidencias(uploadResult.linkOnedrive);
-          showToast('Informe subido a OneDrive correctamente.');
-        } else if (uploadResult.ok && !uploadResult.linkOnedrive) {
-          showToast('Subido exitosamente pero sin link OneDrive. Configurar STORAGE_PROVIDERS.', 'error');
+      setExportProgress("Renderizando gráficas de asistencia y niveles...");
+      const chartImages = [];
+
+      // Chart 1: Attendance
+      if (chartAttendanceRef.current) {
+        try {
+          const canvas = await Promise.race([
+            html2canvas(chartAttendanceRef.current, { scale: 2, useCORS: true, logging: false, allowTaint: true, backgroundColor: '#FFFFFF' }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+          ]);
+          chartImages.push({
+            base64: canvas.toDataURL('image/png'),
+            title: 'Asistencia de Estudiantes — Matriculados vs. Presentes',
+            caption: 'Fuente: Sistema de Monitoreo AGEBATP (2026).'
+          });
+        } catch (e) {
+          console.error('Error capturing attendance chart for Acta:', e);
         }
-      } catch (e) {
-        console.warn('Upload failed (backend may not be configured):', e);
       }
-      setUploading(false);
+
+      // Chart 2: Levels distribution
+      if (chartLevelsRef.current) {
+        try {
+          const canvas = await Promise.race([
+            html2canvas(chartLevelsRef.current, { scale: 2, useCORS: true, logging: false, allowTaint: true, backgroundColor: '#FFFFFF' }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+          ]);
+          chartImages.push({
+            base64: canvas.toDataURL('image/png'),
+            title: 'Distribución de Niveles Alcanzados por Rúbrica',
+            caption: 'Fuente: Sistema de Monitoreo AGEBATP (2026).'
+          });
+        } catch (e) {
+          console.error('Error capturing levels chart for Acta:', e);
+        }
+      }
+
+      setExportProgress("Procesando firmas y estructurando acta...");
+      const actaPayload = {
+        especialista: especialistaSeleccionado?.nombre,
+        especialistaCargo: especialistaSeleccionado?.cargo,
+        especialistaDNI,
+        institucion: institucionNombre,
+        institucionTipo,
+        director: directorNombre,
+        directorCargo: cargoDirector,
+        directorDNI,
+        fecha,
+        horaCierre: actaHoraCierre,
+        observaciones: actaObservaciones,
+        programa: programaFinal,
+        docentes,
+        firmaMonitorDataUrl,
+        firmaDirectorDataUrl,
+        compromisosGenerales: actaCompromisosGenerales
+      };
+      setExportProgress("Generando archivo PDF y descargando acta consolidada...");
+      generarActaMonitoreoPDF(actaPayload, bannerDataURL, chartImages.length > 0 ? chartImages : null);
+      showToast('Acta PDF descargada correctamente.');
     } catch (err) {
-      showToast(`Error al exportar PDF: ${err.message}`, 'error');
+      showToast(`Error al exportar acta: ${err.message}`, 'error');
+    } finally {
+      setExportProgress(null);
     }
   };
 
-  const handleExportOficioPDF = async () => {
-    if (!oficioRef.current) return;
+  const handleExportFichaPDF = (docenteItem) => {
+    if (!docenteItem.ficha) return;
     try {
-      await exportContainerToPDF(oficioRef.current, `Oficio_Monitoreo_${tipoMonitoreo}_${fecha}.pdf`);
+      setExportProgress(`Preparando ficha de monitoreo de ${docenteItem.nombre}...`);
+      if (programaFinal === 'ETP') {
+        generarFichaETPPDF(docenteItem.ficha, bannerDataURL);
+      } else {
+        generarFichaPDF(docenteItem.ficha, bannerDataURL);
+      }
+      showToast(`Ficha de ${docenteItem.nombre} descargada.`);
+    } catch (err) {
+      showToast(`Error al exportar ficha: ${err.message}`, 'error');
+    } finally {
+      setExportProgress(null);
+    }
+  };
+
+  const handleExportInformePDF = async () => {
+    if (!informeData) return;
+    try {
+      setExportProgress("Iniciando compilación de informe docente...");
+      // Build tablaInstituciones from docentes
+      const tablaInstituciones = docentes.map((doc, idx) => ({
+        n: (idx + 1).toString(),
+        monitoreo: `Monitoreo y acompañamiento pedagógico en aula al docente ${doc.nombre} en el módulo/área/especialidad ${doc.datosSesion?.moduloFormativo || doc.datosSesion?.programaEstudio || doc.datosSesion?.opcionOcuracional || doc.datosSesion?.areaCurricular || '—'}`,
+        inst: `${institucionTipo} "${institucionNombre}"`
+      }));
+
+      // Capture charts (Addendum v28)
+      setExportProgress("Renderizando gráficas de asistencia y niveles...");
+      const chartImages = [];
+
+      // Chart 1: Attendance
+      if (chartAttendanceRef.current) {
+        try {
+          const canvas = await Promise.race([
+            html2canvas(chartAttendanceRef.current, { scale: 2, useCORS: true, logging: false, allowTaint: true, backgroundColor: '#FFFFFF' }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+          ]);
+          chartImages.push({
+            base64: canvas.toDataURL('image/png'),
+            title: 'Asistencia de Estudiantes — Matriculados vs. Presentes',
+            caption: 'Fuente: Sistema de Monitoreo AGEBATP (2026).'
+          });
+        } catch (e) {
+          console.error('Error capturing attendance chart:', e);
+        }
+      }
+
+      // Chart 2: Levels distribution
+      if (chartLevelsRef.current) {
+        try {
+          const canvas = await Promise.race([
+            html2canvas(chartLevelsRef.current, { scale: 2, useCORS: true, logging: false, allowTaint: true, backgroundColor: '#FFFFFF' }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+          ]);
+          chartImages.push({
+            base64: canvas.toDataURL('image/png'),
+            title: 'Distribución de Niveles Alcanzados por Rúbrica (R1–R5)',
+            caption: 'Fuente: Sistema de Monitoreo AGEBATP (2026).'
+          });
+        } catch (e) {
+          console.error('Error capturing levels chart:', e);
+        }
+      }
+
+      const payload = {
+        numero: informeNumero,
+        destinatario: { nombre: JEFATURA_AGEBATP.nombre, cargo: JEFATURA_AGEBATP.cargo },
+        remitente: { 
+          nombre: especialistaSeleccionado?.nombre || initialData?.especialistaNombre || 'ESPECIALISTA MONITOR', 
+          cargo: especialistaSeleccionado?.cargo || initialData?.especialistaCargo || 'Especialista de Educación Básica Alternativa' 
+        },
+        fecha: new Date().toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' }),
+        mes: monthNames[new Date().getMonth()].toLowerCase(),
+        anio: new Date().getFullYear().toString(),
+        programa: programaFinal,
+        institucionNombre,
+        institucionTipo,
+        docentes,
+        conclusiones: informeData.conclusionesTabla || [],
+        linkEvidencias: linkEvidencias ? { texto: "Evidencias de Monitoreo", url: linkEvidencias } : null,
+        asunto: informeData.asunto || `INFORME DE MONITOREO Y ACOMPAÑAMIENTO PEDAGÓGICO AL ${institucionTipo.toUpperCase()} "${institucionNombre.toUpperCase()}"`,
+        referencia: informeData.referencia || 'Plan de Trabajo AGEBATP 2026',
+        antecedentes: informeData.antecedentes || [],
+        parrafoAplicacion: `Que, dentro de las acciones de monitoreo y acompañamiento pedagógico, se aplicó la ficha de monitoreo a ${docentes.length} docente(s) de la institución educativa, conforme al siguiente detalle:`,
+        tablaInstituciones,
+        resultados: informeData.analisis || []
+      };
+
+      setExportProgress("Generando archivo PDF y descargando informe...");
+      generarInformePDF(payload, bannerDataURL, qrDataURL, chartImages.length > 0 ? chartImages : null);
+      showToast('Informe PDF descargado correctamente.');
+    } catch (err) {
+      showToast(`Error al exportar informe PDF: ${err.message}`, 'error');
+    } finally {
+      setExportProgress(null);
+    }
+  };
+
+  const handleExportOficioPDF = () => {
+    if (!oficioData) return;
+    try {
+      setExportProgress("Iniciando compilación de oficio de monitoreo...");
+      const payload = {
+        numero: informeNumero,
+        destinatario: { nombre: directorNombre, cargo: cargoDirector, institucion: `${institucionTipo} "${institucionNombre}"` },
+        remitente: { 
+          nombre: especialistaSeleccionado?.nombre || initialData?.especialistaNombre || 'ESPECIALISTA MONITOR', 
+          cargo: especialistaSeleccionado?.cargo || initialData?.especialistaCargo || 'Especialista de Educación Básica Alternativa' 
+        },
+        fecha: new Date().toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' }),
+        programa: programaFinal,
+        institucionNombre,
+        institucionTipo,
+        docentes,
+        cuerpo: oficioData.cuerpo || [],
+        asunto: oficioData.asunto || 'REMITIR ACCIONES DEL MONITOREO PEDAGÓGICO',
+        referencia: oficioData.referencia || 'Plan de Trabajo AGEBATP 2026'
+      };
+      setExportProgress("Generando archivo PDF y descargando oficio...");
+      generarOficioPDF(payload, bannerDataURL, qrDataURL);
       showToast('Oficio PDF descargado correctamente.');
     } catch (err) {
-      showToast(`Error al exportar PDF: ${err.message}`, 'error');
+      showToast(`Error al exportar oficio PDF: ${err.message}`, 'error');
+    } finally {
+      setExportProgress(null);
     }
+  };
+
+  const handleFinalizarMonitoreo = async () => {
+    await saveDraft('finalizado');
+    showToast('Monitoreo finalizado y guardado exitosamente.');
+    if (onSaved) onSaved();
+    onClose();
   };
 
   // Inline styles
@@ -344,16 +1303,16 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
   };
 
   const STEPS = [
-    { n: 1, label: 'Acta de Inicio' },
-    { n: 2, label: 'Sección de Clase' },
-    { n: 3, label: 'Ficha de Monitoreo (OCR IA)' },
+    { n: 1, label: 'Datos IE' },
+    { n: 2, label: 'Docentes Monitoreados' },
+    { n: 3, label: 'Acta Consolidada' },
     { n: 4, label: 'Informe + Oficio' },
   ];
 
   const canGoNext = () => {
-    if (step === 1) return especialistaSeleccionado && (programaFinal) && institucionNombre && directorNombre && fecha;
-    if (step === 2) return true;
-    if (step === 3) return fichaConfirmada;
+    if (step === 1) return especialistaSeleccionado && programaFinal && institucionNombre && directorNombre && fecha;
+    if (step === 2) return docentes.length > 0;
+    if (step === 3) return true;
     return false;
   };
 
@@ -364,11 +1323,11 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
         <div style={{ padding: "20px 28px", borderBottom: `1px solid ${C.g200}`, display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: C.white, zIndex: 10 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: "1.2rem", fontFamily: "'DM Serif Display',serif", color: C.navy1 }}>
-              Nuevo Informe — Monitoreo {tipoMonitoreo === 'director' ? 'Director' : 'Docente'}
+              Nuevo Monitoreo Consolidado por IE — {programaFinal || 'AGEBATP'}
             </h2>
             {saving && <span style={{ fontSize: 11, color: C.g400 }}>Guardando borrador...</span>}
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.g500, padding: 4 }}>✕</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.g500, padding: 4, display: 'flex', alignItems: 'center' }}><Icon name="x" size={20} /></button>
         </div>
 
         {/* Toast */}
@@ -383,9 +1342,9 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
           {STEPS.map((s, i) => (
             <div key={s.n} style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={S.stepIndicator(step === s.n, step > s.n)}>
-                {step > s.n ? '✓' : s.n}
+                {step > s.n ? <Icon name="check" size={14} color={C.white} /> : s.n}
               </div>
-              <span style={{ fontSize: 12, fontWeight: step === s.n ? 700 : 400, color: step === s.n ? C.navy1 : C.g500, fontFamily: "'DM Sans'", display: i < STEPS.length - 1 ? 'block' : 'block' }}>{s.label}</span>
+              <span style={{ fontSize: 12, fontWeight: step === s.n ? 700 : 400, color: step === s.n ? C.navy1 : C.g500, fontFamily: "'DM Sans'" }}>{s.label}</span>
               {i < STEPS.length - 1 && <div style={{ width: 30, height: 2, background: step > s.n ? C.green : C.g200, borderRadius: 2 }} />}
             </div>
           ))}
@@ -393,25 +1352,25 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
 
         {/* Content */}
         <div style={{ padding: "0 28px 28px" }}>
-          {/* ══ PASO 1: ACTA ══ */}
+          {/* ══ PASO 1: DATOS IE ══ */}
           {step === 1 && (
             <div>
-              <h3 style={{ fontSize: "1rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Serif Display',serif", marginBottom: 20 }}>Paso 1 — Acta de Inicio</h3>
+              <h3 style={{ fontSize: "1rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Serif Display',serif", marginBottom: 20 }}>Paso 1 — Datos de la Institución Educativa</h3>
               
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
                 <div style={{ gridColumn: "span 2" }}>
-                  <label style={S.label}>Especialista *</label>
+                  <label style={S.label}>Especialista pedagógico / monitor *</label>
                   <select value={especialistaId} onChange={e => { setEspecialistaId(e.target.value); setProgramaSeleccionado(''); }} style={S.input}>
                     <option value="">Seleccione especialista...</option>
                     {ESPECIALISTAS_MONITOREO.map(esp => (
-                      <option key={esp.id} value={esp.id}>{esp.nombre} — {esp.cargoCorto}</option>
+                      <option key={esp.id} value={esp.id}>{esp.nombre} — {esp.cargo.toUpperCase()}</option>
                     ))}
                   </select>
                 </div>
 
                 {especialistaSeleccionado?.puedeElegirPrograma && (
                   <div>
-                    <label style={S.label}>Programa *</label>
+                    <label style={S.label}>Programa / Modalidad *</label>
                     <select value={programaSeleccionado} onChange={e => setProgramaSeleccionado(e.target.value)} style={S.input}>
                       <option value="">Seleccione...</option>
                       <option value="EBA">EBA (CEBA)</option>
@@ -422,15 +1381,83 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
 
                 {programaFinal && (
                   <div>
-                    <label style={S.label}>Tipo Institución</label>
+                    <label style={S.label}>Tipo de Institución</label>
                     <input value={institucionTipo} disabled style={{ ...S.input, background: C.g100, color: C.g500 }} />
                   </div>
                 )}
 
-                <div style={{ gridColumn: "span 2" }}>
+                <div style={{ gridColumn: "span 2", position: "relative" }}>
                   <label style={S.label}>Nombre de la Institución ({institucionTipo || 'CEBA/CETPRO'}) *</label>
-                  <input value={institucionNombre} onChange={e => setInstitucionNombre(e.target.value)} placeholder={`Ej: ${institucionTipo || 'CEBA'} "República de Panamá"`} style={S.input} />
+                  <input 
+                    value={institucionNombre} 
+                    onChange={e => { 
+                      setInstitucionNombre(e.target.value); 
+                      setShowSuggestions(true); 
+                    }} 
+                    onFocus={() => setShowSuggestions(true)}
+                    placeholder={`Ej: ${institucionTipo || 'CEBA'} "República de Panamá"`} 
+                    style={S.input} 
+                  />
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div 
+                      ref={suggestionsRef}
+                      style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        zIndex: 1000,
+                        maxHeight: 180,
+                        overflowY: "auto",
+                        background: C.white,
+                        border: `1px solid ${C.g200}`,
+                        boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)",
+                        borderRadius: 4,
+                        marginTop: 2
+                      }}
+                    >
+                      {suggestions.map((item) => (
+                        <div 
+                          key={item.id} 
+                          onClick={() => handleSelectInstitution(item)}
+                          style={{ 
+                            padding: "8px 12px", 
+                            cursor: "pointer", 
+                            fontSize: 12.5, 
+                            borderBottom: `1px solid ${C.g100}`,
+                            background: C.white,
+                            color: C.navy1,
+                            textAlign: "left"
+                          }}
+                          onMouseEnter={e => e.target.style.background = C.g50}
+                          onMouseLeave={e => e.target.style.background = C.white}
+                        >
+                          <strong>{item.nombre}</strong> {item.distrito ? `— ${item.distrito}` : ''}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
+                {programaFinal === 'ETP' && (
+                  <div>
+                    <label style={S.label}>Código Modular *</label>
+                    <input value={codigoModular} onChange={e => setCodigoModular(e.target.value)} placeholder="Código Modular CETPRO" style={S.input} />
+                  </div>
+                )}
+
+                {programaFinal === 'EBA' && (
+                  <>
+                    <div>
+                      <label style={S.label}>Código Modular Inicial-Intermedio *</label>
+                      <input value={codigoModularInicialIntermedio} onChange={e => setCodigoModularInicialIntermedio(e.target.value)} placeholder="Código Modular Inicial-Intermedio" style={S.input} />
+                    </div>
+                    <div>
+                      <label style={S.label}>Código Modular Avanzado *</label>
+                      <input value={codigoModularAvanzado} onChange={e => setCodigoModularAvanzado(e.target.value)} placeholder="Código Modular Avanzado" style={S.input} />
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <label style={S.label}>Nombre del Director/Coordinador *</label>
@@ -445,16 +1472,16 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
                 </div>
 
                 <div>
-                  <label style={S.label}>Fecha *</label>
+                  <label style={S.label}>Fecha del Monitoreo *</label>
                   <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={S.input} />
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                   <div>
-                    <label style={S.label}>Hora Inicio</label>
+                    <label style={S.label}>Hora de Inicio</label>
                     <input type="time" value={horaInicio} onChange={e => setHoraInicio(e.target.value)} style={S.input} />
                   </div>
                   <div>
-                    <label style={S.label}>Hora Fin</label>
+                    <label style={S.label}>Hora de Fin</label>
                     <input type="time" value={horaFin} onChange={e => setHoraFin(e.target.value)} style={S.input} />
                   </div>
                   <div>
@@ -463,375 +1490,500 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
                   </div>
                 </div>
               </div>
-
-              <div style={{ marginBottom: 20 }}>
-                <label style={S.label}>Observaciones</label>
-                <input value={observaciones} onChange={e => setObservaciones(e.target.value)} placeholder="Ej: No se pudo dar inicio al monitoreo por..." style={S.input} />
-              </div>
-
-              <div>
-                <label style={S.label}>Texto del Acta (Editable)</label>
-                <textarea value={actaTexto} onChange={e => setActaTexto(e.target.value)} style={S.textarea} />
-              </div>
             </div>
           )}
 
-          {/* ══ PASO 2: SECCIÓN DE CLASE ══ */}
+          {/* ══ PASO 2: DOCENTES MONITOREADOS ══ */}
           {step === 2 && (
             <div>
-              <h3 style={{ fontSize: "1rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Serif Display',serif", marginBottom: 20 }}>
-                Paso 2 — Sección de Clase del {tipoMonitoreo === 'director' ? 'Director' : 'Docente'}
-              </h3>
-
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "12px 16px", borderRadius: 8, background: seccionNoDisponible ? C.amberBg : C.g50, border: `1px solid ${seccionNoDisponible ? C.amberBorder : C.g200}`, transition: "all 0.15s" }}>
-                  <input type="checkbox" checked={seccionNoDisponible} onChange={e => { setSeccionNoDisponible(e.target.checked); if (e.target.checked) setSeccionFile(null); }} />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: seccionNoDisponible ? C.amber : C.navy1 }}>
-                    El {tipoMonitoreo === 'director' ? 'director' : 'docente'} no cuenta con sección de clase
-                  </span>
-                </label>
-              </div>
-
-              {!seccionNoDisponible && (
-                <div style={{ border: `2px dashed ${C.g300}`, borderRadius: 10, padding: "40px 20px", textAlign: "center", background: C.g50, cursor: "pointer" }}
-                  onClick={() => document.getElementById('seccion-file-input')?.click()}>
-                  <Icon name="upload" size={32} color={C.g400} />
-                  <p style={{ color: C.g500, fontSize: "0.85rem", margin: "12px 0 4px" }}>
-                    {seccionFile ? `✓ ${seccionFile.name}` : "Subir archivo de sección de clase (PDF/imagen)"}
-                  </p>
-                  <input id="seccion-file-input" type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }}
-                    onChange={e => { if (e.target.files[0]) setSeccionFile(e.target.files[0]); }} />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ══ PASO 3: FICHA OCR ══ */}
-          {step === 3 && (
-            <div>
               <h3 style={{ fontSize: "1rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Serif Display',serif", marginBottom: 8 }}>
-                Paso 3 — Ficha de Monitoreo (Extracción por IA)
+                Paso 2 — Personal Docente Monitoreado
               </h3>
-              <p style={{ color: C.g500, fontSize: "0.82rem", marginBottom: 20 }}>Suba la ficha escaneada (PDF/imagen). La IA extraerá los datos automáticamente. Revise y corrija antes de confirmar.</p>
+              <p style={{ color: C.g500, fontSize: "0.82rem", marginBottom: 20 }}>
+                Agregue los docentes que han sido acompañados en esta visita de monitoreo a la IE. Complete su ficha digital u OCR y sus firmas táctiles correspondientes.
+              </p>
 
-              <div style={{ border: `2px dashed ${ocrLoading ? C.navy5 : C.g300}`, borderRadius: 10, padding: "30px 20px", textAlign: "center", background: ocrLoading ? `${C.navy5}08` : C.g50, cursor: ocrLoading ? "wait" : "pointer", marginBottom: 20 }}
-                onClick={() => !ocrLoading && document.getElementById('ficha-file-input')?.click()}>
-                <Icon name="upload" size={28} color={ocrLoading ? C.navy5 : C.g400} />
-                <p style={{ color: C.g500, fontSize: "0.85rem", margin: "10px 0 0" }}>
-                  {ocrLoading ? "Procesando OCR por IA... Esto puede tardar unos segundos" : fichaFile ? `✓ ${fichaFile.name} — Clic para reemplazar` : "Subir ficha escaneada (PDF/imagen)"}
-                </p>
-                <input id="ficha-file-input" type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }}
-                  onChange={e => { if (e.target.files[0]) handleFichaUpload(e.target.files[0]); }} />
-              </div>
-
-              {/* OCR Result Preview - Editable */}
-              {ocrResult && (
-                <div style={{ ...S.card, marginBottom: 20 }}>
-                  <h4 style={{ fontSize: 14, fontWeight: 700, color: C.navy3, marginBottom: 16 }}>Datos Extraídos — Revise y Corrija</h4>
-                  
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-                    <div>
-                      <label style={S.label}>Docente/Director</label>
-                      <input value={ocrResult.docenteNombre || ''} onChange={e => setOcrResult(prev => ({ ...prev, docenteNombre: e.target.value }))} style={S.input} />
-                    </div>
-                    <div>
-                      <label style={S.label}>DNI</label>
-                      <input value={ocrResult.docenteDni || ''} onChange={e => setOcrResult(prev => ({ ...prev, docenteDni: e.target.value }))} style={S.input} />
-                    </div>
-                    <div>
-                      <label style={S.label}>Institución</label>
-                      <input value={ocrResult.institucionNombre || ''} onChange={e => setOcrResult(prev => ({ ...prev, institucionNombre: e.target.value }))} style={S.input} />
-                    </div>
-                    <div>
-                      <label style={S.label}>Código Modular</label>
-                      <input value={ocrResult.institucionCodigo || ''} onChange={e => setOcrResult(prev => ({ ...prev, institucionCodigo: e.target.value }))} style={S.input} />
-                    </div>
-                    <div>
-                      <label style={S.label}>Monitor</label>
-                      <input value={ocrResult.monitorNombre || ''} onChange={e => setOcrResult(prev => ({ ...prev, monitorNombre: e.target.value }))} style={S.input} />
-                    </div>
-                    <div>
-                      <label style={S.label}>Fecha Ejecución</label>
-                      <input value={ocrResult.fechaEjecucionISO || ocrResult.fechaEjecucion || ''} onChange={e => setOcrResult(prev => ({ ...prev, fechaEjecucionISO: e.target.value, fechaEjecucion: e.target.value }))} style={S.input} />
-                    </div>
-                  </div>
-
-                  {/* Desempeño Rúbricas */}
-                  <h4 style={{ fontSize: 13, fontWeight: 700, color: C.navy3, marginBottom: 8 }}>Criterios de Desempeño (Nivel 1-4)</h4>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
-                    {[
-                      { key: 'involucraEstudiantes', label: '2.1 Involucra Estudiantes' },
-                      { key: 'promueveRazonamiento', label: '2.2 Promueve Razonamiento' },
-                      { key: 'evaluaProgreso', label: '2.3 Evalúa Progreso' },
-                      { key: 'ambienteRespeto', label: '2.4 Ambiente de Respeto' },
-                      { key: 'regulaComportamiento', label: '2.5 Regula Comportamiento' },
-                    ].map(({ key, label }) => (
-                      <div key={key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 11, color: C.g600, flex: 1 }}>{label}</span>
-                        <select
-                          value={ocrResult.desempeno?.[key]?.nivel || ''}
-                          onChange={e => {
-                            const val = e.target.value ? parseInt(e.target.value) : null;
-                            setOcrResult(prev => ({
-                              ...prev,
-                              desempeno: { ...prev.desempeno, [key]: { ...prev.desempeno?.[key], nivel: val, raw: val ? `Nivel ${val}` : '' } }
-                            }));
-                          }}
-                          style={{ ...S.input, width: 80, textAlign: "center" }}
-                        >
-                          <option value="">—</option>
-                          <option value="1">I</option>
-                          <option value="2">II</option>
-                          <option value="3">III</option>
-                          <option value="4">IV</option>
-                        </select>
+              {docentes.length === 0 ? (
+                <div style={{ padding: 40, border: `2px dashed ${C.g200}`, borderRadius: 10, textAlign: 'center', background: C.g50 }}>
+                  <Icon name="folder" size={40} color={C.g300} style={{ margin: '0 auto 12px' }} />
+                  <p style={{ fontSize: 13, color: C.g500, margin: '0 0 16px' }}>Aún no se han registrado docentes para esta visita.</p>
+                  <button type="button" onClick={handleAddDocenteOpen} style={S.btn(C.navy4, C.white, C.navy5)}>
+                    + Agregar Docente Monitoreado
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginBottom: 20 }}>
+                    {docentes.map((doc, idx) => (
+                      <div key={doc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: C.g50, border: `1px solid ${C.g200}`, borderRadius: 8, padding: '12px 18px' }}>
+                        <div>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.navy1 }}>{doc.nombre || 'Docente sin nombre'}</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 11, color: C.g500 }}>
+                            DNI: {doc.dni || '—'} | Área: {doc.datosSesion?.moduloFormativo || doc.datosSesion?.areaCurricular || '—'}
+                          </p>
+                          <p style={{ margin: '2px 0 0', fontSize: 11, fontWeight: 700, color: C.navy3 }}>
+                            Rúbricas: {getNivelesIndividualesText(doc, programaFinal)}
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button type="button" onClick={() => handleExportFichaPDF(doc)} style={S.btn(C.white, C.navy3, C.g200)} title="Descargar Ficha individual del docente en PDF">
+                            <Icon name="download" size={12} /> PDF
+                          </button>
+                          <button type="button" onClick={() => handleEditDocenteOpen(idx)} style={S.btn(C.white, C.navy3, C.g200)}>
+                            Editar
+                          </button>
+                          <button type="button" onClick={() => handleRemoveDocente(idx)} style={S.btn(C.redBg, C.red, C.redBorder)}>
+                            Eliminar
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
+                  <button type="button" onClick={handleAddDocenteOpen} style={S.btn(C.navy4, C.white, C.navy5)}>
+                    + Agregar Otro Docente
+                  </button>
+                </div>
+              )}
 
-                  <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-                    <div>
-                      <label style={S.label}>Compromisos</label>
-                      <input value={ocrResult.compromisos || ''} onChange={e => setOcrResult(prev => ({ ...prev, compromisos: e.target.value }))} style={{ ...S.input, width: 400 }} />
+              {/* Editing Docente Modal / Slideover */}
+              {editingDocente && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 500, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                  <div style={{ background: C.white, borderRadius: 12, width: '100%', maxWidth: 750, maxHeight: '90vh', overflow: 'auto', padding: 24, boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.g200}`, paddingBottom: 12, marginBottom: 16 }}>
+                      <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.navy3 }}>
+                        {currentDocenteIdx !== null ? 'Editar Ficha y Datos del Docente' : 'Registrar Nuevo Docente'}
+                      </h4>
+                      <button type="button" onClick={() => setEditingDocente(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.g500 }}><Icon name="x" size={18} /></button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 16, borderBottom: `1px solid ${C.g200}`, paddingBottom: 8 }}>
+                      {['datos', 'ocr'].map(tab => (
+                        <button
+                          key={tab}
+                          type="button"
+                          onClick={() => setDocenteModalTab(tab)}
+                          style={{
+                            padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600, border: 'none',
+                            background: docenteModalTab === tab ? C.navy3 : 'transparent',
+                            color: docenteModalTab === tab ? C.white : C.g500,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {tab === 'datos' ? '1. Datos & Ficha Digital' : '2. Cargar Ficha PDF (OCR)'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {docenteModalTab === 'datos' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                          <div>
+                            <label style={S.label}>Apellidos y Nombres del Docente *</label>
+                            <input value={editingDocente.nombre || ''} onChange={e => handleDocenteFieldChange('nombre', e.target.value)} style={S.input} placeholder="Nombres del docente..." />
+                          </div>
+                          <div>
+                            <label style={S.label}>DNI *</label>
+                            <input value={editingDocente.dni || ''} onChange={e => handleDocenteFieldChange('dni', e.target.value)} style={S.input} maxLength={8} placeholder="8 dígitos..." />
+                          </div>
+                          <div>
+                            <label style={S.label}>Teléfono</label>
+                            <input value={editingDocente.telefono || ''} onChange={e => handleDocenteFieldChange('telefono', e.target.value)} style={S.input} />
+                          </div>
+                          <div>
+                            <label style={S.label}>Correo Electrónico</label>
+                            <input value={editingDocente.correo || ''} onChange={e => handleDocenteFieldChange('correo', e.target.value)} style={S.input} type="email" />
+                          </div>
+                        </div>
+                        
+                        {programaFinal === 'ETP' ? (
+                          <FichaDigitalFormETP data={editingDocente.ficha} onChange={handleEditingDocenteFichaChange} />
+                        ) : (
+                          <FichaDigitalForm data={editingDocente.ficha} onChange={handleEditingDocenteFichaChange} programa={programaFinal} />
+                        )}
+                      </div>
+                    )}
+
+                    {docenteModalTab === 'ocr' && (
+                      <div>
+                        <div style={{ border: `2px dashed ${ocrLoading ? C.navy5 : C.g300}`, borderRadius: 10, padding: "30px 20px", textAlign: "center", background: ocrLoading ? `${C.navy5}08` : C.g50, cursor: ocrLoading ? "wait" : "pointer", marginBottom: 16 }}
+                          onClick={() => !ocrLoading && document.getElementById('docente-file-input')?.click()}>
+                          <Icon name="upload" size={28} color={ocrLoading ? C.navy5 : C.g400} />
+                          <p style={{ color: C.g500, fontSize: "0.85rem", margin: "10px 0 0" }}>
+                            {ocrLoading ? "Procesando OCR por IA..." : docenteFile ? <><Icon name="check" size={12} color={C.green} /> {docenteFile.name}</> : "Subir ficha escaneada (PDF/imagen) para este docente"}
+                          </p>
+                          <input id="docente-file-input" type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }}
+                            onChange={e => { if (e.target.files[0]) handleDocenteFichaUpload(e.target.files[0]); }} />
+                        </div>
+                        {ocrLoading && (
+                          <ProgresoIA porcentaje={ocrProgress.percent} estado={ocrProgress.status} detail={ocrProgress.detail} />
+                        )}
+                      </div>
+                    )}
+
+                    <div style={{ borderTop: `1px solid ${C.g200}`, paddingTop: 16, marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                      <button type="button" onClick={() => setEditingDocente(null)} style={S.btn(C.white, C.g500, C.g300)}>
+                        Cancelar
+                      </button>
+                      <button type="button" onClick={handleSaveDocenteInList} style={S.btn(C.navy4, C.white, C.navy5)}>
+                        Guardar Docente
+                      </button>
                     </div>
                   </div>
-
-                  {ocrResult.advertencias?.length > 0 && (
-                    <div style={{ padding: "8px 12px", borderRadius: 6, background: C.amberBg, border: `1px solid ${C.amberBorder}`, marginBottom: 12 }}>
-                      <p style={{ margin: 0, fontSize: 11, color: C.amber, fontWeight: 600 }}>Advertencias de la IA:</p>
-                      {ocrResult.advertencias.map((w, i) => <p key={i} style={{ margin: "2px 0 0", fontSize: 11, color: C.amber }}>{w}</p>)}
-                    </div>
-                  )}
-
-                  <button onClick={handleConfirmarFicha} disabled={fichaConfirmada} style={{ ...S.btn(fichaConfirmada ? C.green : C.navy4, C.white, fichaConfirmada ? C.green : C.navy5), opacity: fichaConfirmada ? 0.8 : 1 }}>
-                    {fichaConfirmada ? '✓ Ficha Confirmada' : 'Confirmar Datos de la Ficha'}
-                  </button>
                 </div>
               )}
             </div>
           )}
 
-          {/* ══ PASO 4: INFORME + OFICIO ══ */}
+          {/* ══ PASO 3: ACTA CONSOLIDADA ══ */}
+          {step === 3 && (
+            <div>
+              <h3 style={{ fontSize: "1rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Serif Display',serif", marginBottom: 20 }}>
+                Paso 3 — Acta Consolidada de Monitoreo y Acompañamiento
+              </h3>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+                <div>
+                  <label style={S.label}>Hora de Cierre del Acta *</label>
+                  <input type="time" value={actaHoraCierre} onChange={e => setActaHoraCierre(e.target.value)} style={S.input} />
+                </div>
+                <div>
+                  <label style={S.label}>Especialista DNI *</label>
+                  <input value={especialistaDNI} onChange={e => setEspecialistaDNI(e.target.value)} style={S.input} maxLength={8} placeholder="8 dígitos..." />
+                </div>
+                <div>
+                  <label style={S.label}>Director DNI *</label>
+                  <input value={directorDNI} onChange={e => setDirectorDNI(e.target.value)} style={S.input} maxLength={8} placeholder="8 dígitos..." />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={S.label}>Observaciones del Acta</label>
+                <textarea value={actaObservaciones} onChange={e => setActaObservaciones(e.target.value)} style={S.textarea} placeholder="Escriba aquí observaciones del acta..." />
+              </div>
+
+              {/* v30: IV. COMPROMISOS Y ACUERDOS DE MEJORA CONTINUA (Generales y Editables) */}
+              <div style={{ ...S.card, marginBottom: 20, padding: 16 }}>
+                <label style={{ ...S.label, fontWeight: 700, marginBottom: 10, display: 'block' }}>
+                  IV. COMPROMISOS Y ACUERDOS DE MEJORA CONTINUA (Generales de la Visita)
+                </label>
+                <p style={{ fontSize: 12, color: C.g500, margin: '0 0 12px 0' }}>
+                  Defina los acuerdos generales de esta visita de monitoreo. Se incluirán de forma numerada en el Acta de Monitoreo.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                  {actaCompromisosGenerales.map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 'bold', color: C.navy3, width: 20 }}>{idx + 1}.</span>
+                      <input
+                        value={item}
+                        onChange={e => {
+                          const newComps = [...actaCompromisosGenerales];
+                          newComps[idx] = e.target.value;
+                          setActaCompromisosGenerales(newComps);
+                        }}
+                        style={{ ...S.input, flex: 1 }}
+                        placeholder={`Compromiso general ${idx + 1}...`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newComps = actaCompromisosGenerales.filter((_, i) => i !== idx);
+                          setActaCompromisosGenerales(newComps);
+                        }}
+                        style={{
+                          background: C.white,
+                          border: `1px solid ${C.red}`,
+                          color: C.red,
+                          borderRadius: 6,
+                          width: 36,
+                          height: 36,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        title="Eliminar compromiso"
+                      >
+                        <Icon name="trash" size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActaCompromisosGenerales([...actaCompromisosGenerales, ''])}
+                  style={{
+                    background: C.white,
+                    border: `1px solid ${C.navy5}`,
+                    color: C.navy5,
+                    borderRadius: 6,
+                    padding: '8px 12px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Icon name="plus" size={12} /> Agregar Compromiso General
+                </button>
+              </div>
+
+              {/* Digital tactile signature pads for monitor and director */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                <FirmaDigital
+                  value={firmaMonitorDataUrl}
+                  onChange={setFirmaMonitorDataUrl}
+                  label="Firma Táctil del Especialista Monitor"
+                />
+                <FirmaDigital
+                  value={firmaDirectorDataUrl}
+                  onChange={setFirmaDirectorDataUrl}
+                  label="Firma Táctil del Director / Coordinador"
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+                <button type="button" onClick={handleExportActaPDF} style={S.btn(C.navy4, C.white, C.navy5)}>
+                  <Icon name="download" size={14} /> Descargar Acta Consolidada (PDF)
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ══ PASO 4: INFORME + OFICIO (WORD) ══ */}
           {step === 4 && (
             <div>
               <h3 style={{ fontSize: "1rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Serif Display',serif", marginBottom: 20 }}>
-                Paso 4 — Generar Informe y Oficio
+                Paso 4 — Generación de Informe y Oficio Consolidado (PDF)
               </h3>
 
-              {/* Generate buttons */}
-              <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
-                <button onClick={handleGenerarInforme} disabled={informeLoading} style={{ ...S.btn(C.navy4, C.white, C.navy5), opacity: informeLoading ? 0.6 : 1 }}>
-                  {informeLoading ? 'Generando...' : informeData ? '↻ Regenerar Informe' : '🤖 Generar Informe con IA'}
-                </button>
-                {informeData && (
-                  <button onClick={handleGenerarOficio} disabled={oficioLoading} style={{ ...S.btn(C.gold2, C.white, C.gold1), opacity: oficioLoading ? 0.6 : 1 }}>
-                    {oficioLoading ? 'Generando...' : oficioData ? '↻ Regenerar Oficio' : '📄 Generar Oficio'}
-                  </button>
-                )}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+                <div>
+                  <label style={S.label}>Número de Documento (Correlativo)</label>
+                  <input value={informeNumero} onChange={e => setInformeNumero(e.target.value)} style={S.input} placeholder="Ej: 0027" />
+                </div>
+                <div>
+                  <label style={S.label}>Enlace OneDrive de Evidencias</label>
+                  <input value={linkEvidencias} onChange={e => setLinkEvidencias(e.target.value)} style={S.input} placeholder="https://onedrive.live.com/..." />
+                </div>
               </div>
 
-              {/* Charts from ficha */}
-              {ocrResult && (
-                <div style={{ ...S.card, marginBottom: 20 }}>
-                  <h4 style={{ fontSize: 13, fontWeight: 700, color: C.navy3, marginBottom: 12 }}>Gráficos del Monitoreo</h4>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                    <div style={{ height: 200 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={Object.entries(ocrResult.desempeno || {}).map(([k, v]) => ({
-                          name: k.replace(/([A-Z])/g, ' $1').substring(0, 12),
-                          nivel: v?.nivel || 0
-                        }))}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="name" tick={{ fontSize: 8 }} />
-                          <YAxis domain={[0, 4]} />
-                          <Tooltip />
-                          <Bar dataKey="nivel" fill={C.navy4} radius={[4, 4, 0, 0]}>
-                            {Object.values(ocrResult.desempeno || {}).map((v, i) => (
-                              <Cell key={i} fill={LEVEL_COLORS[v?.nivel] || C.g300} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
-                      <div style={{ fontSize: 36, fontWeight: 700, color: LEVEL_COLORS[Math.round(ocrResult.promedioGeneral)] || C.navy1, fontFamily: "'JetBrains Mono'" }}>
-                        {ocrResult.promedioGeneral?.toFixed(2) || '0.00'}
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.navy3 }}>{ocrResult.nivelGeneralLabel || 'Nivel I'}</div>
-                      <div style={{ fontSize: 11, color: C.g500, marginTop: 4 }}>Promedio General</div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* Gen buttons */}
+              <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+                <button onClick={handleGenerarInforme} disabled={informeLoading} style={S.btn(C.navy4, C.white, C.navy5)}>
+                  {informeLoading ? 'Generando Informe...' : 'Generar Informe con IA'}
+                </button>
+                <button onClick={handleGenerarOficio} disabled={oficioLoading} style={S.btn(C.gold2, C.white, C.gold1)}>
+                  {oficioLoading ? 'Generando Oficio...' : 'Generar Oficio con IA'}
+                </button>
+              </div>
 
-              {/* Editable Informe */}
+              {/* Progress visualizers */}
+              {informeLoading && <ProgresoIA porcentaje={informeProgress.percent} estado={informeProgress.status} />}
+              {oficioLoading && <ProgresoIA porcentaje={oficioProgress.percent} estado={oficioProgress.status} />}
+
+              {/* Editor visual block */}
               {informeData && (
-                <div ref={informeRef} style={{ ...S.card, marginBottom: 20, background: C.white }}>
-                  <div style={{ textAlign: "center", marginBottom: 16, fontSize: 9, color: C.g500, fontStyle: "italic", lineHeight: 1.5 }}>
-                    Documento electrónico firmado digitalmente en el marco de la Ley N° 27269...<br/>
-                    Decenio de la Igualdad de oportunidades para mujeres y hombres<br/>
-                    Año de la Esperanza y el Fortalecimiento de la Democracia
-                  </div>
-
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={S.label}>Número de Informe</label>
-                    <input value={informeNumero} onChange={e => setInformeNumero(e.target.value)} placeholder="Ej: 001" style={{ ...S.input, maxWidth: 200 }} />
-                    <p style={{ fontSize: 12, fontWeight: 700, color: C.navy1, marginTop: 4 }}>
-                      INFORME N.° {informeNumero || '____'}-2026-MINEDU/VMGI-DRELM-UGEL03/DIR-AGEBATP
-                    </p>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "60px 1fr", gap: "4px 12px", marginBottom: 16, fontSize: 12 }}>
-                    <strong>A:</strong><span>{JEFATURA_AGEBATP.nombre}, {JEFATURA_AGEBATP.cargo}</span>
-                    <strong>De:</strong><span>{especialistaSeleccionado?.nombre}, {especialistaSeleccionado?.cargo}</span>
-                    <strong>Asunto:</strong>
-                    <input value={informeData.asunto || ''} onChange={e => setInformeData(prev => ({ ...prev, asunto: e.target.value }))} style={{ ...S.input, fontSize: 12 }} />
-                    <strong>Ref.:</strong><span>{informeData.referencia || 'Plan de Trabajo AGEBATP 2026'}</span>
-                    <strong>Fecha:</strong><span>Lima, {new Date().toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                  </div>
-
-                  {/* Antecedentes */}
-                  <div style={{ marginBottom: 16 }}>
-                    <h4 style={{ fontSize: 13, fontWeight: 700, color: C.navy1, margin: "0 0 8px" }}>I. ANTECEDENTES</h4>
-                    <textarea value={(informeData.antecedentes || []).join('\n')} onChange={e => setInformeData(prev => ({ ...prev, antecedentes: e.target.value.split('\n') }))} style={{ ...S.textarea, minHeight: 80 }} />
-                  </div>
-
-                  {/* Análisis */}
-                  <div style={{ marginBottom: 16 }}>
-                    <h4 style={{ fontSize: 13, fontWeight: 700, color: C.navy1, margin: "0 0 8px" }}>II. ANÁLISIS</h4>
-                    <textarea value={(informeData.analisis || []).join('\n')} onChange={e => setInformeData(prev => ({ ...prev, analisis: e.target.value.split('\n') }))} style={{ ...S.textarea, minHeight: 80 }} />
-                  </div>
-
-                  {/* Resultados */}
-                  <div style={{ marginBottom: 16 }}>
-                    <h4 style={{ fontSize: 13, fontWeight: 700, color: C.navy1, margin: "0 0 8px" }}>Resultados</h4>
-                    <textarea value={(informeData.resultados || []).join('\n')} onChange={e => setInformeData(prev => ({ ...prev, resultados: e.target.value.split('\n') }))} style={{ ...S.textarea, minHeight: 60 }} />
-                  </div>
-
-                  {/* Conclusiones */}
-                  <div style={{ marginBottom: 16 }}>
-                    <h4 style={{ fontSize: 13, fontWeight: 700, color: C.navy1, margin: "0 0 8px" }}>III. CONCLUSIONES</h4>
-                    <div style={{ overflowX: "auto" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                        <thead>
-                          <tr><th style={{ border: `1px solid ${C.g200}`, padding: 8, background: C.g50 }}>Nudo Crítico</th><th style={{ border: `1px solid ${C.g200}`, padding: 8, background: C.g50 }}>Alternativa de Solución</th></tr>
-                        </thead>
-                        <tbody>
-                          {(informeData.conclusionesTabla || []).map((row, i) => (
-                            <tr key={i}>
-                              <td style={{ border: `1px solid ${C.g200}`, padding: 6 }}>
-                                <input value={row.nudoCritico || ''} onChange={e => {
-                                  const updated = [...(informeData.conclusionesTabla || [])];
-                                  updated[i] = { ...updated[i], nudoCritico: e.target.value };
-                                  setInformeData(prev => ({ ...prev, conclusionesTabla: updated }));
-                                }} style={{ ...S.input, border: "none", padding: 4 }} />
-                              </td>
-                              <td style={{ border: `1px solid ${C.g200}`, padding: 6 }}>
-                                <input value={row.alternativa || ''} onChange={e => {
-                                  const updated = [...(informeData.conclusionesTabla || [])];
-                                  updated[i] = { ...updated[i], alternativa: e.target.value };
-                                  setInformeData(prev => ({ ...prev, conclusionesTabla: updated }));
-                                }} style={{ ...S.input, border: "none", padding: 4 }} />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                <div style={{ ...S.card, marginBottom: 20 }}>
+                  <h4 style={{ fontSize: 13, fontWeight: 700, color: C.navy3, marginBottom: 12 }}>Previsualización del Informe</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div>
+                      <label style={S.label}>Asunto</label>
+                      <input value={informeData.asunto || ''} onChange={e => setInformeData({ ...informeData, asunto: e.target.value })} style={S.input} />
                     </div>
-                    <button onClick={() => setInformeData(prev => ({ ...prev, conclusionesTabla: [...(prev.conclusionesTabla || []), { nudoCritico: '', alternativa: '' }] }))} style={{ ...S.btn(C.g50, C.navy3, C.g200), marginTop: 8, fontSize: 11 }}>+ Agregar fila</button>
-                  </div>
-
-                  {/* Recomendaciones */}
-                  <div style={{ marginBottom: 16 }}>
-                    <h4 style={{ fontSize: 13, fontWeight: 700, color: C.navy1, margin: "0 0 8px" }}>IV. RECOMENDACIONES</h4>
-                    <textarea value={(informeData.recomendaciones || []).join('\n')} onChange={e => setInformeData(prev => ({ ...prev, recomendaciones: e.target.value.split('\n') }))} style={{ ...S.textarea, minHeight: 60 }} />
-                  </div>
-
-                  {/* Link evidencias */}
-                  {linkEvidencias && (
-                    <div style={{ padding: "8px 12px", borderRadius: 6, background: C.greenBg, border: `1px solid ${C.greenBorder}`, marginBottom: 12, fontSize: 12 }}>
-                      <strong>Link de evidencias OneDrive:</strong> <a href={linkEvidencias} target="_blank" rel="noopener noreferrer" style={{ color: C.blue }}>{linkEvidencias}</a>
+                    <div>
+                      <label style={S.label}>Antecedentes (párrafo consolidado)</label>
+                      <textarea value={informeData.antecedentes?.join('\n') || ''} onChange={e => setInformeData({ ...informeData, antecedentes: e.target.value.split('\n') })} style={{ ...S.textarea, minHeight: 120 }} />
                     </div>
-                  )}
-                  {!linkEvidencias && (
-                    <div style={{ padding: "8px 12px", borderRadius: 6, background: C.amberBg, border: `1px solid ${C.amberBorder}`, marginBottom: 12, fontSize: 11, color: C.amber }}>
-                      ⚠ Link de evidencias OneDrive se generará al exportar el PDF (requiere backend configurado con STORAGE_PROVIDERS=onedrive).
+                    <div>
+                      <label style={S.label}>Análisis (párrafo consolidado)</label>
+                      <textarea value={informeData.analisis?.join('\n') || ''} onChange={e => setInformeData({ ...informeData, analisis: e.target.value.split('\n') })} style={{ ...S.textarea, minHeight: 180 }} />
                     </div>
-                  )}
-
-                  {/* Firma */}
-                  <div style={{ marginTop: 24, textAlign: "center", fontSize: 12 }}>
-                    <p style={{ marginBottom: 4 }}>Atentamente,</p>
-                    <p style={{ fontStyle: "italic", color: C.g500, fontSize: 10, marginBottom: 12 }}>Documento firmado digitalmente</p>
-                    <p style={{ fontWeight: 700 }}>{especialistaSeleccionado?.nombre}</p>
-                    <p style={{ color: C.g600 }}>{especialistaSeleccionado?.cargo}</p>
+                    <button type="button" onClick={handleExportInformePDF} style={S.btn(C.green, C.white, C.green)}>
+                      <Icon name="download" size={14} /> Descargar Informe (PDF)
+                    </button>
                   </div>
                 </div>
               )}
 
-              {/* Editable Oficio */}
               {oficioData && (
-                <div ref={oficioRef} style={{ ...S.card, marginBottom: 20, background: C.white }}>
-                  <h4 style={{ fontSize: 14, fontWeight: 700, color: C.navy1, marginBottom: 12 }}>
-                    OFICIO N.° {informeNumero || '____'}-2026-MINEDU/VMGI-DRELM-UGEL03/DIR-AGEBATP
-                  </h4>
-                  <div style={{ fontSize: 12, marginBottom: 12 }}>
-                    <p style={{ margin: "2px 0" }}>Señor(a):</p>
-                    <p style={{ margin: "2px 0", fontWeight: 600 }}>{directorNombre}</p>
-                    <p style={{ margin: "2px 0" }}>{cargoDirector} del {institucionTipo} "{institucionNombre}"</p>
-                    <p style={{ margin: "2px 0" }}>Presente.-</p>
-                  </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={S.label}>Asunto</label>
-                    <input value={oficioData.asunto || ''} onChange={e => setOficioData(prev => ({ ...prev, asunto: e.target.value }))} style={S.input} />
-                  </div>
-                  <div>
-                    <label style={S.label}>Cuerpo del Oficio</label>
-                    <textarea value={(oficioData.cuerpo || []).join('\n\n')} onChange={e => setOficioData(prev => ({ ...prev, cuerpo: e.target.value.split('\n\n') }))} style={{ ...S.textarea, minHeight: 160 }} />
-                  </div>
-                  {linkEvidencias && (
-                    <p style={{ fontSize: 12, margin: "12px 0" }}>Las evidencias se encuentran disponibles en: <a href={linkEvidencias} target="_blank" rel="noopener noreferrer" style={{ color: C.blue }}>{linkEvidencias}</a></p>
-                  )}
-                  <div style={{ marginTop: 16, fontSize: 12 }}>
-                    <p>{oficioData.despedida || 'Hago propicia la ocasión para expresarle los sentimientos de mi especial consideración.'}</p>
-                    <p style={{ fontWeight: 700, marginTop: 16 }}>{especialistaSeleccionado?.nombre}</p>
-                    <p style={{ color: C.g600 }}>{especialistaSeleccionado?.cargo}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Export buttons */}
-              {(informeData || oficioData) && (
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                  {informeData && (
-                    <button onClick={handleExportInformePDF} disabled={uploading} style={S.btn(C.navy4, C.white, C.navy5)}>
-                      {uploading ? 'Subiendo...' : '📥 Descargar Informe (PDF)'}
+                <div style={{ ...S.card, marginBottom: 20 }}>
+                  <h4 style={{ fontSize: 13, fontWeight: 700, color: C.navy3, marginBottom: 12 }}>Previsualización del Oficio</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div>
+                      <label style={S.label}>Asunto</label>
+                      <input value={oficioData.asunto || ''} onChange={e => setOficioData({ ...oficioData, asunto: e.target.value })} style={S.input} />
+                    </div>
+                    <div>
+                      <label style={S.label}>Cuerpo del Oficio</label>
+                      <textarea value={oficioData.cuerpo?.join('\n') || ''} onChange={e => setOficioData({ ...oficioData, cuerpo: e.target.value.split('\n') })} style={{ ...S.textarea, minHeight: 180 }} />
+                    </div>
+                    <button type="button" onClick={handleExportOficioPDF} style={S.btn(C.green, C.white, C.green)}>
+                      <Icon name="download" size={14} /> Descargar Oficio (PDF)
                     </button>
-                  )}
-                  {oficioData && (
-                    <button onClick={handleExportOficioPDF} style={S.btn(C.gold2, C.white, C.gold1)}>
-                      📥 Descargar Oficio (PDF)
-                    </button>
-                  )}
-                  <button onClick={async () => { await saveDraft(); showToast('Guardado en Firestore.'); if (onSaved) onSaved(); }} style={S.btn(C.green, C.white, C.green)}>
-                    💾 Guardar Final
-                  </button>
+                  </div>
                 </div>
               )}
             </div>
           )}
+        </div>
 
-          {/* Navigation */}
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 28, paddingTop: 20, borderTop: `1px solid ${C.g200}` }}>
-            <button onClick={() => step > 1 ? setStep(step - 1) : onClose()} style={S.btn(C.white, C.navy3, C.g200)}>
-              {step === 1 ? 'Cancelar' : '← Anterior'}
+        {/* Footer Navigation */}
+        <div style={{ padding: "20px 28px", borderTop: `1px solid ${C.g200}`, display: "flex", justifyContent: "space-between", alignItems: "center", sticky: "bottom", background: C.white }}>
+          <button 
+            onClick={() => setStep(step - 1)} 
+            disabled={step === 1} 
+            style={S.btn(C.white, step === 1 ? C.g300 : C.navy4, step === 1 ? C.g200 : C.navy5)}
+          >
+            Atrás
+          </button>
+          
+          {step < STEPS.length ? (
+            <button 
+              onClick={() => { saveDraft(); setStep(step + 1); }} 
+              disabled={!canGoNext()} 
+              style={{ ...S.btn(canGoNext() ? C.navy4 : C.g200, canGoNext() ? C.white : C.g500, canGoNext() ? C.navy5 : C.g200) }}
+            >
+              Siguiente
             </button>
-            {step < 4 && (
-              <button onClick={() => setStep(step + 1)} disabled={!canGoNext()} style={{ ...S.btn(C.navy4, C.white, C.navy5), opacity: canGoNext() ? 1 : 0.5 }}>
-                Siguiente →
-              </button>
-            )}
+          ) : (
+            <button 
+              onClick={handleFinalizarMonitoreo} 
+              style={S.btn(C.green, C.white, C.green)}
+            >
+              Finalizar y Guardar
+            </button>
+          )}
+        </div>
+      </div>
+
+      {exportProgress && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(12, 25, 41, 0.75)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 99999,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontFamily: "'DM Sans', sans-serif"
+        }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.98)',
+            borderRadius: 16,
+            padding: '32px 40px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            textAlign: 'center',
+            maxWidth: 420,
+            width: '90%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 16
+          }}>
+            <div style={{
+              width: 48,
+              height: 48,
+              border: `4px solid ${C.g200}`,
+              borderTop: `4px solid ${C.navy5}`,
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+            <style>{`
+              @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+            `}</style>
+            <h4 style={{ fontSize: 16, fontWeight: 700, color: C.navy1, margin: 0 }}>
+              Preparando Descarga PDF
+            </h4>
+            <p style={{ fontSize: 13, color: C.g500, margin: 0, lineHeight: 1.5 }}>
+              {exportProgress}
+            </p>
           </div>
+        </div>
+      )}
+      {/* ── Hidden Recharts for PDF capture (Addendum v28) ── */}
+      <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+        {/* Chart 1: Matriculados vs. Presentes */}
+        <div ref={chartAttendanceRef} style={{ width: 600, height: 320, background: '#fff', padding: 16 }}>
+          <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Asistencia de Estudiantes — Matriculados vs. Presentes</div>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={docentes.map(d => ({
+              name: (d.nombre || 'Docente').split(' ').slice(0, 2).join(' '),
+              Matriculados: Number(d.datosSesion?.matriculados) || 0,
+              Presentes: Number(d.datosSesion?.presentes) || 0
+            }))} margin={{ top: 10, right: 20, left: 0, bottom: 70 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" angle={-20} textAnchor="end" tick={{ fontSize: 10 }} height={60} />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Legend wrapperStyle={{ paddingTop: 10 }} />
+              <Bar dataKey="Matriculados" fill="#2563A0" radius={[4,4,0,0]}>
+                <LabelList dataKey="Matriculados" position="top" style={{ fontSize: 10 }} />
+              </Bar>
+              <Bar dataKey="Presentes" fill="#15803D" radius={[4,4,0,0]}>
+                <LabelList dataKey="Presentes" position="top" style={{ fontSize: 10 }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Chart 2: Level Distribution per R (frequency, not averaged) */}
+        <div ref={chartLevelsRef} style={{ width: 600, height: 320, background: '#fff', padding: 16 }}>
+          <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Distribución de Niveles Alcanzados por Rúbrica</div>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={(() => {
+              const isEtp = programaFinal === 'ETP';
+              const result = [];
+              for (let r = 0; r < 5; r++) {
+                const name = isEtp
+                  ? ["Planifica", "Involucra", "Procedimientos", "Acompaña", "Clima"][r]
+                  : ["Involucra", "Razonamiento", "Evalúa", "Respeto", "Regula"][r];
+                const counts = { name, 'Nivel I': 0, 'Nivel II': 0, 'Nivel III': 0, 'Nivel IV': 0 };
+                docentes.forEach(d => {
+                  let lvl;
+                  if (isEtp) {
+                    lvl = d.ficha?.rubricasETP?.[r]?.nivel;
+                  } else {
+                    lvl = d.ficha?.instrumento1?.criterios?.[r]?.nivel;
+                  }
+                  if (lvl === 1) counts['Nivel I']++;
+                  else if (lvl === 2) counts['Nivel II']++;
+                  else if (lvl === 3) counts['Nivel III']++;
+                  else if (lvl === 4) counts['Nivel IV']++;
+                });
+                result.push(counts);
+              }
+              return result;
+            })()} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+              <YAxis allowDecimals={false} label={{ value: 'N° Docentes', angle: -90, position: 'insideLeft', style: { fontSize: 10 } }} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="Nivel I" stackId="a" fill="#B91C1C">
+                <LabelList dataKey="Nivel I" position="inside" formatter={(val) => val > 0 ? val : ''} style={{ fontSize: 9, fill: '#fff', fontWeight: 'bold' }} />
+              </Bar>
+              <Bar dataKey="Nivel II" stackId="a" fill="#B45309">
+                <LabelList dataKey="Nivel II" position="inside" formatter={(val) => val > 0 ? val : ''} style={{ fontSize: 9, fill: '#fff', fontWeight: 'bold' }} />
+              </Bar>
+              <Bar dataKey="Nivel III" stackId="a" fill="#2563A0">
+                <LabelList dataKey="Nivel III" position="inside" formatter={(val) => val > 0 ? val : ''} style={{ fontSize: 9, fill: '#fff', fontWeight: 'bold' }} />
+              </Bar>
+              <Bar dataKey="Nivel IV" stackId="a" fill="#15803D">
+                <LabelList dataKey="Nivel IV" position="inside" formatter={(val) => val > 0 ? val : ''} style={{ fontSize: 9, fill: '#fff', fontWeight: 'bold' }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
     </div>

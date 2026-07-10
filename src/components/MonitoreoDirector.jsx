@@ -511,7 +511,7 @@ export default function MonitoreoDirector() {
           onClick={() => setSelectedFicha(null)}>
           <div style={{ background: C.white, borderRadius: 12, width: "100%", maxWidth: 700, padding: 32, position: "relative", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}
             onClick={e => e.stopPropagation()}>
-            <button onClick={() => setSelectedFicha(null)} style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", fontSize: 20, cursor: "pointer", color: C.g500 }}>✕</button>
+            <button onClick={() => setSelectedFicha(null)} style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", cursor: "pointer", color: C.g500, display: 'flex', alignItems: 'center', padding: 4 }}><Icon name="x" size={20} /></button>
             <h3 style={{ ...S.sectionTitle, marginBottom: 20 }}>Detalle de Ficha — Director</h3>
             
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>

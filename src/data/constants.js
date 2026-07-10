@@ -9,6 +9,8 @@ export const STAFF = [
     { id: 6, name: "Beronica Olinda Cuellar Cornelio", role: "Especialista ETP", phone: "51932109876", email: "bcuellar@ugel03.gob.pe", initials: "BC" },
     { id: 7, name: "Rosa Isabel Ninamango Baldeon", role: "Jefatura", phone: "51921098765", email: "rninamango@ugel03.gob.pe", initials: "RN" },
     { id: 8, name: "Ricardo Alejandro Viera Suarez", role: "Sistemas", phone: "51917349479", email: "perumaster201@gmail.com", initials: "RV" },
+    { id: 9, name: "Aracelli del Carmen Gonzales Sánchez", role: "Asistente EBA", phone: "", email: "agonzaless@ugel03.gob.pe", initials: "AG" },
+    { id: 10, name: "Isabel Inés Suyo Villar", role: "Asistente ETP", phone: "", email: "isuyov@ugel03.gob.pe", initials: "IS" },
 ];
 
 /* ═══ Expedientes — ahora se cargan desde Google Sheets (no hardcoded) ═══ */
@@ -76,8 +78,20 @@ export const ESPECIALISTAS_MONITOREO = [
     id: 'nelida-albino',
     nombre: 'Nélida Albino Igreda',
     email: 'nalbinoi@ugel03.gob.pe',
+    dni: '06749888',
     cargo: 'Especialista de Educación Básica Alternativa',
     cargoCorto: 'Especialista de EBA',
+    programa: 'EBA',
+    institucionTipo: 'CEBA',
+    puedeElegirPrograma: false
+  },
+  {
+    id: 'aracelli-gonzales',
+    nombre: 'Aracelli del Carmen Gonzales Sánchez',
+    email: 'agonzaless@ugel03.gob.pe',
+    dni: '10103721',
+    cargo: 'Asistente de Monitoreo y Evaluación Pedagógica de EBA',
+    cargoCorto: 'Asistente de EBA',
     programa: 'EBA',
     institucionTipo: 'CEBA',
     puedeElegirPrograma: false
@@ -86,6 +100,7 @@ export const ESPECIALISTAS_MONITOREO = [
     id: 'juan-quispe',
     nombre: 'Juan Alberto Quispe Solano',
     email: 'jaquispes@ugel03.gob.pe',
+    dni: '09349513',
     cargo: 'Especialista de Educación Técnico-Productiva',
     cargoCorto: 'Especialista de ETP',
     programa: 'ETP',
@@ -96,8 +111,20 @@ export const ESPECIALISTAS_MONITOREO = [
     id: 'francisco-villalobos',
     nombre: 'Francisco Villalobos Gonzales',
     email: 'fvillalobosg@ugel03.gob.pe',
+    dni: '07223272',
     cargo: 'Especialista de Educación Técnico-Productiva',
     cargoCorto: 'Especialista de ETP',
+    programa: 'ETP',
+    institucionTipo: 'CETPRO',
+    puedeElegirPrograma: false
+  },
+  {
+    id: 'isabel-suyo',
+    nombre: 'Isabel Inés Suyo Villar',
+    email: 'isuyov@ugel03.gob.pe',
+    dni: '09590847',
+    cargo: 'Asistente de Monitoreo y Evaluación Pedagógica de ETP',
+    cargoCorto: 'Asistente de ETP',
     programa: 'ETP',
     institucionTipo: 'CETPRO',
     puedeElegirPrograma: false
@@ -106,6 +133,7 @@ export const ESPECIALISTAS_MONITOREO = [
     id: 'rosa-ninamango',
     nombre: 'Rosa Isabel Ninamango Baldeon',
     email: 'rninamango@ugel03.gob.pe',
+    dni: '21263087',
     cargo: 'Jefa del Área de Gestión de la Educación Básica Alternativa y Técnico Productiva',
     cargoCorto: 'Jefa de AGEBATP',
     programa: null,

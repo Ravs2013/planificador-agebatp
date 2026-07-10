@@ -62,7 +62,11 @@ export async function updateUsuario(uid, data) {
 export function subscribeActividades(callback) {
   const q = query(collection(db, "actividades"), orderBy("date", "asc"));
   return onSnapshot(q, (snapshot) => {
-    const list = snapshot.docs.map(mapDoc);
+    const list = snapshot.docs.map(mapDoc).map(a => {
+      const progress = (a.progreso !== undefined && a.progreso !== null) ? a.progreso : (a.progress ?? 0);
+      const status   = a.estado ?? a.status ?? 'pendiente';
+      return { ...a, progress, progreso: progress, status, estado: status };
+    });
     callback(list);
   }, (err) => console.error("Error subscribing to actividades:", err));
 }
@@ -74,7 +78,9 @@ export async function addActividad(data) {
     ...data,
     id,
     checklist: data.checklist || {},
+    progress: data.progress || 0,
     progreso: data.progreso || 0,
+    status: data.status || "pendiente",
     estado: data.estado || "pendiente",
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()

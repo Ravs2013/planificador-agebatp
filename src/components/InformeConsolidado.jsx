@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ESPECIALISTAS_MONITOREO, JEFATURA_AGEBATP, monthNames } from '../data/constants';
 import { subscribeMonitoreoDocente } from '../firebase/db';
-import { generarInforme } from '../api/monitoreoApi';
+import { getChatModel } from '../firebase/config';
 import { exportContainerToPDF } from '../utils/pdfGenerator';
 import Icon from './Icon';
 import {
@@ -22,6 +22,55 @@ const C = {
 };
 
 const LEVEL_COLORS = { 1: C.red, 2: C.amber, 3: C.blue, 4: C.green };
+
+async function generarInformeConsolidadoIA(payload) {
+  const model = await getChatModel();
+  const prompt = `Eres un especialista pedagógico del Área de Gestión de la Educación Básica Alternativa y Técnico Productiva (AGEBATP) de la UGEL 03 (Perú).
+Genera un informe consolidado mensual detallado e institucional en base a los siguientes datos agregados de monitoreo docente.
+Especialista: ${payload.especialista.nombre} (${payload.especialista.cargo})
+Jefatura: ${payload.jefatura.nombre} (${payload.jefatura.cargo})
+Período: ${payload.periodo.mes} de ${payload.periodo.anio}
+Programa: ${payload.programa}
+
+Fichas procesadas en este mes:
+${JSON.stringify(payload.fichas)}
+
+Métricas agregadas:
+- Total de fichas aplicadas: ${payload.kpis.total}
+- Docentes únicos monitoreados: ${payload.kpis.docentesUnicos}
+- Instituciones Educativas (IE) intervenidas: ${payload.kpis.ieUnicas}
+- Distribución de niveles por criterio (frecuencias): ${JSON.stringify(payload.distribucion)}
+
+Devuelve EXCLUSIVAMENTE un JSON válido (sin markdown, sin bloques de código \`\`\`json) con el siguiente esquema:
+{
+  "asunto": "INFORME CONSOLIDADO DE MONITOREO Y ACOMPAÑAMIENTO PEDAGÓGICO - MES DE ...",
+  "antecedentes": [
+    "Párrafo 1 de antecedentes del monitoreo del mes...",
+    "Párrafo 2 de antecedentes..."
+  ],
+  "analisis": [
+    "Párrafo 1 de análisis general de los resultados por criterios...",
+    "Párrafo 2 de análisis..."
+  ],
+  "conclusiones": [
+    "Conclusión 1...",
+    "Conclusión 2..."
+  ],
+  "recomendaciones": [
+    "Recomendación 1...",
+    "Recomendación 2..."
+  ]
+}
+Usa un lenguaje formal, técnico, administrativo, coherente con las normas del Ministerio de Educación de Perú (MINEDU). No inventes resoluciones. Coincide exactamente con la realidad de los datos agregados. Redacta íntegramente en español formal peruano; no incluyas palabras en inglés (bajo ninguna circunstancia utilices palabras como 'during', 'since', etc.).`;
+
+  const result = await model.generateContent({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: 'application/json' }
+  });
+  const text = typeof result.response.text === "function" ? result.response.text() : result.response.text;
+  const cleanedText = text.replace(/```json\s*/i, '').replace(/```\s*$/, '').trim();
+  return JSON.parse(cleanedText);
+}
 
 export default function InformeConsolidado({ onClose }) {
   const { user } = useAuth();
@@ -106,7 +155,16 @@ export default function InformeConsolidado({ onClose }) {
 
   const chartPieData = useMemo(() => {
     const counts = { "Nivel I": 0, "Nivel II": 0, "Nivel III": 0, "Nivel IV": 0 };
-    fichasDelMes.forEach(f => { if (counts[f.nivelGeneralLabel] !== undefined) counts[f.nivelGeneralLabel]++; });
+    fichasDelMes.forEach(f => {
+      const keys = ['involucraEstudiantes', 'promueveRazonamiento', 'evaluaProgreso', 'ambienteRespeto', 'regulaComportamiento'];
+      keys.forEach(k => {
+        const lvl = f.desempeno?.[k]?.nivel;
+        if (lvl === 1) counts["Nivel I"]++;
+        else if (lvl === 2) counts["Nivel II"]++;
+        else if (lvl === 3) counts["Nivel III"]++;
+        else if (lvl === 4) counts["Nivel IV"]++;
+      });
+    });
     return Object.keys(counts).map(k => ({ name: k, value: counts[k] }));
   }, [fichasDelMes]);
 
@@ -138,13 +196,9 @@ export default function InformeConsolidado({ onClose }) {
         kpis,
       };
 
-      const result = await generarInforme(payload);
-      if (result.ok) {
-        setConsolidado(result.informe);
-        showToast('Informe consolidado generado exitosamente.');
-      } else {
-        showToast(`Error: ${result.error}`, 'error');
-      }
+      const result = await generarInformeConsolidadoIA(payload);
+      setConsolidado(result);
+      showToast('Informe consolidado generado exitosamente.');
     } catch (err) {
       showToast(`Error: ${err.message}`, 'error');
     }
@@ -178,7 +232,7 @@ export default function InformeConsolidado({ onClose }) {
           <h2 style={{ margin: 0, fontSize: "1.2rem", fontFamily: "'DM Serif Display',serif", color: C.navy1 }}>
             Informe Consolidado Mensual — {programa}
           </h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.g500 }}>✕</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.g500, display: 'flex', alignItems: 'center', padding: 4 }}><Icon name="x" size={20} /></button>
         </div>
 
         {toast && (
@@ -212,7 +266,7 @@ export default function InformeConsolidado({ onClose }) {
             </div>
             <div style={{ flex: 1 }} />
             <button onClick={handleGenerar} disabled={generando || fichasDelMes.length === 0} style={{ ...S.btn(C.navy4, C.white, C.navy5), opacity: generando || fichasDelMes.length === 0 ? 0.5 : 1 }}>
-              {generando ? 'Generando...' : '🤖 Generar Consolidado con IA'}
+              {generando ? 'Generando...' : <><Icon name="activity" size={14} /> Generar Consolidado con IA</>}
             </button>
           </div>
 
@@ -226,22 +280,18 @@ export default function InformeConsolidado({ onClose }) {
           ) : (
             <>
               {/* KPIs */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, marginBottom: 20 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 20 }}>
                 <div style={S.statCard(C.navy4)}>
                   <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 22, fontWeight: 700, color: C.navy4 }}>{kpis.total}</div>
-                  <div style={{ fontSize: 10, color: C.g500, fontWeight: 700, textTransform: "uppercase" }}>Fichas</div>
+                  <div style={{ fontSize: 10, color: C.g500, fontWeight: 700, textTransform: "uppercase" }}>Fichas Aplicadas</div>
                 </div>
                 <div style={S.statCard(C.blue)}>
                   <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 22, fontWeight: 700, color: C.blue }}>{kpis.docentesUnicos}</div>
-                  <div style={{ fontSize: 10, color: C.g500, fontWeight: 700, textTransform: "uppercase" }}>Docentes</div>
+                  <div style={{ fontSize: 10, color: C.g500, fontWeight: 700, textTransform: "uppercase" }}>Docentes Monitoreados</div>
                 </div>
                 <div style={S.statCard(C.gold2)}>
                   <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 22, fontWeight: 700, color: C.gold1 }}>{kpis.ieUnicas}</div>
-                  <div style={{ fontSize: 10, color: C.g500, fontWeight: 700, textTransform: "uppercase" }}>IE</div>
-                </div>
-                <div style={S.statCard(C.green)}>
-                  <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 22, fontWeight: 700, color: C.green }}>{kpis.promG} / 4</div>
-                  <div style={{ fontSize: 10, color: C.g500, fontWeight: 700, textTransform: "uppercase" }}>Prom. Gral</div>
+                  <div style={{ fontSize: 10, color: C.g500, fontWeight: 700, textTransform: "uppercase" }}>Instituciones Intervenidas</div>
                 </div>
               </div>
 
@@ -312,35 +362,51 @@ export default function InformeConsolidado({ onClose }) {
                   <div style={{ marginBottom: 16 }}>
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: C.navy1, margin: "0 0 8px" }}>II. ANÁLISIS DE RESULTADOS</h4>
                     <textarea value={(consolidado.analisis || []).join('\n')} onChange={e => setConsolidado(prev => ({ ...prev, analisis: e.target.value.split('\n') }))} style={S.textarea} />
+                    
+                    {/* Add chart here inside printable container ref for Addendum v8 */}
+                    <div style={{ height: 220, marginTop: 16, marginBottom: 16, background: C.white, padding: 12, borderRadius: 8, border: `1px solid ${C.g200}` }}>
+                      <h5 style={{ fontSize: 11, fontWeight: 700, color: C.navy3, margin: "0 0 8px", textAlign: 'center' }}>Distribución de Niveles de Logro por Criterio</h5>
+                      <div style={{ height: 180 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={chartIndicatorData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" tick={{ fontSize: 8, fontWeight: 600 }} interval={0} />
+                            <YAxis tick={{ fontSize: 10, fontWeight: 700 }} />
+                            <Tooltip />
+                            <Legend wrapperStyle={{ fontSize: 9 }} />
+                            <Bar dataKey="Nivel I" stackId="a" fill={C.red} />
+                            <Bar dataKey="Nivel II" stackId="a" fill={C.amber} />
+                            <Bar dataKey="Nivel III" stackId="a" fill={C.blue} />
+                            <Bar dataKey="Nivel IV" stackId="a" fill={C.green} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Data summary table */}
                   <div style={{ marginBottom: 16 }}>
-                    <h4 style={{ fontSize: 13, fontWeight: 700, color: C.navy1, margin: "0 0 8px" }}>Resumen por Criterio de Desempeño</h4>
+                    <h4 style={{ fontSize: 13, fontWeight: 700, color: C.navy1, margin: "0 0 8px" }}>Distribución por Criterio de Desempeño (Cantidad de Docentes)</h4>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                       <thead>
                         <tr>
                           <th style={{ border: `1px solid ${C.g200}`, padding: 8, background: C.g50 }}>Criterio</th>
-                          <th style={{ border: `1px solid ${C.g200}`, padding: 8, background: C.g50 }}>Promedio</th>
+                          <th style={{ border: `1px solid ${C.g200}`, padding: 8, background: C.g50, textAlign: 'center' }}>Nivel I</th>
+                          <th style={{ border: `1px solid ${C.g200}`, padding: 8, background: C.g50, textAlign: 'center' }}>Nivel II</th>
+                          <th style={{ border: `1px solid ${C.g200}`, padding: 8, background: C.g50, textAlign: 'center' }}>Nivel III</th>
+                          <th style={{ border: `1px solid ${C.g200}`, padding: 8, background: C.g50, textAlign: 'center' }}>Nivel IV</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {[
-                          { label: '2.1 Involucra Estudiantes', val: kpis.promInvolucra },
-                          { label: '2.2 Promueve Razonamiento', val: kpis.promRazonamiento },
-                          { label: '2.3 Evalúa Progreso', val: kpis.promEvalua },
-                          { label: '2.4 Ambiente de Respeto', val: kpis.promRespeto },
-                          { label: '2.5 Regula Comportamiento', val: kpis.promRegula },
-                        ].map(({ label, val }) => (
-                          <tr key={label}>
-                            <td style={{ border: `1px solid ${C.g200}`, padding: 8 }}>{label}</td>
-                            <td style={{ border: `1px solid ${C.g200}`, padding: 8, fontWeight: 700, color: LEVEL_COLORS[Math.round(val)] || C.navy1, fontFamily: "'JetBrains Mono'" }}>{val.toFixed(2)}</td>
+                        {chartIndicatorData.map((row) => (
+                          <tr key={row.name}>
+                            <td style={{ border: `1px solid ${C.g200}`, padding: 8, fontWeight: 600 }}>{row.name}</td>
+                            <td style={{ border: `1px solid ${C.g200}`, padding: 8, textAlign: 'center', color: C.red, fontWeight: 700 }}>{row["Nivel I"]}</td>
+                            <td style={{ border: `1px solid ${C.g200}`, padding: 8, textAlign: 'center', color: C.amber, fontWeight: 700 }}>{row["Nivel II"]}</td>
+                            <td style={{ border: `1px solid ${C.g200}`, padding: 8, textAlign: 'center', color: C.blue, fontWeight: 700 }}>{row["Nivel III"]}</td>
+                            <td style={{ border: `1px solid ${C.g200}`, padding: 8, textAlign: 'center', color: C.green, fontWeight: 700 }}>{row["Nivel IV"]}</td>
                           </tr>
                         ))}
-                        <tr>
-                          <td style={{ border: `1px solid ${C.g200}`, padding: 8, fontWeight: 700 }}>PROMEDIO GENERAL</td>
-                          <td style={{ border: `1px solid ${C.g200}`, padding: 8, fontWeight: 700, color: C.navy4, fontFamily: "'JetBrains Mono'" }}>{kpis.promG.toFixed(2)}</td>
-                        </tr>
                       </tbody>
                     </table>
                   </div>
@@ -359,8 +425,8 @@ export default function InformeConsolidado({ onClose }) {
 
               {consolidado && (
                 <div style={{ display: "flex", gap: 12 }}>
-                  <button onClick={handleExportPDF} style={S.btn(C.navy4, C.white, C.navy5)}>📥 Descargar PDF</button>
-                  <button onClick={handleGenerar} disabled={generando} style={S.btn(C.g50, C.navy3, C.g200)}>↻ Regenerar</button>
+                  <button onClick={handleExportPDF} style={S.btn(C.navy4, C.white, C.navy5)}><Icon name="download" size={14} /> Descargar PDF</button>
+                  <button onClick={handleGenerar} disabled={generando} style={S.btn(C.g50, C.navy3, C.g200)}><Icon name="refresh" size={14} /> Regenerar</button>
                 </div>
               )}
             </>
