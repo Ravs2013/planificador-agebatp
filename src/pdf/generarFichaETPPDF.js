@@ -437,10 +437,10 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     ];
 
     // R1 (página 1) es corta (evidencias de 26 mm).
-    // R2, R3, R4, R5 (páginas 2 y 3) miden 68 mm de alto mínimo de evidencias, lo suficientemente pequeño
-    // como para evitar que se desborde a otra hoja y asegurar que quepan R2/R3 en la pág 2 y R4/R5 en la pág 3.
+    // R2, R3, R4, R5 (páginas 2 y 3) miden 75 mm de alto mínimo de evidencias, lo suficientemente pequeño
+    // para caber en una misma página en formato continuo, pero lo suficientemente grande para escribir cómodamente.
     const bodyRowMinH = isPage1 ? 22 : 24;
-    const evRowMinH = isPage1 ? 26 : 68;
+    const evRowMinH = isPage1 ? 26 : 75;
 
     bodyRows[0][0].styles.minCellHeight = bodyRowMinH;
     bodyRows[0][1].styles.minCellHeight = bodyRowMinH;
@@ -504,17 +504,17 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
   // Draw R1 on Page 1 (Fits perfectly and leaves plenty of space)
   drawRubricaTable(0, y, true);
 
-  // Draw R2 and R3 on Page 2 (Together as a single group on one page, starting at Y=34 and Y=152)
+  // Draw R2 and R3 on Page 2 (Together as a single continuous unified table, touching borders exactly)
   doc.addPage();
   setupPage();
   drawRubricaTable(1, topPosition, false);
-  drawRubricaTable(2, topPosition + 118, false); // Posicionamiento exacto para encajar en la misma hoja sin desbordar
+  drawRubricaTable(2, doc.lastAutoTable.finalY, false); // Colocada exactamente a continuación del final de R2
 
-  // Draw R4 and R5 on Page 3 (Together as a single group on one page)
+  // Draw R4 and R5 on Page 3 (Together as a single continuous unified table, touching borders exactly)
   doc.addPage();
   setupPage();
   drawRubricaTable(3, topPosition, false);
-  drawRubricaTable(4, topPosition + 118, false);
+  drawRubricaTable(4, doc.lastAutoTable.finalY, false); // Colocada exactamente a continuación del final de R4
 
   // Draw Page 4: Section IV, Observaciones, Declaración, Firmas
   doc.addPage();
@@ -752,7 +752,7 @@ const RUBRICAS_DEF = [
     titulo: 'R4. Acompaña el proceso de aprendizaje de los estudiantes.',
     etiquetaEvidencia: 'Conductas observadas (evidencias)',
     aspectosDef: [
-      'Monitoreo que realiza el docente del trabajo de los estudiantes and de sus avances durante el desarrollo de la actividad de aprendizaje.',
+      'Monitoreo que realiza el docente del trabajo de los estudiantes y de sus avances durante el desarrollo de la actividad de aprendizaje.',
       'Calidad de la retroalimentación que el docente brinda o adaptación de las actividades que realiza a partir de las necesidades de aprendizaje identificadas.',
     ]
   },
@@ -815,7 +815,7 @@ const RUBRICAS_COMPLETAS_ETP = [
   },
   {
     num: "R4",
-    titulo: "4. R4. Acompaña el proceso de aprendizaje de los estudiantes.",
+    titulo: "4. R4. Acompaña el process de aprendizaje de los estudiantes.",
     descripcion: "Acompaña a los estudiantes durante el desarrollo de las actividades de aprendizaje, monitoreando sus avances y dificultades en el logro de los aprendizajes y, a partir de esto, les brinda retroalimentación o adecúa las actividades planteadas.",
     aspectos: [
       "Monitoreo que realiza el docente del trabajo de los estudiantes y de sus avances durante el desarrollo de la actividad de aprendizaje.",
@@ -844,4 +844,5 @@ const RUBRICAS_COMPLETAS_ETP = [
     ]
   }
 ];
+
 export { RUBRICAS_DEF };
