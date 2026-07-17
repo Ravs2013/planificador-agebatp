@@ -153,12 +153,12 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
 
   // Title
   doc.setFont("Arial", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(10.5);
   doc.setTextColor(0);
   const titleText = "FICHA DE MONITOREO PEDAGÓGICO AL DOCENTE DE CETPRO";
   const titleLines = doc.splitTextToSize(titleText, myCONTENT_W);
   doc.text(titleLines, myM.pageW / 2, y, { align: "center" });
-  y += (titleLines.length * 4) + 2.5;
+  y += (titleLines.length * 4.2) + 3;
 
   const pageBottomLimit = myBODY_BOTTOM;
   const dg = fichaData.datosGeneralesCETPRO || {};
@@ -167,13 +167,13 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
 
   // ═══ I. DATOS GENERALES ═══
   doc.setFont("Arial", "bold");
-  doc.setFontSize(9);
+  doc.setFontSize(9.5);
   doc.text("I. DATOS GENERALES:", myM.left, y);
-  y += 2.5;
+  y += 3;
   doc.setFont("Arial", "normal");
-  doc.setFontSize(7.5);
+  doc.setFontSize(8);
   doc.text("Registre los datos del CETPRO, del docente a monitorear, del monitor y, si lo hubiera, de un observador.", myM.left, y);
-  y += 3.5;
+  y += 4.5;
 
   // Table 1: CETPRO data (Unified into a single, compact table)
   const instVal = dg.instancia || '';
@@ -217,8 +217,8 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     startY: y,
     margin: marginConfig,
     theme: 'grid',
-    // cellPadding: 1.1 para que solo entren las letras (mínima altura)
-    styles: { font: 'Arial', fontSize: 7.5, cellPadding: 1.1, textColor: [0, 0, 0], valign: 'middle', overflow: 'linebreak', lineColor: [140, 140, 140], lineWidth: 0.2 },
+    // cellPadding: 1.8 para que se vea aireado, no apretado
+    styles: { font: 'Arial', fontSize: 8, cellPadding: 1.8, textColor: [0, 0, 0], valign: 'middle', overflow: 'linebreak', lineColor: [140, 140, 140], lineWidth: 0.2 },
     columnStyles: {
       0: { cellWidth: 80 },
       1: { cellWidth: 32, halign: 'center' },
@@ -247,17 +247,17 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     rowPageBreak: 'avoid',
     didDrawPage: (data) => { if (data.pageNumber > pageCount) setupPage(); }
   });
-  y = doc.lastAutoTable.finalY + 3;
+  y = doc.lastAutoTable.finalY + 4;
 
   // ═══ II. DATOS DE LA SESIÓN OBSERVADA ═══
   doc.setFont("Arial", "bold");
-  doc.setFontSize(9);
+  doc.setFontSize(9.5);
   doc.text("II. DATOS DE LA SESIÓN OBSERVADA:", myM.left, y);
-  y += 2.5;
+  y += 3;
   doc.setFont("Arial", "italic");
-  doc.setFontSize(7.5);
+  doc.setFontSize(8);
   doc.text("Registre los datos de la sesión a observar.", myM.left, y);
-  y += 3.5;
+  y += 4.5;
 
   // Ciclo table
   const cicloVal = sesion.ciclo || '';
@@ -289,7 +289,7 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     startY: y,
     margin: marginConfig,
     theme: 'grid',
-    styles: { font: 'Arial', fontSize: 7.5, cellPadding: 1.1, textColor: [0, 0, 0], overflow: 'linebreak', lineColor: [140, 140, 140], lineWidth: 0.2 },
+    styles: { font: 'Arial', fontSize: 8, cellPadding: 1.8, textColor: [0, 0, 0], overflow: 'linebreak', lineColor: [140, 140, 140], lineWidth: 0.2 },
     body: cicloRows,
     columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 45 }, 2: { cellWidth: 43 }, 3: { cellWidth: 80 } }, // Suma 190 mm
     willDrawCell: (data) => {
@@ -312,7 +312,7 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     startY: y,
     margin: marginConfig,
     theme: 'grid',
-    styles: { font: 'Arial', fontSize: 7.5, cellPadding: 1.1, textColor: [0, 0, 0], overflow: 'linebreak', lineColor: [140, 140, 140], lineWidth: 0.2 },
+    styles: { font: 'Arial', fontSize: 8, cellPadding: 1.8, textColor: [0, 0, 0], overflow: 'linebreak', lineColor: [140, 140, 140], lineWidth: 0.2 },
     body: [
       ['Módulo formativo', sesion.moduloFormativo || ''],
       ['Unidad didáctica', sesion.unidadDidactica || ''],
@@ -368,8 +368,8 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     startY: y,
     margin: marginConfig,
     theme: 'grid',
-    styles: { font: 'Arial', fontSize: 7, cellPadding: 1.0, textColor: [0, 0, 0], overflow: 'linebreak', halign: 'center', valign: 'middle', lineColor: [140, 140, 140], lineWidth: 0.2 },
-    headStyles: { fillColor: [217, 217, 217], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', fontSize: 7 },
+    styles: { font: 'Arial', fontSize: 7.5, cellPadding: 1.5, textColor: [0, 0, 0], overflow: 'linebreak', halign: 'center', valign: 'middle', lineColor: [140, 140, 140], lineWidth: 0.2 },
+    headStyles: { fillColor: [217, 217, 217], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', fontSize: 7.5 },
     head: sessionHead,
     body: sessionBody,
     columnStyles: {
@@ -385,26 +385,22 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     rowPageBreak: 'avoid',
     didDrawPage: (data) => { if (data.pageNumber > pageCount) setupPage(); }
   });
-  y = doc.lastAutoTable.finalY + 3;
+  y = doc.lastAutoTable.finalY + 4;
 
   // ═══ III. DESEMPEÑOS, ASPECTOS Y CALIFICACIÓN ═══
   doc.setFont("Arial", "bold");
-  doc.setFontSize(9);
+  doc.setFontSize(9.5);
   doc.text("III. DESEMPEÑOS, ASPECTOS Y CALIFICACIÓN", myM.left, y);
-  y += 2.5;
+  y += 3;
   doc.setFont("Arial", "italic");
-  doc.setFontSize(7.5);
+  doc.setFontSize(8);
   const instrETP = "Registre las descripciones o evidencias correspondientes a cada rúbrica/desempeño y determine el nivel de logro.";
   doc.text(instrETP, myM.left, y, { maxWidth: myCONTENT_W });
-  y += 3.5;
+  y += 4.5;
 
   const topPosition = llevaMembrete ? 34 : 20;
-  const availableHeight = pageBottomLimit - topPosition;
-  const halfHeight = availableHeight / 2;
-  const HEADER_H = 8;
-  const blockBodyHeight = halfHeight - HEADER_H;
 
-  const drawRubricaTable = (rIdx, startY, isPage1) => {
+  const drawRubricaTable = (rIdx, startY) => {
     const rubrica = rubricas[rIdx] || {};
     const def = RUBRICAS_DEF[rIdx] || {};
     const aspectos = rubrica.aspectos || [];
@@ -439,11 +435,9 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
       }]
     ];
 
-    // Para la página 1, la tabla R1 debe terminar a más tardar en Y=272 para evitar desbordes accidentales
-    const maxPage1Y = 272;
-    const currentBlockBody = isPage1 ? (maxPage1Y - startY - 8) : blockBodyHeight;
-    const bodyRowMinH = isPage1 ? 30 : 24;
-    const evRowMinH = currentBlockBody - bodyRowMinH;
+    // Celdas de rúbricas cortas y compactas para evitar abultar
+    const bodyRowMinH = 22; // alto mínimo para aspectos
+    const evRowMinH = 26;   // alto mínimo para evidencias (muy compacto)
 
     bodyRows[0][0].styles.minCellHeight = bodyRowMinH;
     bodyRows[0][1].styles.minCellHeight = bodyRowMinH;
@@ -504,20 +498,20 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     });
   };
 
-  // Draw R1 on Page 1 (Force it to fit here)
-  drawRubricaTable(0, y, true);
+  // Draw R1 on Page 1 (Fits perfectly and leaves plenty of space)
+  drawRubricaTable(0, y);
 
-  // Draw R2 and R3 on Page 2 (They must be in the same page)
+  // Draw R2 and R3 on Page 2 (Together as a single group on one page)
   doc.addPage();
   setupPage();
-  drawRubricaTable(1, topPosition, false);
-  drawRubricaTable(2, topPosition + halfHeight, false);
+  drawRubricaTable(1, topPosition);
+  drawRubricaTable(2, topPosition + 75); // Separation of 75 mm makes them look great
 
-  // Draw R4 and R5 on Page 3 (They must be in the same page)
+  // Draw R4 and R5 on Page 3 (Together as a single group on one page)
   doc.addPage();
   setupPage();
-  drawRubricaTable(3, topPosition, false);
-  drawRubricaTable(4, topPosition + halfHeight, false);
+  drawRubricaTable(3, topPosition);
+  drawRubricaTable(4, topPosition + 75);
 
   // Draw Page 4: Section IV, Observaciones, Declaración, Firmas
   doc.addPage();
@@ -843,7 +837,7 @@ const RUBRICAS_COMPLETAS_ETP = [
       "No alcanza las condiciones del nivel II.\n\nEn alguna ocasión, falta el respeto a uno o más estudiantes.\nO\nSi nota que hay faltas de respeto entre los estudiantes, no interviene.",
       "El docente es siempre respetuoso con los estudiantes y si nota faltas de respeto entre ellos, interviene. Sin embargo, se muestra distante en su interacción con los estudiantes.\n\nAlways es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nEn su interacción con los estudiantes, es frío e indiferente.",
       "El docente es siempre respetuoso con los estudiantes y si nota faltas de respeto entre ellos, interviene. Además, muestra cercanía en su interacción con los estudiantes.\n\nSiempre es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nEn su interacción con los estudiantes, practica la escucha atenta y emplea recursos de comunicación (proximidad espacial, desplazamiento en el aula, gestos amables, tono de voz calmado, entre otros) apropiados a sus características. Si emplea el humor, este es respetuoso y favorece las relaciones positivas en el aula.",
-      "El docente es siempre respetuoso con los estudiantes and si nota faltas de respeto entre ellos, interviene. Además, muestra consideración hacia la perspectiva de los estudiantes y cercanía en su interacción con ellos.\n\nSiempre es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nMuestra consideración hacia la perspectiva de los estudiantes (es decir, respeta sus opiniones y puntos de vista, les pide su parecer y lo considera, evita imponerse, y tiene una actitud dialogante y abierta).\nY\nEn su interacción con los estudiantes, practica la escucha atenta y emplea recursos de comunicación (proximidad espacial, desplazamiento en el aula, gestos amables, tono de voz calmado, entre otros) apropiados a sus características. Si emplea el humor, este es respetuoso y favorece las relaciones positivas en el aula."
+      "El docente es siempre respetuoso con los estudiantes y si nota faltas de respeto entre ellos, interviene. Además, muestra consideración hacia la perspectiva de los estudiantes y cercanía en su interacción con ellos.\n\nSiempre es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nMuestra consideración hacia la perspectiva de los estudiantes (es decir, respeta sus opiniones y puntos de vista, les pide su parecer y lo considera, evita imponerse, y tiene una actitud dialogante y abierta).\nY\nEn su interacción con los estudiantes, practica la escucha atenta y emplea recursos de comunicación (proximidad espacial, desplazamiento en el aula, gestos amables, tono de voz calmado, entre otros) apropiados a sus características. Si emplea el humor, este es respetuoso y favorece las relaciones positivas en el aula."
     ]
   }
 ];
