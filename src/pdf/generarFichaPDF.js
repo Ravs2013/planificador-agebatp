@@ -323,6 +323,8 @@ export function generarFichaPDF(fichaData, bannerDataURL) {
     }
   ];
 
+  const FIXED_NIVEL_ROW_H = 7; // v36: altura fija ~7 mm por fila (etiqueta + celdas I-IV)
+
   const celdaNivel = (num, marcado) => {
     return {
       content: marcado ? `${num}  X` : num,
@@ -330,7 +332,10 @@ export function generarFichaPDF(fichaData, bannerDataURL) {
         halign: "center",
         valign: "middle",
         fontStyle: marcado ? "bold" : "normal",
-        fillColor: marcado ? [220, 220, 220] : [255, 255, 255]
+        fillColor: marcado ? [220, 220, 220] : [255, 255, 255],
+        fontSize: 7.5,
+        cellPadding: { top: 1, bottom: 1, left: 1, right: 1 },
+        minCellHeight: FIXED_NIVEL_ROW_H
       }
     };
   };
@@ -339,47 +344,62 @@ export function generarFichaPDF(fichaData, bannerDataURL) {
   doc.addPage();
   setupPage();
 
+  // ═══ v37: ALGORITMO FIJO POR POSICIÓN (par/impar) — reemplaza cálculo dinámico ═══
+  // Cada bloque de desempeño va en una posición FIJA de la hoja:
+  //   - Índice par (0, 2, 4) → nueva hoja, mitad SUPERIOR (startY = topPosition)
+  //   - Índice impar (1, 3)  → MISMA hoja, mitad INFERIOR (startY = topPosition + halfHeight)
+  // Resultado garantizado: R1+R2 (hoja A), R3+R4 (hoja B), R5 solo (hoja C) = 4 páginas total.
   const topPosition = llevaMembrete ? 34 : 20;
   const availableHeight = pageBottomLimit - topPosition;
   const halfHeight = availableHeight / 2;
-  const cellMinHeight = halfHeight - 18; // approx 94 mm or 110.5 mm
+  const HEADER_H = 8; // altura estimada del encabezado de la tabla (1 fila de header)
+  // v37: altura del bloque de contenido (body) = media hoja - header
+  const blockBodyHeight = halfHeight - HEADER_H;
 
   let currentY = topPosition;
   criteriosFieles.forEach((c, idx) => {
+    // ── v37: posición determinística basada en índice par/impar ──
     if (idx % 2 === 0) {
+      // Índice par: nueva hoja (excepto el primero, que ya tiene hoja), mitad superior
       if (idx > 0) {
         doc.addPage();
         setupPage();
       }
-      currentY = topPosition;
+      currentY = topPosition; // posición fija: arriba
     } else {
-      const firstTableEnd = doc.lastAutoTable.finalY;
-      const spacing = 6;
-      currentY = Math.max(topPosition + halfHeight, firstTableEnd + spacing);
+      // Índice impar: MISMA hoja, mitad inferior — NUNCA agregar página aquí
+      currentY = topPosition + halfHeight; // posición fija: abajo
     }
 
-    const currentCellMinHeight = (idx === 4) ? (cellMinHeight - 30) : cellMinHeight;
+    // v37: para R5 (idx=4), usar altura reducida para dejar espacio a compromisos/firmas
+    const isR5 = (idx === 4);
+    const currentBlockBody = isR5 ? (blockBodyHeight - 45) : blockBodyHeight;
+
+    // v37: el descriptor absorbe TODO el espacio sobrante; las 2 filas inferiores quedan fijas a 7 mm.
+    // Suma: descriptorMinH + FIXED + FIXED = currentBlockBody
+    const descriptorMinH = currentBlockBody - (2 * FIXED_NIVEL_ROW_H);
 
     const descriptorConVinetas = c.titulo + "\n" + c.bullets.join("\n");
+
     const singleBody = [
       [
         {
           content: descriptorConVinetas,
-          colSpan: 5,
+          colSpan: 4, // v39: cubre las 4 columnas de niveles (18 mm * 4 = 72 mm)
           isDescriptor: true,
           title: c.titulo,
           styles: {
             halign: 'left',
             overflow: 'linebreak',
             fontSize: 9,
-            cellPadding: { top: 2, right: 4, bottom: 2, left: 2 }
+            cellPadding: { top: 2, right: 4, bottom: 2, left: 2 },
+            minCellHeight: descriptorMinH // v37: absorbe espacio sobrante → "Nivel de logro" queda al fondo
           }
         },
         {
           content: c.conductas,
           rowSpan: 3,
           styles: {
-            minCellHeight: currentCellMinHeight,
             valign: 'top',
             halign: 'left'
           }
@@ -388,17 +408,18 @@ export function generarFichaPDF(fichaData, bannerDataURL) {
       [
         {
           content: "Nivel de logro:",
-          colSpan: 5,
+          colSpan: 4, // v39: cubre las 4 columnas de niveles (72 mm)
           styles: {
             fontStyle: "bold",
-            halign: "left",
+            halign: "center",
             valign: "middle",
-            fillColor: [250, 250, 250]
+            fillColor: [250, 250, 250],
+            cellPadding: { top: 1.5, bottom: 1, left: 2, right: 2 },
+            minCellHeight: FIXED_NIVEL_ROW_H // v36: altura fija ~7 mm
           }
         }
       ],
       [
-        { content: "", styles: { fillColor: [255, 255, 255] } }, // Blank spacer cell (Column 0, 32 mm)
         celdaNivel("I", c.nivel === 1),
         celdaNivel("II", c.nivel === 2),
         celdaNivel("III", c.nivel === 3),
@@ -406,27 +427,31 @@ export function generarFichaPDF(fichaData, bannerDataURL) {
       ]
     ];
 
-    const showTableHeader = true;
+    // Evitar colisiones de startY con la tabla anterior reseteando finalY
+    if (doc.lastAutoTable) {
+      doc.lastAutoTable.finalY = 0;
+    }
 
     autoTable(doc, {
       startY: currentY,
-      margin: marginConfig,
+      margin: { ...marginConfig, bottom: 2 }, // v38: bottom mínimo para que autoTable NO auto-pagine — la paginación es manual
+      pageBreak: 'avoid', // v38: NUNCA partir la tabla entre páginas
       theme: 'grid',
+      tableWidth: 160, // v37: ancho fijo
       styles: { font: "Arial", fontSize: 8.5, lineColor: [120, 120, 120], lineWidth: 0.2, valign: "top", cellPadding: { top: 2, right: 4, bottom: 2, left: 2 }, textColor: [0, 0, 0] },
       headStyles: { fillColor: [235, 235, 235], textColor: 20, fontStyle: "bold", halign: "center" },
-      showHead: showTableHeader ? "everyPage" : "never",
-      head: showTableHeader ? [[
-        { content: "Desempeño y aspecto", colSpan: 5 },
+      showHead: "everyPage",
+      head: [[
+        { content: "Desempeño y aspecto", colSpan: 4 }, // v39: colSpan 4
         { content: "Conductas observables que describen el desempeño" }
-      ]] : [],
+      ]],
       body: singleBody,
       columnStyles: {
-        0: { cellWidth: 32 },
-        1: { cellWidth: 10 },
-        2: { cellWidth: 10 },
-        3: { cellWidth: 10 },
-        4: { cellWidth: 10 },
-        5: { cellWidth: 88 }
+        0: { cellWidth: 18 }, // v39: celda del nivel I (18 mm)
+        1: { cellWidth: 18 }, // v39: celda del nivel II (18 mm)
+        2: { cellWidth: 18 }, // v39: celda del nivel III (18 mm)
+        3: { cellWidth: 18 }, // v39: celda del nivel IV (18 mm)
+        4: { cellWidth: 88 }  // conductas
       },
       willDrawCell: (data) => {
         if (data.row.section === 'body') {
@@ -450,60 +475,10 @@ export function generarFichaPDF(fichaData, bannerDataURL) {
     currentY = doc.lastAutoTable.finalY;
   });
 
-  y = currentY + 5;
+  // Ajustes Addendum v33: Subir la tabla de compromisos y optimizar espaciado
+  y = currentY + 3;
 
   // III. COMPROMISOS DE MEJORA
-  if (y > pageBottomLimit - 30) {
-    doc.addPage();
-    setupPage();
-    y = llevaMembrete ? 34 : 20;
-  }
-
-  doc.setFont("Arial", "bold");
-  doc.setFontSize(10);
-  doc.text("III. COMPROMISOS DE MEJORA", M.left, y);
-  y += 4.5;
-
-  doc.setFont("Arial", "normal");
-  doc.setFontSize(8.5);
-  const textCompromisos = 'A partir de las conductas observables registradas por cada uno de los desempeños y del diálogo reflexivo y haciendo uso de preguntas orientadoras (ver protocolo) anote en la primera columna el o los desempeños que el docente requiere mejorar. En la segunda columna, registre los compromisos de mejora relacionados con cada uno de los desempeños.';
-  const splitCompromisos = doc.splitTextToSize(textCompromisos, CONTENT_W);
-  if (y + (splitCompromisos.length * 3.8) > pageBottomLimit) {
-    doc.addPage();
-    setupPage();
-    y = llevaMembrete ? 34 : 20;
-  }
-  doc.text(textCompromisos, M.left, y, { align: "justify", maxWidth: CONTENT_W });
-  y += (splitCompromisos.length * 3.8) + 5.5;
-
-  const compromisos = fichaData.compromisosMejora || [];
-  const compRows = compromisos.map(c => [
-    c.desempenoPorMejorar || "",
-    c.compromisoMejora || ""
-  ]).filter(row => row[0].trim() !== "" || row[1].trim() !== "");
-
-
-  autoTable(doc, {
-    startY: y,
-    margin: marginConfig,
-    theme: 'grid',
-    styles: { font: 'Arial', fontSize: 8.5, cellPadding: 3, overflow: 'linebreak', textColor: [0, 0, 0] },
-    headStyles: { fillColor: [235, 235, 235], textColor: 20, fontStyle: 'bold' },
-    columnStyles: {
-      0: { cellWidth: 80 },
-      1: { cellWidth: 80 }
-    },
-    head: [["Desempeño por mejorar", "Compromisos de mejora"]],
-    body: compRows.map(row => [
-      { content: row[0], styles: { minCellHeight: 15 } },
-      { content: row[1], styles: { minCellHeight: 15 } }
-    ]),
-    didDrawPage: (data) => { if (data.pageNumber > pageCount) setupPage(); }
-  });
-
-  y = doc.lastAutoTable.finalY + 5;
-
-  // IV. DECLARACIÓN
   if (y > pageBottomLimit - 25) {
     doc.addPage();
     setupPage();
@@ -511,12 +486,66 @@ export function generarFichaPDF(fichaData, bannerDataURL) {
   }
 
   doc.setFont("Arial", "bold");
-  doc.setFontSize(10);
-  doc.text("IV. DECLARACIÓN", M.left, y);
-  y += 4.5;
+  doc.setFontSize(9.5);
+  doc.text("III. COMPROMISOS DE MEJORA", M.left, y);
+  y += 3.5;
 
   doc.setFont("Arial", "normal");
-  doc.setFontSize(9);
+  doc.setFontSize(8); // v33: tamaño reducido
+  const textCompromisos = 'A partir de las conductas observables registradas por cada uno de los desempeños y del diálogo reflexivo y haciendo uso de preguntas orientadoras (ver protocolo) anote en la primera columna el o los desempeños que el docente requiere mejorar. En la segunda columna, registre los compromisos de mejora relacionados con cada uno de los desempeños.';
+  const splitCompromisos = doc.splitTextToSize(textCompromisos, CONTENT_W);
+  if (y + (splitCompromisos.length * 3.3) > pageBottomLimit) {
+    doc.addPage();
+    setupPage();
+    y = llevaMembrete ? 34 : 20;
+  }
+  doc.text(textCompromisos, M.left, y, { align: "justify", maxWidth: CONTENT_W });
+  y += (splitCompromisos.length * 3.3) + 4; // v33: reducido
+
+  const compromisos = fichaData.compromisosMejora || [];
+  let compRows = compromisos.map(c => [
+    c.desempenoPorMejorar || "",
+    c.compromisoMejora || ""
+  ]).filter(row => row[0].trim() !== "" || row[1].trim() !== "");
+
+  if (compRows.length === 0) {
+    compRows = [["", ""]];
+  }
+
+  autoTable(doc, {
+    startY: y,
+    margin: marginConfig,
+    theme: 'grid',
+    styles: { font: 'Arial', fontSize: 8.5, cellPadding: 2.5, overflow: 'linebreak', textColor: [0, 0, 0] },
+    headStyles: { fillColor: [235, 235, 235], textColor: 20, fontStyle: 'bold' },
+    columnStyles: {
+      0: { cellWidth: 80 },
+      1: { cellWidth: 80 }
+    },
+    head: [["Desempeño por mejorar", "Compromisos de mejora"]],
+    body: compRows.map(row => [
+      { content: row[0], styles: { minCellHeight: 18 } }, // v33: celdas más cómodas (antes 15)
+      { content: row[1], styles: { minCellHeight: 18 } }  // v33: celdas más cómodas (antes 15)
+    ]),
+    didDrawPage: (data) => { if (data.pageNumber > pageCount) setupPage(); }
+  });
+
+  y = doc.lastAutoTable.finalY + 4.5; // v33: reducido
+
+  // IV. DECLARACIÓN
+  if (y > pageBottomLimit - 22) { // v33: reducido
+    doc.addPage();
+    setupPage();
+    y = llevaMembrete ? 34 : 20;
+  }
+
+  doc.setFont("Arial", "bold");
+  doc.setFontSize(9.5); // v33: reducido
+  doc.text("IV. DECLARACIÓN", M.left, y);
+  y += 3.5; // v33: reducido
+
+  doc.setFont("Arial", "normal");
+  doc.setFontSize(8.5); // v33: reducido
   
   const dec = fichaData.declaracion || {};
   const horaVal = dec.hora || "____";
@@ -527,7 +556,7 @@ export function generarFichaPDF(fichaData, bannerDataURL) {
   const decText = `En mérito de la retroalimentación brindada, a las ${horaVal} horas del día ${diaVal} de ${mesVal} del año ${anioVal}, en calidad de docente monitoreado y observador firmamos el presente documento dando conformidad de haberse realizado la reunión.`;
   const linesCount = doc.splitTextToSize(decText, CONTENT_W).length;
   doc.text(decText, M.left, y, { maxWidth: CONTENT_W, align: 'justify' });
-  y += (linesCount * 4.2) + 8;
+  y += (linesCount * 3.8) + 6; // v33: reducido
 
   // V. SIGNATURES
   if (y > pageBottomLimit - 25) {

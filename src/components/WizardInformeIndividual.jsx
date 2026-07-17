@@ -505,6 +505,8 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
   const [bannerDataURL, setBannerDataURL] = useState(null);
   const [qrDataURL, setQrDataURL] = useState(null);
   const [exportProgress, setExportProgress] = useState(null);
+  const [showFichaExportModal, setShowFichaExportModal] = useState(false);
+  const [selectedDocenteForExport, setSelectedDocenteForExport] = useState(null);
 
   const especialistaSeleccionado = ESPECIALISTAS_MONITOREO.find(e => e.id === especialistaId);
 
@@ -1150,16 +1152,32 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
     }
   };
 
+  const handleDownloadETPFicha = (conRubrica) => {
+    if (!selectedDocenteForExport || !selectedDocenteForExport.ficha) return;
+    setShowFichaExportModal(false);
+    try {
+      setExportProgress(`Preparando ficha de monitoreo de ${selectedDocenteForExport.nombre}...`);
+      generarFichaETPPDF(selectedDocenteForExport.ficha, bannerDataURL, { conRubrica });
+      showToast(`Ficha de ${selectedDocenteForExport.nombre} descargada.`);
+    } catch (err) {
+      showToast(`Error al exportar ficha: ${err.message}`, 'error');
+    } finally {
+      setExportProgress(null);
+      setSelectedDocenteForExport(null);
+    }
+  };
+
   const handleExportFichaPDF = (docenteItem) => {
     if (!docenteItem.ficha) return;
     try {
-      setExportProgress(`Preparando ficha de monitoreo de ${docenteItem.nombre}...`);
       if (programaFinal === 'ETP') {
-        generarFichaETPPDF(docenteItem.ficha, bannerDataURL);
+        setSelectedDocenteForExport(docenteItem);
+        setShowFichaExportModal(true);
       } else {
+        setExportProgress(`Preparando ficha de monitoreo de ${docenteItem.nombre}...`);
         generarFichaPDF(docenteItem.ficha, bannerDataURL);
+        showToast(`Ficha de ${docenteItem.nombre} descargada.`);
       }
-      showToast(`Ficha de ${docenteItem.nombre} descargada.`);
     } catch (err) {
       showToast(`Error al exportar ficha: ${err.message}`, 'error');
     } finally {
@@ -1985,6 +2003,109 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
             </BarChart>
           </ResponsiveContainer>
         </div>
+      {showFichaExportModal && selectedDocenteForExport && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(12, 25, 41, 0.75)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontFamily: "'DM Sans', sans-serif"
+        }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.98)',
+            borderRadius: 16,
+            padding: '32px 40px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            textAlign: 'center',
+            maxWidth: 480,
+            width: '90%',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 20
+          }}>
+            <h4 style={{ fontSize: 18, fontWeight: 700, color: C.navy1, margin: 0 }}>
+              Formato de Descarga - Monitoreo ETP
+            </h4>
+            <p style={{ fontSize: 14, color: C.g500, margin: 0, lineHeight: 1.5 }}>
+              Selecciona el tipo de documento a exportar para el docente <strong>{selectedDocenteForExport.nombre}</strong>:
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button 
+                type="button" 
+                onClick={() => handleDownloadETPFicha(false)} 
+                style={{
+                  padding: '12px 20px',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  backgroundColor: C.navy3,
+                  color: C.white,
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8
+                }}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = C.navy5}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = C.navy3}
+              >
+                📄 Descargar Ficha de Monitoreo sola (4 páginas)
+              </button>
+              <button 
+                type="button" 
+                onClick={() => handleDownloadETPFicha(true)} 
+                style={{
+                  padding: '12px 20px',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  backgroundColor: C.green,
+                  color: C.white,
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8
+                }}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#15803D'}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = C.green}
+              >
+                📚 Descargar Ficha + Rúbrica de Observación (10 páginas)
+              </button>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+              <button 
+                type="button" 
+                onClick={() => {
+                  setShowFichaExportModal(false);
+                  setSelectedDocenteForExport(null);
+                }} 
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 6,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  backgroundColor: 'transparent',
+                  color: C.g500,
+                  border: `1px solid ${C.g300}`,
+                  cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
