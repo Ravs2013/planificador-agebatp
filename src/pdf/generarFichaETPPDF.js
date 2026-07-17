@@ -138,18 +138,19 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     bottom: myM.bottom
   };
 
-  // Year slogan in Monotype Corsiva
+  // Year slogan in Monotype Corsiva (bajado un poquito más a Y=33 para no chocar con el membrete)
   if (llevaMembrete) {
     doc.setFont("Monotype Corsiva", "italic");
     doc.setFontSize(9.5);
     doc.setTextColor(60, 60, 60);
-    doc.text('"Año de la Esperanza y el Fortalecimiento de la Democracia"', myM.pageW / 2, 31, { align: "center" });
+    doc.text('"Año de la Esperanza y el Fortalecimiento de la Democracia"', myM.pageW / 2, 33, { align: "center" });
     doc.setTextColor(0);
     doc.setFont("Arial", "normal");
     doc.setFontSize(10);
   }
 
-  let y = llevaMembrete ? 35 : 20;
+  // Título inicia en Y=38 para no chocar con el slogan
+  let y = llevaMembrete ? 38 : 20;
 
   // Title
   doc.setFont("Arial", "bold");
@@ -399,8 +400,12 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
   y += 4.5;
 
   const topPosition = llevaMembrete ? 34 : 20;
+  const availableHeight = pageBottomLimit - topPosition;
+  const halfHeight = availableHeight / 2;
+  const HEADER_H = 8;
+  const blockBodyHeight = halfHeight - HEADER_H;
 
-  const drawRubricaTable = (rIdx, startY) => {
+  const drawRubricaTable = (rIdx, startY, isPage1) => {
     const rubrica = rubricas[rIdx] || {};
     const def = RUBRICAS_DEF[rIdx] || {};
     const aspectos = rubrica.aspectos || [];
@@ -435,9 +440,10 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
       }]
     ];
 
-    // Celdas de rúbricas cortas y compactas para evitar abultar
-    const bodyRowMinH = 22; // alto mínimo para aspectos
-    const evRowMinH = 26;   // alto mínimo para evidencias (muy compacto)
+    // Lógica diferenciada: R1 en la página 1 es compacta. 
+    // R2, R3, R4, R5 en las páginas 2 y 3 se estiran dinámicamente para ocupar exactamente la mitad del folio
+    const bodyRowMinH = isPage1 ? 22 : 24;
+    const evRowMinH = isPage1 ? 26 : (blockBodyHeight - bodyRowMinH);
 
     bodyRows[0][0].styles.minCellHeight = bodyRowMinH;
     bodyRows[0][1].styles.minCellHeight = bodyRowMinH;
@@ -484,7 +490,7 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
           doc.setFontSize(8.5);
           doc.setTextColor(0);
           const startX = data.cell.x + 2.5;
-          let startYCell = data.cell.y + 3.2; // Ajustado
+          let startYCell = data.cell.y + 3.2;
           doc.text(`${data.cell.raw.label}:`, startX, startYCell);
 
           doc.setFont("Arial", "normal");
@@ -499,19 +505,19 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
   };
 
   // Draw R1 on Page 1 (Fits perfectly and leaves plenty of space)
-  drawRubricaTable(0, y);
+  drawRubricaTable(0, y, true);
 
-  // Draw R2 and R3 on Page 2 (Together as a single group on one page)
+  // Draw R2 and R3 on Page 2 (Together as a single, page-filling table structure)
   doc.addPage();
   setupPage();
-  drawRubricaTable(1, topPosition);
-  drawRubricaTable(2, topPosition + 75); // Separation of 75 mm makes them look great
+  drawRubricaTable(1, topPosition, false);
+  drawRubricaTable(2, topPosition + halfHeight, false); // Colocada exactamente al inicio de la segunda mitad para unirse con R2
 
-  // Draw R4 and R5 on Page 3 (Together as a single group on one page)
+  // Draw R4 and R5 on Page 3 (Together as a single, page-filling table structure)
   doc.addPage();
   setupPage();
-  drawRubricaTable(3, topPosition);
-  drawRubricaTable(4, topPosition + 75);
+  drawRubricaTable(3, topPosition, false);
+  drawRubricaTable(4, topPosition + halfHeight, false);
 
   // Draw Page 4: Section IV, Observaciones, Declaración, Firmas
   doc.addPage();
@@ -837,7 +843,7 @@ const RUBRICAS_COMPLETAS_ETP = [
       "No alcanza las condiciones del nivel II.\n\nEn alguna ocasión, falta el respeto a uno o más estudiantes.\nO\nSi nota que hay faltas de respeto entre los estudiantes, no interviene.",
       "El docente es siempre respetuoso con los estudiantes y si nota faltas de respeto entre ellos, interviene. Sin embargo, se muestra distante en su interacción con los estudiantes.\n\nAlways es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nEn su interacción con los estudiantes, es frío e indiferente.",
       "El docente es siempre respetuoso con los estudiantes y si nota faltas de respeto entre ellos, interviene. Además, muestra cercanía en su interacción con los estudiantes.\n\nSiempre es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nEn su interacción con los estudiantes, practica la escucha atenta y emplea recursos de comunicación (proximidad espacial, desplazamiento en el aula, gestos amables, tono de voz calmado, entre otros) apropiados a sus características. Si emplea el humor, este es respetuoso y favorece las relaciones positivas en el aula.",
-      "El docente es siempre respetuoso con los estudiantes y si nota faltas de respeto entre ellos, interviene. Además, muestra consideración hacia la perspectiva de los estudiantes y cercanía en su interacción con ellos.\n\nSiempre es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nMuestra consideración hacia la perspectiva de los estudiantes (es decir, respeta sus opiniones y puntos de vista, les pide su parecer y lo considera, evita imponerse, y tiene una actitud dialogante y abierta).\nY\nEn su interacción con los estudiantes, practica la escucha atenta y emplea recursos de comunicación (proximidad espacial, desplazamiento en el aula, gestos amables, tono de voz calmado, entre otros) apropiados a sus características. Si emplea el humor, este es respetuoso y favorece las relaciones positivas en el aula."
+      "El docente es siempre respetuoso con los estudiantes and si nota faltas de respeto entre ellos, interviene. Además, muestra consideración hacia la perspectiva de los estudiantes y cercanía en su interacción con ellos.\n\nSiempre es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nMuestra consideración hacia la perspectiva de los estudiantes (es decir, respeta sus opiniones y puntos de vista, les pide su parecer y lo considera, evita imponerse, y tiene una actitud dialogante y abierta).\nY\nEn su interacción con los estudiantes, practica la escucha atenta y emplea recursos de comunicación (proximidad espacial, desplazamiento en el aula, gestos amables, tono de voz calmado, entre otros) apropiados a sus características. Si emplea el humor, este es respetuoso y favorece las relaciones positivas en el aula."
     ]
   }
 ];

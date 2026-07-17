@@ -2056,7 +2056,7 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
                 onMouseOver={(e) => e.currentTarget.style.backgroundColor = C.navy5}
                 onMouseOut={(e) => e.currentTarget.style.backgroundColor = C.navy3}
               >
-                📄 Descargar Ficha de Monitoreo sola (4 páginas)
+                Descargar Ficha de Monitoreo sola (4 páginas)
               </button>
               <button 
                 type="button" 
@@ -2079,7 +2079,7 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
                 onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#15803D'}
                 onMouseOut={(e) => e.currentTarget.style.backgroundColor = C.green}
               >
-                📚 Descargar Ficha + Rúbrica de Observación (10 páginas)
+                Descargar Ficha + Rúbrica de Observación (10 páginas)
               </button>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
