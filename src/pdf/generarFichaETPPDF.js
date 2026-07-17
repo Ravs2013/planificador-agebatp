@@ -1,6 +1,19 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { M, CONTENT_W, BODY_BOTTOM, aplicarFuentesArial, drawChrome } from './membrete';
+import { aplicarFuentesArial } from './membrete';
+import { FONT_CORSIVA } from './fuenteCorsiva';
+
+// Márgenes mínimos para expandir al máximo el contenido
+const myM = {
+  left: 10,
+  right: 10,
+  top: 9.5,
+  bottom: 12,
+  pageW: 210,
+  pageH: 297
+};
+const myCONTENT_W = myM.pageW - myM.left - myM.right; // 190 mm
+const myBODY_BOTTOM = myM.pageH - myM.bottom; // 285 mm
 
 /**
  * Dibuja las 8 casillas del DNI centradas en una celda de tabla.
@@ -68,7 +81,7 @@ function drawSignatureBlockWithBoxes(doc, name, role, dni, signatureDataURL, xCe
   doc.setFont("Arial", "normal");
   doc.text(name, xCenter, lineY + 8, { align: 'center' });
 
-  // v29 fix: DNI as simple text without boxes
+  // DNI as simple text without boxes
   const cleanDni = (dni || '').replace(/[^0-9]/g, '');
   if (cleanDni) {
     doc.setFont("Arial", "normal");
@@ -79,12 +92,17 @@ function drawSignatureBlockWithBoxes(doc, name, role, dni, signatureDataURL, xCe
 
 /**
  * Genera la Ficha de Monitoreo Pedagógico al Docente de CETPRO (ETP).
- * Copia fiel del modelo oficial con membrete AGEBATP.
+ * Copia fiel del modelo oficial con membrete AGEBATP y márgenes de impresión mínimos.
  */
 export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
   const conRubrica = options.conRubrica || false;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   aplicarFuentesArial(doc);
+
+  // Registrar la fuente Monotype Corsiva en el VFS de jsPDF
+  doc.addFileToVFS('MTCORSVA.TTF', FONT_CORSIVA);
+  doc.addFont('MTCORSVA.TTF', 'Monotype Corsiva', 'italic');
+  doc.addFont('MTCORSVA.TTF', 'Monotype Corsiva', 'normal');
 
   let pageCount = 0;
 
@@ -100,8 +118,13 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
   const llevaMembrete = !/ASISTENTE/i.test(cargoAutor);
 
   const setupPage = () => {
-    if (llevaMembrete) {
-      drawChrome(doc, { conMembreteCompleto: false, banner: bannerDataURL });
+    if (llevaMembrete && bannerDataURL) {
+      try {
+        // Banner extendido al ancho de página mínimo
+        doc.addImage(bannerDataURL, "JPEG", myM.left, 8, myCONTENT_W, myCONTENT_W / 8.6);
+      } catch (e) {
+        console.warn("Error drawing banner in PDF:", e);
+      }
     }
     pageCount++;
   };
@@ -110,53 +133,54 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
 
   const marginConfig = {
     top: llevaMembrete ? 34 : 20,
-    left: M.left,
-    right: M.right,
-    bottom: llevaMembrete ? 18 : 20
+    left: myM.left,
+    right: myM.right,
+    bottom: myM.bottom
   };
 
-  // Year slogan
+  // Year slogan in Monotype Corsiva
   if (llevaMembrete) {
-    doc.setFont("Arial", "italic");
-    doc.setFontSize(8);
-    doc.setTextColor(80, 80, 80);
-    doc.text('"Año de la Esperanza y el Fortalecimiento de la Democracia"', M.pageW / 2, 32, { align: "center" });
+    doc.setFont("Monotype Corsiva", "italic");
+    doc.setFontSize(10);
+    doc.setTextColor(60, 60, 60);
+    doc.text('"Año de la Esperanza y el Fortalecimiento de la Democracia"', myM.pageW / 2, 32.5, { align: "center" });
     doc.setTextColor(0);
     doc.setFont("Arial", "normal");
     doc.setFontSize(10);
   }
 
-  let y = llevaMembrete ? 38 : 20;
+  let y = llevaMembrete ? 37 : 20;
 
   // Title
   doc.setFont("Arial", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(10.5);
   doc.setTextColor(0);
   const titleText = "FICHA DE MONITOREO PEDAGÓGICO AL DOCENTE DE CETPRO";
-  const titleLines = doc.splitTextToSize(titleText, CONTENT_W);
-  doc.text(titleLines, M.pageW / 2, y, { align: "center" });
-  y += (titleLines.length * 4.8) + 5;
+  const titleLines = doc.splitTextToSize(titleText, myCONTENT_W);
+  doc.text(titleLines, myM.pageW / 2, y, { align: "center" });
+  y += (titleLines.length * 4.2) + 3;
 
-  const pageBottomLimit = llevaMembrete ? BODY_BOTTOM : (M.pageH - 20);
+  const pageBottomLimit = myBODY_BOTTOM;
   const dg = fichaData.datosGeneralesCETPRO || {};
   const sesion = fichaData.datosSesion || {};
   const rubricas = fichaData.rubricasETP || [];
 
   // ═══ I. DATOS GENERALES ═══
   doc.setFont("Arial", "bold");
-  doc.setFontSize(10);
-  doc.text("I. DATOS GENERALES:", M.left, y);
-  y += 3;
+  doc.setFontSize(9.5);
+  doc.text("I. DATOS GENERALES:", myM.left, y);
+  y += 3.2;
   doc.setFont("Arial", "normal");
   doc.setFontSize(8);
-  doc.text("Registre los datos del CETPRO, del docente a monitorear, del monitor y, si lo hubiera, de un observador.", M.left, y);
-  y += 5;
+  doc.text("Registre los datos del CETPRO, del docente a monitorear, del monitor y, si lo hubiera, de un observador.", myM.left, y);
+  y += 4.5;
 
   // Table 1: CETPRO data (Unified into a single, compact table)
   const instVal = dg.instancia || '';
   const instText = `${instVal === 'DRELM' ? '●' : '○'} DRELM     ${instVal === 'UGEL' ? '●' : '○'} UGEL     ${instVal === 'CETPRO' ? '●' : '○'} CETPRO`;
 
-  const hStyle = { fillColor: [242, 242, 242], fontStyle: 'bold' };
+  // Color de relleno "Blanco, Fondo 1, Oscuro 15%" -> [217, 217, 217]
+  const hStyle = { fillColor: [217, 217, 217], fontStyle: 'bold' };
 
   const dgTableRows = [
     [
@@ -193,12 +217,13 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     startY: y,
     margin: marginConfig,
     theme: 'grid',
-    styles: { font: 'Arial', fontSize: 8, cellPadding: 2.5, textColor: [0, 0, 0], valign: 'middle', overflow: 'linebreak', lineColor: [140, 140, 140], lineWidth: 0.2 },
+    // cellPadding: 1.5 para altura mínima de celda
+    styles: { font: 'Arial', fontSize: 8, cellPadding: 1.5, textColor: [0, 0, 0], valign: 'middle', overflow: 'linebreak', lineColor: [140, 140, 140], lineWidth: 0.2 },
     columnStyles: {
-      0: { cellWidth: 65 },
-      1: { cellWidth: 35, halign: 'center' },
-      2: { cellWidth: 25 },
-      3: { cellWidth: 35 } // Spans exactly 160 mm total
+      0: { cellWidth: 80 },
+      1: { cellWidth: 32, halign: 'center' },
+      2: { cellWidth: 30 },
+      3: { cellWidth: 48 } // Suma exactamente 190 mm de ancho
     },
     body: dgTableRows,
     willDrawCell: (data) => {
@@ -222,23 +247,23 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     rowPageBreak: 'avoid',
     didDrawPage: (data) => { if (data.pageNumber > pageCount) setupPage(); }
   });
-  y = doc.lastAutoTable.finalY + 6;
+  y = doc.lastAutoTable.finalY + 4;
 
   // ═══ II. DATOS DE LA SESIÓN OBSERVADA ═══
   doc.setFont("Arial", "bold");
-  doc.setFontSize(10);
-  doc.text("II. DATOS DE LA SESIÓN OBSERVADA:", M.left, y);
-  y += 3;
+  doc.setFontSize(9.5);
+  doc.text("II. DATOS DE LA SESIÓN OBSERVADA:", myM.left, y);
+  y += 3.2;
   doc.setFont("Arial", "italic");
   doc.setFontSize(8);
-  doc.text("Registre los datos de la sesión a observar.", M.left, y);
-  y += 5;
+  doc.text("Registre los datos de la sesión a observar.", myM.left, y);
+  y += 4.5;
 
   // Ciclo table
   const cicloVal = sesion.ciclo || '';
   const cicloRows = [
     [
-      { content: 'Ciclo', rowSpan: 4, styles: { fontStyle: 'bold', valign: 'middle', halign: 'center', fillColor: [242, 242, 242] } },
+      { content: 'Ciclo', rowSpan: 4, styles: { fontStyle: 'bold', valign: 'middle', halign: 'center', fillColor: [217, 217, 217] } },
       `${cicloVal === 'Basico' ? '●' : '○'} Básico`,
       'Opción ocupacional',
       sesion.opcionOcupacional || ''
@@ -264,13 +289,13 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     startY: y,
     margin: marginConfig,
     theme: 'grid',
-    styles: { font: 'Arial', fontSize: 8, cellPadding: 2.5, textColor: [0, 0, 0], overflow: 'linebreak', lineColor: [140, 140, 140], lineWidth: 0.2 },
+    styles: { font: 'Arial', fontSize: 8, cellPadding: 1.5, textColor: [0, 0, 0], overflow: 'linebreak', lineColor: [140, 140, 140], lineWidth: 0.2 },
     body: cicloRows,
-    columnStyles: { 0: { cellWidth: 18 }, 1: { cellWidth: 40 }, 2: { cellWidth: 37 }, 3: { cellWidth: 65 } },
+    columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 45 }, 2: { cellWidth: 43 }, 3: { cellWidth: 80 } }, // Suma 190 mm
     willDrawCell: (data) => {
       // Column 0 and Column 2 are headers (gray background)
       if (data.column.index === 0 || data.column.index === 2) {
-        data.cell.styles.fillColor = [242, 242, 242];
+        data.cell.styles.fillColor = [217, 217, 217];
         data.cell.styles.fontStyle = 'bold';
       } else {
         data.cell.styles.fillColor = [255, 255, 255];
@@ -287,16 +312,16 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     startY: y,
     margin: marginConfig,
     theme: 'grid',
-    styles: { font: 'Arial', fontSize: 8, cellPadding: 2.5, textColor: [0, 0, 0], overflow: 'linebreak', lineColor: [140, 140, 140], lineWidth: 0.2 },
+    styles: { font: 'Arial', fontSize: 8, cellPadding: 1.5, textColor: [0, 0, 0], overflow: 'linebreak', lineColor: [140, 140, 140], lineWidth: 0.2 },
     body: [
       ['Módulo formativo', sesion.moduloFormativo || ''],
       ['Unidad didáctica', sesion.unidadDidactica || ''],
       ['Nombre de la actividad', sesion.nombreActividad || ''],
     ],
-    columnStyles: { 0: { cellWidth: 40 }, 1: { cellWidth: 120 } },
+    columnStyles: { 0: { cellWidth: 45 }, 1: { cellWidth: 145 } }, // Suma 190 mm
     willDrawCell: (data) => {
       if (data.column.index === 0) {
-        data.cell.styles.fillColor = [242, 242, 242];
+        data.cell.styles.fillColor = [217, 217, 217];
         data.cell.styles.fontStyle = 'bold';
       } else {
         data.cell.styles.fillColor = [255, 255, 255];
@@ -343,41 +368,41 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     startY: y,
     margin: marginConfig,
     theme: 'grid',
-    styles: { font: 'Arial', fontSize: 7.5, cellPadding: 2, textColor: [0, 0, 0], overflow: 'linebreak', halign: 'center', valign: 'middle', lineColor: [140, 140, 140], lineWidth: 0.2 },
-    headStyles: { fillColor: [242, 242, 242], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', fontSize: 7.5 },
+    styles: { font: 'Arial', fontSize: 7.5, cellPadding: 1.2, textColor: [0, 0, 0], overflow: 'linebreak', halign: 'center', valign: 'middle', lineColor: [140, 140, 140], lineWidth: 0.2 },
+    headStyles: { fillColor: [217, 217, 217], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', fontSize: 7.5 },
     head: sessionHead,
     body: sessionBody,
     columnStyles: {
-      0: { cellWidth: 32 },
-      1: { cellWidth: 32 },
-      2: { cellWidth: 8 },
-      3: { cellWidth: 8 },
-      4: { cellWidth: 8 },
-      5: { cellWidth: 32 },
-      6: { cellWidth: 20 },
-      7: { cellWidth: 20 }
+      0: { cellWidth: 38 },
+      1: { cellWidth: 38 },
+      2: { cellWidth: 10 },
+      3: { cellWidth: 10 },
+      4: { cellWidth: 10 },
+      5: { cellWidth: 38 },
+      6: { cellWidth: 23 },
+      7: { cellWidth: 23 } // Total: 38+38+10+10+10+38+23+23 = 190 mm
     },
     rowPageBreak: 'avoid',
     didDrawPage: (data) => { if (data.pageNumber > pageCount) setupPage(); }
   });
-  y = doc.lastAutoTable.finalY + 6;
+  y = doc.lastAutoTable.finalY + 4;
 
   // ═══ III. DESEMPEÑOS, ASPECTOS Y CALIFICACIÓN ═══
   doc.setFont("Arial", "bold");
-  doc.setFontSize(10);
-  doc.text("III. DESEMPEÑOS, ASPECTOS Y CALIFICACIÓN", M.left, y);
-  y += 3;
+  doc.setFontSize(9.5);
+  doc.text("III. DESEMPEÑOS, ASPECTOS Y CALIFICACIÓN", myM.left, y);
+  y += 3.2;
   doc.setFont("Arial", "italic");
   doc.setFontSize(8);
   const instrETP = "Registre las descripciones o evidencias correspondientes a cada rúbrica/desempeño y determine el nivel de logro.";
-  doc.text(instrETP, M.left, y, { maxWidth: CONTENT_W });
-  y += 5;
+  doc.text(instrETP, myM.left, y, { maxWidth: myCONTENT_W });
+  y += 4.5;
 
   const topPosition = llevaMembrete ? 34 : 20;
   const availableHeight = pageBottomLimit - topPosition;
   const halfHeight = availableHeight / 2;
   const HEADER_H = 8;
-  const blockBodyHeight = halfHeight - HEADER_H; // 104 mm
+  const blockBodyHeight = halfHeight - HEADER_H;
 
   const drawRubricaTable = (rIdx, startY, isPage1) => {
     const rubrica = rubricas[rIdx] || {};
@@ -393,11 +418,11 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
       [
         {
           content: def.titulo || rubrica.titulo || `R${rIdx + 1}`,
-          styles: { fontStyle: 'bold', valign: 'middle', fontSize: 8.5, cellPadding: 3, fillColor: [255, 255, 255] }
+          styles: { fontStyle: 'bold', valign: 'middle', fontSize: 8.5, cellPadding: 2.5, fillColor: [255, 255, 255] }
         },
         { 
           content: bulletText, 
-          styles: { fontSize: 7.5, cellPadding: { top: 3, right: 3, bottom: 3, left: 3 }, overflow: 'linebreak', halign: 'justify', fillColor: [255, 255, 255] } 
+          styles: { fontSize: 7.5, cellPadding: 2.5, overflow: 'linebreak', halign: 'justify', fillColor: [255, 255, 255] } 
         },
         { content: lvl === 1 ? 'X' : '', styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: [255, 255, 255] } },
         { content: lvl === 2 ? 'X' : '', styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: [255, 255, 255] } },
@@ -410,12 +435,13 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
         isEvidence: true,
         label: def.etiquetaEvidencia || 'Evidencias',
         evText: evidencias,
-        styles: { fontSize: 8, cellPadding: { top: 2.5, right: 4, bottom: 3, left: 2.5 }, overflow: 'linebreak' }
+        styles: { fontSize: 8, cellPadding: 2 }
       }]
     ];
 
-    const currentBlockBody = isPage1 ? 49 : blockBodyHeight;
-    const bodyRowMinH = 24;
+    // Ajustar el alto del bloque para la página 1 o páginas intermedias
+    const currentBlockBody = isPage1 ? (pageBottomLimit - startY - 8) : blockBodyHeight;
+    const bodyRowMinH = isPage1 ? 28 : 24;
     const evRowMinH = currentBlockBody - bodyRowMinH;
 
     bodyRows[0][0].styles.minCellHeight = bodyRowMinH;
@@ -434,25 +460,25 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
       styles: { font: 'Arial', fontSize: 8, lineColor: [120, 120, 120], lineWidth: 0.2, valign: 'middle', textColor: [0, 0, 0] },
       head: [
         [
-          { content: 'Rúbrica / desempeño', rowSpan: 2, styles: { halign: 'center', valign: 'middle', fillColor: [235, 235, 235], textColor: [0, 0, 0] } },
-          { content: 'Aspectos', rowSpan: 2, styles: { halign: 'center', valign: 'middle', fillColor: [235, 235, 235], textColor: [0, 0, 0] } },
-          { content: 'Nivel de logro', colSpan: 4, styles: { halign: 'center', fillColor: [235, 235, 235], textColor: [0, 0, 0] } }
+          { content: 'Rúbrica / desempeño', rowSpan: 2, styles: { halign: 'center', valign: 'middle', fillColor: [217, 217, 217], textColor: [0, 0, 0] } },
+          { content: 'Aspectos', rowSpan: 2, styles: { halign: 'center', valign: 'middle', fillColor: [217, 217, 217], textColor: [0, 0, 0] } },
+          { content: 'Nivel de logro', colSpan: 4, styles: { halign: 'center', fillColor: [217, 217, 217], textColor: [0, 0, 0] } }
         ],
         [
-          { content: 'I', styles: { halign: 'center', fillColor: [235, 235, 235], textColor: [0, 0, 0] } },
-          { content: 'II', styles: { halign: 'center', fillColor: [235, 235, 235], textColor: [0, 0, 0] } },
-          { content: 'III', styles: { halign: 'center', fillColor: [235, 235, 235], textColor: [0, 0, 0] } },
-          { content: 'IV', styles: { halign: 'center', fillColor: [235, 235, 235], textColor: [0, 0, 0] } }
+          { content: 'I', styles: { halign: 'center', fillColor: [217, 217, 217], textColor: [0, 0, 0] } },
+          { content: 'II', styles: { halign: 'center', fillColor: [217, 217, 217], textColor: [0, 0, 0] } },
+          { content: 'III', styles: { halign: 'center', fillColor: [217, 217, 217], textColor: [0, 0, 0] } },
+          { content: 'IV', styles: { halign: 'center', fillColor: [217, 217, 217], textColor: [0, 0, 0] } }
         ]
       ],
       body: bodyRows,
       columnStyles: {
-        0: { cellWidth: 35 },
-        1: { cellWidth: 97 },
-        2: { cellWidth: 7 },
-        3: { cellWidth: 7 },
-        4: { cellWidth: 7 },
-        5: { cellWidth: 7 },
+        0: { cellWidth: 40 },
+        1: { cellWidth: 118 },
+        2: { cellWidth: 8 },
+        3: { cellWidth: 8 },
+        4: { cellWidth: 8 },
+        5: { cellWidth: 8 }, // Suma 190 mm de ancho
       },
       didDrawCell: (data) => {
         if (data.cell.raw && data.cell.raw.isEvidence) {
@@ -463,13 +489,13 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
           doc.setFontSize(8.5);
           doc.setTextColor(0);
           const startX = data.cell.x + 2.5;
-          let startYCell = data.cell.y + 3.8;
+          let startYCell = data.cell.y + 3.2; // Ajustado
           doc.text(`${data.cell.raw.label}:`, startX, startYCell);
 
           doc.setFont("Arial", "normal");
           const bodyContent = data.cell.raw.evText || '';
           const lines = doc.splitTextToSize(bodyContent, data.cell.width - 5);
-          startYCell += 4.2;
+          startYCell += 3.8;
           doc.text(lines, startX, startYCell);
         }
       },
@@ -498,13 +524,13 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
   y = topPosition;
 
   doc.setFont("Arial", "bold");
-  doc.setFontSize(10);
-  doc.text("IV. RETROALIMENTACIÓN Y COMPROMISOS DE MEJORA:", M.left, y);
-  y += 3;
+  doc.setFontSize(9.5);
+  doc.text("IV. RETROALIMENTACIÓN Y COMPROMISOS DE MEJORA:", myM.left, y);
+  y += 3.2;
   doc.setFont("Arial", "italic");
   doc.setFontSize(8);
-  doc.text("Mediante el diálogo reflexivo, defina con el docente los desempeños que requiere mejorar y sus respectivos compromisos de mejora.", M.left, y, { maxWidth: CONTENT_W });
-  y += 6;
+  doc.text("Mediante el diálogo reflexivo, defina con el docente los desempeños que requiere mejorar y sus respectivos compromisos de mejora.", myM.left, y, { maxWidth: myCONTENT_W });
+  y += 5;
 
   // Compromisos table
   const compromisos = fichaData.compromisosMejora || [];
@@ -515,13 +541,17 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     startY: y,
     margin: marginConfig,
     theme: 'grid',
-    styles: { font: 'Arial', fontSize: 8.5, cellPadding: 3, overflow: 'linebreak', textColor: [0, 0, 0] },
-    headStyles: { fillColor: [220, 220, 220], textColor: [0, 0, 0], fontStyle: 'bold' },
+    styles: { font: 'Arial', fontSize: 8.5, cellPadding: 2.5, overflow: 'linebreak', textColor: [0, 0, 0] },
+    headStyles: { fillColor: [217, 217, 217], textColor: [0, 0, 0], fontStyle: 'bold' },
     head: [['Desempeños por mejorar', 'Compromisos de mejora']],
     body: compRows.map(row => [
       { content: row[0], styles: { minCellHeight: 12 } },
       { content: row[1], styles: { minCellHeight: 12 } }
     ]),
+    columnStyles: {
+      0: { cellWidth: 95 },
+      1: { cellWidth: 95 } // Total 190 mm
+    },
     rowPageBreak: 'avoid',
     didDrawPage: (data) => { if (data.pageNumber > pageCount) setupPage(); }
   });
@@ -530,20 +560,20 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
   // Observaciones
   doc.setFont("Arial", "bold");
   doc.setFontSize(9);
-  doc.text("Observaciones:", M.left, y);
+  doc.text("Observaciones:", myM.left, y);
   y += 4;
   doc.setFont("Arial", "normal");
   doc.setFontSize(8.5);
   const obsText = fichaData.observacionesFicha || '';
   if (obsText) {
-    const obsLines = doc.splitTextToSize(obsText, CONTENT_W);
-    doc.text(obsLines, M.left, y);
+    const obsLines = doc.splitTextToSize(obsText, myCONTENT_W);
+    doc.text(obsLines, myM.left, y);
     y += obsLines.length * 3.8 + 4;
   } else {
     doc.setDrawColor(180);
     doc.setLineWidth(0.15);
     for (let i = 0; i < 3; i++) {
-      doc.line(M.left, y + (i * 6), M.left + CONTENT_W, y + (i * 6));
+      doc.line(myM.left, y + (i * 6), myM.left + myCONTENT_W, y + (i * 6));
     }
     y += 20;
   }
@@ -558,8 +588,8 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
   doc.setFont("Arial", "normal");
   doc.setFontSize(9);
   const decText = `Culminado el monitoreo y la retroalimentación brindada y siendo las ${horaVal} horas del día ${diaVal} de ${mesVal} del ${anioVal}, firmamos el presente documento en señal de conformidad.`;
-  const decLines = doc.splitTextToSize(decText, CONTENT_W);
-  doc.text(decText, M.left, y, { maxWidth: CONTENT_W, align: 'justify' });
+  const decLines = doc.splitTextToSize(decText, myCONTENT_W);
+  doc.text(decText, myM.left, y, { maxWidth: myCONTENT_W, align: 'justify' });
   y += (decLines.length * 4.2) + 12;
 
   // Firmas area
@@ -570,7 +600,7 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
   // Draw signature left (Docente)
   const docNombre = firmas.docente?.nombre || '';
   const docDni = (firmas.docente?.dni && firmas.docente?.dni !== '(Espacio en Blanco)') ? firmas.docente?.dni : '';
-  drawSignatureBlockWithBoxes(doc, docNombre, "Firma del docente", docDni, fichaData.firmaDocenteDataUrl, M.left + 5 + (sigWidth / 2), sigLineY - 14);
+  drawSignatureBlockWithBoxes(doc, docNombre, "Firma del docente", docDni, fichaData.firmaDocenteDataUrl, myM.left + 15 + (sigWidth / 2), sigLineY - 14);
 
   // Draw signature right (Monitor)
   const monitorNombreFinal = firmas.observador?.nombre || dg.monitorNombre || '';
@@ -578,7 +608,7 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
     ? firmas.observador?.dni 
     : (dg.monitorDNI || '');
   
-  drawSignatureBlockWithBoxes(doc, monitorNombreFinal, "Firma del monitor", monitorDni, fichaData.firmaMonitorDataUrl, M.pageW - M.right - (sigWidth / 2) - 5, sigLineY - 14);
+  drawSignatureBlockWithBoxes(doc, monitorNombreFinal, "Firma del monitor", monitorDni, fichaData.firmaMonitorDataUrl, myM.pageW - myM.right - (sigWidth / 2) - 15, sigLineY - 14);
 
   // ═══ ETP Rubrica pages (5 to 10) ═══
   if (conRubrica) {
@@ -589,12 +619,12 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
 
     doc.setFont("Arial", "bold");
     doc.setFontSize(11);
-    doc.text("RÚBRICA DE PLANIFICACIÓN Y OBSERVACIÓN DEL DESEMPEÑO DOCENTE DE ETP", M.pageW / 2, yRub, { align: "center", maxWidth: CONTENT_W });
+    doc.text("RÚBRICA DE PLANIFICACIÓN Y OBSERVACIÓN DEL DESEMPEÑO DOCENTE DE ETP", myM.pageW / 2, yRub, { align: "center", maxWidth: myCONTENT_W });
     yRub += 12;
 
     doc.setFont("Arial", "bold");
     doc.setFontSize(9.5);
-    doc.text("Orientaciones de aplicación", M.left, yRub);
+    doc.text("Orientaciones de aplicación", myM.left, yRub);
     yRub += 5;
 
     doc.setFont("Arial", "normal");
@@ -603,7 +633,7 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
       `- Los instrumentos de planificación elaborados por él: la programación del Programa de Estudios, un módulo, una unidad didáctica, una de sus fichas de actividades de aprendizaje.\n\n` +
       `- La descripción del contexto y de las características de los estudiantes en los que basó el diseño de su planificación (edades, ciclo, intereses y necesidades, nivel de desarrollo en la especialidad técnica, situación laboral, entre otros).`;
     
-    doc.text(orientacionesText, M.left, yRub, { maxWidth: CONTENT_W, align: "justify" });
+    doc.text(orientacionesText, myM.left, yRub, { maxWidth: myCONTENT_W, align: "justify" });
 
     // Page 6 to 10: R1 to R5
     RUBRICAS_COMPLETAS_ETP.forEach((rubCompleta, rIdx) => {
@@ -615,29 +645,29 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
 
       doc.setFont("Arial", "bold");
       doc.setFontSize(10.5);
-      doc.text(rubCompleta.titulo, M.left, yRub);
+      doc.text(rubCompleta.titulo, myM.left, yRub);
       yRub += 5;
 
       doc.setFont("Arial", "normal");
       doc.setFontSize(8.5);
       const descText = rubCompleta.descripcion;
-      const descLines = doc.splitTextToSize(descText, CONTENT_W);
-      doc.text(descText, M.left, yRub, { maxWidth: CONTENT_W, align: "justify" });
+      const descLines = doc.splitTextToSize(descText, myCONTENT_W);
+      doc.text(descText, myM.left, yRub, { maxWidth: myCONTENT_W, align: "justify" });
       yRub += descLines.length * 3.8 + 4;
 
       doc.setFont("Arial", "bold");
       doc.setFontSize(9);
-      doc.text("Aspectos:", M.left, yRub);
+      doc.text("Aspectos:", myM.left, yRub);
       yRub += 4;
 
       doc.setFont("Arial", "normal");
       doc.setFontSize(8);
       const aspectsText = rubCompleta.aspectos.map(a => `• ${a}`).join('\n');
-      const aspectsLines = doc.splitTextToSize(aspectsText, CONTENT_W);
-      doc.text(aspectsText, M.left, yRub, { maxWidth: CONTENT_W });
+      const aspectsLines = doc.splitTextToSize(aspectsText, myCONTENT_W);
+      doc.text(aspectsText, myM.left, yRub, { maxWidth: myCONTENT_W });
       yRub += aspectsLines.length * 3.6 + 6;
 
-      // Table of levels
+      // Table of levels (190 mm width)
       const descHeader = [
         [
           { content: `NIVEL I\n(Muy deficiente)${evalLvl === 1 ? '   [X]' : ''}`, styles: { halign: 'center', fillColor: evalLvl === 1 ? [220, 220, 220] : [245, 245, 245], fontStyle: evalLvl === 1 ? 'bold' : 'normal' } },
@@ -664,10 +694,10 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
         head: descHeader,
         body: descBody,
         columnStyles: {
-          0: { cellWidth: 40 },
-          1: { cellWidth: 40 },
-          2: { cellWidth: 40 },
-          3: { cellWidth: 40 }
+          0: { cellWidth: 47.5 },
+          1: { cellWidth: 47.5 },
+          2: { cellWidth: 47.5 },
+          3: { cellWidth: 47.5 } // Total 190 mm
         },
         willDrawCell: (data) => {
           if (data.column.index === evalLvl - 1) {
@@ -762,7 +792,7 @@ const RUBRICAS_COMPLETAS_ETP = [
     aspectos: [
       "Acciones del docente para promover la participación de los estudiantes con metodologías activas o modelos de aprendizaje con atención a las características de los estudiantes en las actividades de aprendizaje.",
       "Proporción de estudiantes involucrados en las actividades de aprendizaje.",
-      "Acciones del docente para favorecer la comprensión de la importancia o utilidad de lo que se aprende con atención a la diversidad."
+      "Acciones del docente para favorer la comprensión de la importancia o utilidad de lo que se aprende con atención a la diversidad."
     ],
     descriptores: [
       "No alcanza las condiciones del nivel II.\n\nNo ofrece oportunidades de participación a los estudiantes durante la actividad de aprendizaje observada.\nO\nMás de la mitad de los estudiantes está distraído, muestra indiferencia, desgano o signos de aburrimiento.",
@@ -797,7 +827,7 @@ const RUBRICAS_COMPLETAS_ETP = [
       "No alcanza las condiciones del nivel II.\n\nNo monitorea o lo hace muy ocasionalmente (es decir, destina menos del 25% de la actividad de aprendizaje a recoger evidencia de la comprensión y progreso de los estudiantes).\nO\nSanciona (reprocha, penaliza o desacredita) las solicitudes de apoyo pedagógico o preguntas de los estudiantes que reflejan incomprensión.\nO\nAnte las actuaciones de los estudiantes (respuestas, intervenciones, presentación de producciones, etc.), brinda retroalimentación incorrecta.\nO\nNo brinda retroalimentación de ningún tipo o solo se limita a repetir las indicaciones sin adaptarlas.\nO\nSanciona las respuestas incorrectas de los estudiantes desaprovechándolas como oportunidades para el aprendizaje.",
       "El docente monitorea activamente a los estudiantes, pero solo les brinda retroalimentación elemental.\n\nMonitorea activamente la comprensión y el progreso de los estudiantes, destinando al menos el 25% de la actividad de aprendizaje a recoger evidencia a través de preguntas, diálogos o problemas formulados a toda la clase, o bien recorriendo los grupos y revisando sus trabajos o productos.\nY\nAnte las actuaciones de los estudiantes (respuestas, intervenciones, presentación de producciones, ejecución de tareas, etc.), solo brinda retroalimentación elemental (indica únicamente si la respuesta es correcta o incorrecta, da la respuesta correcta o señala dónde encontrarla).",
       "El docente monitorea activamente a los estudiantes y en una ocasión les brinda retroalimentación descriptiva o adapta la actividad.\n\nMonitorea activamente la comprensión y el progreso de los estudiantes, destinando al menos el 25% de la actividad de aprendizaje a recoger evidencia a través de preguntas, diálogos o problemas formulados a toda la clase, o bien recorriendo los grupos y revisando sus trabajos o productos.\nY\nAnte las actuaciones de los estudiantes (respuestas, intervenciones, presentación de producciones, ejecución de tareas, etc.), en una ocasión brinda retroalimentación descriptiva (sugiere en detalle qué hacer para mejorar o especifica lo que falta para el logro) o adapta la actividad (retoma una noción previa necesaria para la comprensión, intenta explicar de otro modo o ejemplifica el contenido, o reduce la dificultad de la tarea para favorecer un avance progresivo).",
-      "El docente monitorea activamente a los estudiantes y en más de una ocasión les brinda retroalimentación descriptiva o adapta la actividad.\n\nMonitorea activamente la comprensión y el progreso de los estudiantes, destinando al menos el 25% de la actividad de aprendizaje a recoger evidencia a través de preguntas, diálogos o problemas formulados a toda la clase, o bien recorriendo los grupos y revisando sus trabajos o productos.\nY\nAnte las actuaciones de los estudiantes (respuestas, intervenciones, presentación de producciones, ejecución de tareas, etc.), en más de una ocasión brinda retroalimentación descriptiva (sugiere en detalle qué hacer para mejorar o especifica lo que falta para el logro) o adapta la actividad (retoma una noción previa necesaria para la comprensión, intenta explicar de otro modo o ejemplifica el contenido, o reduce la dificultad de la tarea para favorecer un avance progresivo)."
+      "El docente monitorea activamente a los estudiantes y en más de una ocasión les brinda retroalimentación descriptiva o adapta la actividad.\n\nMonitorea activamente la comprensión y el progreso de los estudiantes, destinando al menos el 25% de la actividad de aprendizaje a recoger evidencia a través de preguntas, diálogos o problemas formulados a toda la clase, o bien recorriendo los grupos y revisando sus trabajos o productos.\nY\nAnte las actuaciones de los estudiantes (respuestas, intervenciones, presentación de producciones, execution de tareas, etc.), en más de una ocasión brinda retroalimentación descriptiva (sugiere en detalle qué hacer para mejorar o especifica lo que falta para el logro) o adapta la actividad (retoma una noción previa necesaria para la comprensión, intenta explicar de otro modo o ejemplifica el contenido, o reduce la dificultad de la tarea para favorecer un avance progresivo)."
     ]
   },
   {
@@ -810,7 +840,7 @@ const RUBRICAS_COMPLETAS_ETP = [
     ],
     descriptores: [
       "No alcanza las condiciones del nivel II.\n\nEn alguna ocasión, falta el respeto a uno o más estudiantes.\nO\nSi nota que hay faltas de respeto entre los estudiantes, no interviene.",
-      "El docente es siempre respetuoso con los estudiantes y si nota faltas de respeto entre ellos, interviene. Sin embargo, se muestra distante en su interacción con los estudiantes.\n\nSiempre es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nEn su interacción con los estudiantes, es frío e indiferente.",
+      "El docente es siempre respetuoso con los estudiantes y si nota faltas de respeto entre ellos, interviene. Sin embargo, se muestra distante en su interacción con los estudiantes.\n\nAlways es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nEn su interacción con los estudiantes, es frío e indiferente.",
       "El docente es siempre respetuoso con los estudiantes y si nota faltas de respeto entre ellos, interviene. Además, muestra cercanía en su interacción con los estudiantes.\n\nSiempre es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nEn su interacción con los estudiantes, practica la escucha atenta y emplea recursos de comunicación (proximidad espacial, desplazamiento en el aula, gestos amables, tono de voz calmado, entre otros) apropiados a sus características. Si emplea el humor, este es respetuoso y favorece las relaciones positivas en el aula.",
       "El docente es siempre respetuoso con los estudiantes y si nota faltas de respeto entre ellos, interviene. Además, muestra consideración hacia la perspectiva de los estudiantes y cercanía en su interacción con ellos.\n\nSiempre es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nMuestra consideración hacia la perspectiva de los estudiantes (es decir, respeta sus opiniones y puntos de vista, les pide su parecer y lo considera, evita imponerse, y tiene una actitud dialogante y abierta).\nY\nEn su interacción con los estudiantes, practica la escucha atenta y emplea recursos de comunicación (proximidad espacial, desplazamiento en el aula, gestos amables, tono de voz calmado, entre otros) apropiados a sus características. Si emplea el humor, este es respetuoso y favorece las relaciones positivas en el aula."
     ]
