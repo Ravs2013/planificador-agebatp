@@ -436,11 +436,15 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
       }]
     ];
 
-    // R1 (página 1) es corta (evidencias de 26 mm).
-    // R2, R3, R4, R5 (páginas 2 y 3) miden 75 mm de alto mínimo de evidencias, lo suficientemente pequeño
-    // para caber en una misma página en formato continuo, pero lo suficientemente grande para escribir cómodamente.
+    // R1 (página 1) se calcula de forma dinámica para ocupar de forma segura todo el espacio restante hasta Y=272.
+    // R2, R3, R4, R5 (páginas 2 y 3) miden 75 mm de alto mínimo de evidencias.
     const bodyRowMinH = isPage1 ? 22 : 24;
-    const evRowMinH = isPage1 ? 26 : 75;
+    
+    let evRowMinH = 75;
+    if (isPage1) {
+      // 8mm cabecera + 22mm aspecto = 30mm
+      evRowMinH = Math.max(26, 272 - startY - 30);
+    }
 
     bodyRows[0][0].styles.minCellHeight = bodyRowMinH;
     bodyRows[0][1].styles.minCellHeight = bodyRowMinH;
@@ -815,7 +819,7 @@ const RUBRICAS_COMPLETAS_ETP = [
   },
   {
     num: "R4",
-    titulo: "4. R4. Acompaña el process de aprendizaje de los estudiantes.",
+    titulo: "4. R4. Acompaña el proceso de aprendizaje de los estudiantes.",
     descripcion: "Acompaña a los estudiantes durante el desarrollo de las actividades de aprendizaje, monitoreando sus avances y dificultades en el logro de los aprendizajes y, a partir de esto, les brinda retroalimentación o adecúa las actividades planteadas.",
     aspectos: [
       "Monitoreo que realiza el docente del trabajo de los estudiantes y de sus avances durante el desarrollo de la actividad de aprendizaje.",
