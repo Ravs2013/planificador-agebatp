@@ -400,10 +400,6 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
   y += 4.5;
 
   const topPosition = llevaMembrete ? 34 : 20;
-  const availableHeight = pageBottomLimit - topPosition;
-  const halfHeight = availableHeight / 2;
-  const HEADER_H = 8;
-  const blockBodyHeight = halfHeight - HEADER_H;
 
   const drawRubricaTable = (rIdx, startY, isPage1) => {
     const rubrica = rubricas[rIdx] || {};
@@ -440,10 +436,11 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
       }]
     ];
 
-    // Lógica diferenciada: R1 en la página 1 es compacta. 
-    // R2, R3, R4, R5 en las páginas 2 y 3 se estiran dinámicamente para ocupar exactamente la mitad del folio
+    // R1 (página 1) es corta (evidencias de 26 mm).
+    // R2, R3, R4, R5 (páginas 2 y 3) miden 68 mm de alto mínimo de evidencias, lo suficientemente pequeño
+    // como para evitar que se desborde a otra hoja y asegurar que quepan R2/R3 en la pág 2 y R4/R5 en la pág 3.
     const bodyRowMinH = isPage1 ? 22 : 24;
-    const evRowMinH = isPage1 ? 26 : (blockBodyHeight - bodyRowMinH);
+    const evRowMinH = isPage1 ? 26 : 68;
 
     bodyRows[0][0].styles.minCellHeight = bodyRowMinH;
     bodyRows[0][1].styles.minCellHeight = bodyRowMinH;
@@ -507,17 +504,17 @@ export function generarFichaETPPDF(fichaData, bannerDataURL, options = {}) {
   // Draw R1 on Page 1 (Fits perfectly and leaves plenty of space)
   drawRubricaTable(0, y, true);
 
-  // Draw R2 and R3 on Page 2 (Together as a single, page-filling table structure)
+  // Draw R2 and R3 on Page 2 (Together as a single group on one page, starting at Y=34 and Y=152)
   doc.addPage();
   setupPage();
   drawRubricaTable(1, topPosition, false);
-  drawRubricaTable(2, topPosition + halfHeight, false); // Colocada exactamente al inicio de la segunda mitad para unirse con R2
+  drawRubricaTable(2, topPosition + 118, false); // Posicionamiento exacto para encajar en la misma hoja sin desbordar
 
-  // Draw R4 and R5 on Page 3 (Together as a single, page-filling table structure)
+  // Draw R4 and R5 on Page 3 (Together as a single group on one page)
   doc.addPage();
   setupPage();
   drawRubricaTable(3, topPosition, false);
-  drawRubricaTable(4, topPosition + halfHeight, false);
+  drawRubricaTable(4, topPosition + 118, false);
 
   // Draw Page 4: Section IV, Observaciones, Declaración, Firmas
   doc.addPage();
@@ -755,7 +752,7 @@ const RUBRICAS_DEF = [
     titulo: 'R4. Acompaña el proceso de aprendizaje de los estudiantes.',
     etiquetaEvidencia: 'Conductas observadas (evidencias)',
     aspectosDef: [
-      'Monitoreo que realiza el docente del trabajo de los estudiantes y de sus avances durante el desarrollo de la actividad de aprendizaje.',
+      'Monitoreo que realiza el docente del trabajo de los estudiantes and de sus avances durante el desarrollo de la actividad de aprendizaje.',
       'Calidad de la retroalimentación que el docente brinda o adaptación de las actividades que realiza a partir de las necesidades de aprendizaje identificadas.',
     ]
   },
@@ -843,7 +840,8 @@ const RUBRICAS_COMPLETAS_ETP = [
       "No alcanza las condiciones del nivel II.\n\nEn alguna ocasión, falta el respeto a uno o más estudiantes.\nO\nSi nota que hay faltas de respeto entre los estudiantes, no interviene.",
       "El docente es siempre respetuoso con los estudiantes y si nota faltas de respeto entre ellos, interviene. Sin embargo, se muestra distante en su interacción con los estudiantes.\n\nAlways es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nEn su interacción con los estudiantes, es frío e indiferente.",
       "El docente es siempre respetuoso con los estudiantes y si nota faltas de respeto entre ellos, interviene. Además, muestra cercanía en su interacción con los estudiantes.\n\nSiempre es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nEn su interacción con los estudiantes, practica la escucha atenta y emplea recursos de comunicación (proximidad espacial, desplazamiento en el aula, gestos amables, tono de voz calmado, entre otros) apropiados a sus características. Si emplea el humor, este es respetuoso y favorece las relaciones positivas en el aula.",
-      "El docente es siempre respetuoso con los estudiantes and si nota faltas de respeto entre ellos, interviene. Además, muestra consideración hacia la perspectiva de los estudiantes y cercanía en su interacción con ellos.\n\nSiempre es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nMuestra consideración hacia la perspectiva de los estudiantes (es decir, respeta sus opiniones y puntos de vista, les pide su parecer y lo considera, evita imponerse, y tiene una actitud dialogante y abierta).\nY\nEn su interacción con los estudiantes, practica la escucha atenta y emplea recursos de comunicación (proximidad espacial, desplazamiento en el aula, gestos amables, tono de voz calmado, entre otros) apropiados a sus características. Si emplea el humor, este es respetuoso y favorece las relaciones positivas en el aula."
+      "El docente es siempre respetuoso con los estudiantes y si nota faltas de respeto entre ellos, interviene. Además, muestra consideración hacia la perspectiva de los estudiantes y cercanía en su interacción con ellos.\n\nSiempre es respetuoso con los estudiantes, al no realizar alguna acción que los agreda, ofenda o discrimine.\nY\nSi nota que hay faltas de respeto entre los estudiantes, interviene. Es decir, dirige, limita o media ante una situación conflictiva en la que, por ejemplo, un estudiante se burla de otro o lo agrede verbalmente.\nY\nMuestra consideración hacia la perspectiva de los estudiantes (es decir, respeta sus opiniones y puntos de vista, les pide su parecer y lo considera, evita imponerse, y tiene una actitud dialogante y abierta).\nY\nEn su interacción con los estudiantes, practica la escucha atenta y emplea recursos de comunicación (proximidad espacial, desplazamiento en el aula, gestos amables, tono de voz calmado, entre otros) apropiados a sus características. Si emplea el humor, este es respetuoso y favorece las relaciones positivas en el aula."
     ]
   }
 ];
+export { RUBRICAS_DEF };
