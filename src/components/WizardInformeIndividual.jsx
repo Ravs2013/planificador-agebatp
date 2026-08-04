@@ -974,6 +974,24 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
       if (data && data.asunto) {
         data.asunto = data.asunto.replace(/^INFORME DE\s+/i, '').replace(/^INFORME CONSOLIDADO DE\s+/i, '');
       }
+
+      // Ensure conclusionesTabla and recomendaciones exist
+      if (!data.conclusionesTabla || !Array.isArray(data.conclusionesTabla) || data.conclusionesTabla.length === 0) {
+        data.conclusionesTabla = docentes.map(d => ({
+          docente: d.nombre || 'Docente',
+          nudoCritico: (d.compromisosMejora && d.compromisosMejora[0]?.desempenoPorMejorar) || 'Aspectos a reforzar en la práctica pedagógica en aula.',
+          alternativa: (d.compromisosMejora && d.compromisosMejora[0]?.compromisoMejora) || 'Brindar acompañamiento pedagógico focalizado y participar en talleres de interaprendizaje.'
+        }));
+      }
+
+      if (!data.recomendaciones || !Array.isArray(data.recomendaciones) || data.recomendaciones.length === 0) {
+        data.recomendaciones = [
+          `Brindar acompañamiento y seguimiento continuo a los docentes del ${institucionTipo} "${institucionNombre}" para el cumplimiento de los compromisos de mejora asumidos.`,
+          `Promover espacios de trabajo colegiado e interaprendizaje para el fortalecimiento de la planificación y evaluación pedagógica en aula.`,
+          `Remitir copia del presente informe al Director de la Institución Educativa para las acciones de su competencia.`
+        ];
+      }
+
       setInformeData(data);
       showToast('Informe consolidado generado exitosamente.');
     } catch (err) {
@@ -1248,7 +1266,11 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
         institucionNombre,
         institucionTipo,
         docentes,
-        conclusiones: informeData.conclusionesTabla || [],
+        conclusionesTabla: informeData.conclusionesTabla || [],
+        conclusiones: informeData.conclusiones || [],
+        recomendaciones: Array.isArray(informeData.recomendaciones)
+          ? informeData.recomendaciones
+          : (informeData.recomendaciones ? [informeData.recomendaciones] : []),
         linkEvidencias: linkEvidencias ? { texto: "Evidencias de Monitoreo", url: linkEvidencias } : null,
         asunto: informeData.asunto || `INFORME DE MONITOREO Y ACOMPAÑAMIENTO PEDAGÓGICO AL ${institucionTipo.toUpperCase()} "${institucionNombre.toUpperCase()}"`,
         referencia: informeData.referencia || 'Plan de Trabajo AGEBATP 2026',
@@ -1805,7 +1827,7 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
               {informeData && (
                 <div style={{ ...S.card, marginBottom: 20 }}>
                   <h4 style={{ fontSize: 13, fontWeight: 700, color: C.navy3, marginBottom: 12 }}>Previsualización del Informe</h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     <div>
                       <label style={S.label}>Asunto</label>
                       <input value={informeData.asunto || ''} onChange={e => setInformeData({ ...informeData, asunto: e.target.value })} style={S.input} />
@@ -1818,7 +1840,118 @@ export default function WizardInformeIndividual({ tipoMonitoreo = 'docente', onC
                       <label style={S.label}>Análisis (párrafo consolidado)</label>
                       <textarea value={informeData.analisis?.join('\n') || ''} onChange={e => setInformeData({ ...informeData, analisis: e.target.value.split('\n') })} style={{ ...S.textarea, minHeight: 180 }} />
                     </div>
-                    <button type="button" onClick={handleExportInformePDF} style={S.btn(C.green, C.white, C.green)}>
+
+                    {/* III. CONCLUSIONES: Tabla de Nudos Críticos y Alternativas de Solución */}
+                    <div style={{ background: C.g50, border: `1px solid ${C.g200}`, borderRadius: 10, padding: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <label style={{ ...S.label, marginBottom: 0, color: C.navy3, fontSize: 12 }}>
+                          III. Conclusiones — Nudos Críticos y Alternativas de Solución Propuestas
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const list = [...(informeData.conclusionesTabla || [])];
+                            list.push({ docente: '', nudoCritico: '', alternativa: '' });
+                            setInformeData({ ...informeData, conclusionesTabla: list });
+                          }}
+                          style={{ ...S.btn(C.white, C.navy4, C.g300), padding: '4px 10px', fontSize: 11 }}
+                        >
+                          + Agregar Fila
+                        </button>
+                      </div>
+
+                      {(informeData.conclusionesTabla || []).length === 0 ? (
+                        <p style={{ fontSize: 12, color: C.g400, fontStyle: 'italic', margin: 0 }}>No hay nudos críticos registrados. Presiona "+ Agregar Fila" para añadir uno.</p>
+                      ) : (
+                        (informeData.conclusionesTabla || []).map((item, idx) => (
+                          <div key={idx} style={{ background: C.white, border: `1px solid ${C.g200}`, borderRadius: 8, padding: 12, marginBottom: 10 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: C.navy4 }}>N° {idx + 1} — {item.docente || 'Docente / Aspecto'}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const list = [...informeData.conclusionesTabla];
+                                  list.splice(idx, 1);
+                                  setInformeData({ ...informeData, conclusionesTabla: list });
+                                }}
+                                style={{ background: 'none', border: 'none', color: C.red, cursor: 'pointer', fontSize: 11, fontWeight: 700 }}
+                                title="Eliminar fila"
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+                              <div>
+                                <label style={{ ...S.label, textTransform: 'none', fontSize: 10.5, color: C.g500 }}>Docente / IE / Aspecto</label>
+                                <input
+                                  value={item.docente || ''}
+                                  onChange={e => {
+                                    const list = [...(informeData.conclusionesTabla || [])];
+                                    list[idx] = { ...list[idx], docente: e.target.value };
+                                    setInformeData({ ...informeData, conclusionesTabla: list });
+                                  }}
+                                  style={S.input}
+                                  placeholder="Ej. Nombre del Docente o IE"
+                                />
+                              </div>
+
+                              <div>
+                                <label style={{ ...S.label, textTransform: 'none', fontSize: 10.5, color: C.g500 }}>Nudo Crítico Identificado</label>
+                                <textarea
+                                  value={item.nudoCritico || ''}
+                                  onChange={e => {
+                                    const list = [...(informeData.conclusionesTabla || [])];
+                                    list[idx] = { ...list[idx], nudoCritico: e.target.value };
+                                    setInformeData({ ...informeData, conclusionesTabla: list });
+                                  }}
+                                  style={{ ...S.textarea, minHeight: 50, padding: "6px 10px", background: C.white }}
+                                  placeholder="Descripción de la dificultad o nudo crítico..."
+                                />
+                              </div>
+
+                              <div>
+                                <label style={{ ...S.label, textTransform: 'none', fontSize: 10.5, color: C.g500 }}>Alternativa de Solución Propuesta</label>
+                                <textarea
+                                  value={item.alternativa || ''}
+                                  onChange={e => {
+                                    const list = [...(informeData.conclusionesTabla || [])];
+                                    list[idx] = { ...list[idx], alternativa: e.target.value };
+                                    setInformeData({ ...informeData, conclusionesTabla: list });
+                                  }}
+                                  style={{ ...S.textarea, minHeight: 50, padding: "6px 10px", background: C.white }}
+                                  placeholder="Descripción de la alternativa de solución..."
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Conclusiones adicionales en texto */}
+                    <div>
+                      <label style={S.label}>Conclusiones Adicionales (párrafos / texto)</label>
+                      <textarea
+                        value={Array.isArray(informeData.conclusiones) ? informeData.conclusiones.join('\n') : (informeData.conclusiones || '')}
+                        onChange={e => setInformeData({ ...informeData, conclusiones: e.target.value.split('\n') })}
+                        style={{ ...S.textarea, minHeight: 90 }}
+                        placeholder="Conclusiones adicionales en texto..."
+                      />
+                    </div>
+
+                    {/* IV. RECOMENDACIONES */}
+                    <div>
+                      <label style={S.label}>IV. Recomendaciones (una por línea)</label>
+                      <textarea
+                        value={Array.isArray(informeData.recomendaciones) ? informeData.recomendaciones.join('\n') : (informeData.recomendaciones || '')}
+                        onChange={e => setInformeData({ ...informeData, recomendaciones: e.target.value.split('\n') })}
+                        style={{ ...S.textarea, minHeight: 120 }}
+                        placeholder="Escriba las recomendaciones (una por línea)..."
+                      />
+                    </div>
+
+                    <button type="button" onClick={handleExportInformePDF} style={{ ...S.btn(C.green, C.white, C.green), marginTop: 8 }}>
                       <Icon name="download" size={14} /> Descargar Informe (PDF)
                     </button>
                   </div>

@@ -327,18 +327,28 @@ export function generarInformePDF(informeData, bannerDataURL, qrDataURL, chartIm
     addParagraph(informeData.conclusionesIntro, { fontSize: 10.5, afterSpace: 3.5 });
   }
 
-  const conclData = Array.isArray(informeData.conclusiones) ? informeData.conclusiones : [];
-  const conclRows = conclData
+  // Draw paragraph conclusions if string array exists
+  const textConcls = Array.isArray(informeData.conclusiones) 
+    ? informeData.conclusiones.filter(c => typeof c === 'string' && c.trim() !== '')
+    : (typeof informeData.conclusiones === 'string' && informeData.conclusiones.trim() !== '' ? [informeData.conclusiones] : []);
+
+  textConcls.forEach((cText, idx) => {
+    addParagraph(cText, { isListItem: true, bullet: `3.${idx + 1}`, fontSize: 10.5, afterSpace: 3 });
+  });
+  if (textConcls.length > 0) y += 2;
+
+  // Draw conclusions table (Nudos críticos y Alternativas de solución)
+  const conclTableData = Array.isArray(informeData.conclusionesTabla) && informeData.conclusionesTabla.length > 0
+    ? informeData.conclusionesTabla
+    : (Array.isArray(informeData.conclusiones) ? informeData.conclusiones.filter(c => typeof c === 'object' && c !== null) : []);
+
+  const conclRows = conclTableData
     .map((c) => {
       if (typeof c === 'object' && c !== null) {
-        const nudo = (c.nudoCritico || '').trim();
+        const nudo = (c.nudoCritico || c.nudo || '').trim();
         const alt = (c.alternativa || '').trim();
         if (!nudo && !alt) return null;
         return [nudo || '—', alt || '—'];
-      } else if (typeof c === 'string') {
-        const str = c.trim();
-        if (!str) return null;
-        return [str, '—'];
       }
       return null;
     })
@@ -377,10 +387,18 @@ export function generarInformePDF(informeData, bannerDataURL, qrDataURL, chartIm
 
   // IV. RECOMENDACIONES
   addSectionTitle("IV. RECOMENDACIONES");
-  const recs = Array.isArray(informeData.recomendaciones) ? informeData.recomendaciones : (typeof informeData.recomendaciones === 'string' ? [informeData.recomendaciones] : []);
-  recs.forEach((rec, idx) => {
-    addParagraph(rec, { isListItem: true, bullet: `4.${idx + 1}`, fontSize: 10.5, afterSpace: 3 });
-  });
+  const rawRecs = Array.isArray(informeData.recomendaciones) 
+    ? informeData.recomendaciones 
+    : (typeof informeData.recomendaciones === 'string' ? [informeData.recomendaciones] : []);
+
+  const recs = rawRecs.filter(r => typeof r === 'string' && r.trim() !== '');
+  if (recs.length > 0) {
+    recs.forEach((rec, idx) => {
+      addParagraph(rec, { isListItem: true, bullet: `4.${idx + 1}`, fontSize: 10.5, afterSpace: 3 });
+    });
+  } else {
+    addParagraph("Brindar acompañamiento y seguimiento a las acciones de mejora en la práctica pedagógica en la institución educativa.", { isListItem: true, bullet: "4.1", fontSize: 10.5, afterSpace: 3 });
+  }
   y += 7;
 
   // Centered signatures blocks
