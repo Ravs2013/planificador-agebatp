@@ -110,6 +110,31 @@ service cloud.firestore {
       allow write: if isStaff();
     }
 
+    function isJurado() {
+      return isAuthenticated() && getUserData().rol == 'jurado';
+    }
+
+    // Módulo Juegos Florales (JFEN 2026):
+    match /jfParticipantes/{id} {
+      allow read: if isStaff() || isJurado();
+      allow write: if isStaff() || isJurado();
+    }
+
+    match /jfEvaluaciones/{id} {
+      allow read: if isStaff() || isJurado();
+      allow write: if isStaff() || isJurado();
+    }
+
+    match /jfConsolidados/{id} {
+      allow read: if isStaff() || isJurado();
+      allow write: if isStaff();
+    }
+
+    match /jfActas/{id} {
+      allow read: if isStaff() || isJurado();
+      allow write: if isStaff();
+    }
+
     // Configuración general:
     match /config/{id} {
       allow read: if isAuthenticated();

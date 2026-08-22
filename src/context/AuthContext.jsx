@@ -11,7 +11,40 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
+import { construirBloqueJurado } from '../data/juegosFloralesCredenciales';
+
 const AuthContext = createContext(null);
+
+function enrichUserWithJuradoInfo(baseUser) {
+    if (!baseUser || !baseUser.email) return baseUser;
+    const juradoInfo = construirBloqueJurado(baseUser.email);
+    if (juradoInfo) {
+        const baseNombreIsPlaceholder = baseUser.nombre && baseUser.nombre.toUpperCase().startsWith('JURADO');
+        const realNombre = (juradoInfo.nombreCompleto && juradoInfo.nombreCompleto.trim() !== '' && !juradoInfo.nombreCompleto.toUpperCase().startsWith('JURADO'))
+            ? juradoInfo.nombreCompleto
+            : (baseNombreIsPlaceholder ? (juradoInfo.nombreCompleto || baseUser.nombre) : baseUser.nombre);
+        const realDni = (juradoInfo.dni && juradoInfo.dni.trim() !== '')
+            ? juradoInfo.dni
+            : baseUser.dni || '';
+        const baseCargoIsPlaceholder = baseUser.cargo && baseUser.cargo.toUpperCase().startsWith('JURADO CALIFICADOR N.°');
+        const realCargo = (juradoInfo.cargo && juradoInfo.cargo.trim() !== '' && !juradoInfo.cargo.toUpperCase().startsWith('JURADO CALIFICADOR N.°'))
+            ? juradoInfo.cargo
+            : (baseCargoIsPlaceholder ? (juradoInfo.cargo || baseUser.cargo) : baseUser.cargo || '');
+
+        return {
+            ...baseUser,
+            rol: 'jurado',
+            nombre: realNombre,
+            nombreCompleto: realNombre,
+            dni: realDni,
+            cargo: realCargo,
+            numeroJurado: juradoInfo.numeroJurado || baseUser.numeroJurado || 1,
+            disciplinaId: juradoInfo.disciplinaId || baseUser.disciplinaId,
+            celular: juradoInfo.celular || baseUser.celular || ''
+        };
+    }
+    return baseUser;
+}
 
 function translateAuthError(code) {
     switch (code) {
@@ -43,30 +76,30 @@ export function AuthProvider({ children }) {
                     const userRef = doc(db, 'usuarios', firebaseUser.uid);
                     const userSnap = await getDoc(userRef);
                     if (userSnap.exists()) {
-                        setUser({
+                        setUser(enrichUserWithJuradoInfo({
                             uid: firebaseUser.uid,
                             email: firebaseUser.email,
                             ...userSnap.data()
-                        });
+                        }));
                     } else {
                         // Fallback si no existe el documento en Firestore
-                        setUser({
+                        setUser(enrichUserWithJuradoInfo({
                             uid: firebaseUser.uid,
                             email: firebaseUser.email,
                             nombre: firebaseUser.displayName || 'Usuario público',
                             rol: 'publico',
                             permisos: []
-                        });
+                        }));
                     }
                 } catch (error) {
                     console.error('Error al obtener datos de usuario de Firestore:', error);
-                    setUser({
+                    setUser(enrichUserWithJuradoInfo({
                         uid: firebaseUser.uid,
                         email: firebaseUser.email,
                         nombre: firebaseUser.displayName || 'Usuario público',
                         rol: 'publico',
                         permisos: []
-                    });
+                    }));
                 }
             } else {
                 setUser(null);
@@ -92,19 +125,19 @@ export function AuthProvider({ children }) {
             let userData = null;
 
             if (userSnap.exists()) {
-                userData = {
+                userData = enrichUserWithJuradoInfo({
                     uid: firebaseUser.uid,
                     email: firebaseUser.email,
                     ...userSnap.data()
-                };
+                });
             } else {
-                userData = {
+                userData = enrichUserWithJuradoInfo({
                     uid: firebaseUser.uid,
                     email: firebaseUser.email,
                     nombre: firebaseUser.displayName || 'Usuario público',
                     rol: 'publico',
                     permisos: []
-                };
+                });
             }
             setUser(userData);
             return { success: true, user: userData };

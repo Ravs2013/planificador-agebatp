@@ -88,7 +88,8 @@ export function drawChrome(doc, { conMembreteCompleto = false, banner, qr, exped
   // 1) Banner (always drawn in all pages)
   if (banner) {
     try {
-      doc.addImage(banner, "JPEG", M.left, 8, CONTENT_W, CONTENT_W / 8.6);
+      const format = typeof banner === 'string' && banner.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+      doc.addImage(banner, format, M.left, 8, CONTENT_W, CONTENT_W / 8.6);
     } catch (e) {
       console.warn("Error drawing banner in PDF:", e);
     }

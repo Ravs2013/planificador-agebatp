@@ -12,10 +12,17 @@ const C = {
   redBorder: "#FECACA"
 };
 
-export default function FirmaDigital({ value, onChange, label = "Firma digital" }) {
+export default function FirmaDigital({ value, onChange, label = "Firma digital", storageKey = null }) {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isEmpty, setIsEmpty] = useState(true);
+
+  // Clear legacy global cache if present
+  useEffect(() => {
+    try {
+      localStorage.removeItem('jf_saved_signature_cache');
+    } catch (e) {}
+  }, []);
 
   // Track bounding box for auto-cropping
   const boundsRef = useRef({ minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
@@ -104,44 +111,52 @@ export default function FirmaDigital({ value, onChange, label = "Firma digital" 
 
   const saveSignature = () => {
     const canvas = canvasRef.current;
-    if (!canvas || isEmpty) return;
+    if (!canvas) return;
 
-    const bounds = boundsRef.current;
-    const dpr = window.devicePixelRatio || 1;
+    try {
+      const bounds = boundsRef.current;
+      const dpr = window.devicePixelRatio || 1;
 
-    let sx = 0, sy = 0, sw = canvas.width / dpr, sh = canvas.height / dpr;
+      if (bounds.minX !== Infinity && bounds.maxX > bounds.minX && bounds.maxY > bounds.minY) {
+        const pad = 10;
+        const sx = Math.max(0, bounds.minX - pad);
+        const sy = Math.max(0, bounds.minY - pad);
+        const sw = Math.min(canvas.width / dpr - sx, bounds.maxX - bounds.minX + pad * 2);
+        const sh = Math.min(canvas.height / dpr - sy, bounds.maxY - bounds.minY + pad * 2);
 
-    if (bounds.minX !== Infinity) {
-      const pad = 10;
-      sx = Math.max(0, bounds.minX - pad);
-      sy = Math.max(0, bounds.minY - pad);
-      sw = Math.min(canvas.width / dpr - sx, bounds.maxX - bounds.minX + pad * 2);
-      sh = Math.min(canvas.height / dpr - sy, bounds.maxY - bounds.minY + pad * 2);
+        if (sw > 10 && sh > 10) {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = sw;
+          tempCanvas.height = sh;
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCtx.drawImage(
+            canvas,
+            sx * dpr,
+            sy * dpr,
+            sw * dpr,
+            sh * dpr,
+            0,
+            0,
+            sw,
+            sh
+          );
+          const croppedData = tempCanvas.toDataURL('image/png');
+          if (croppedData && croppedData.length > 100) {
+            onChange(croppedData);
+            return;
+          }
+        }
+      }
+
+      // Fallback
+      const fullData = canvas.toDataURL('image/png');
+      onChange(fullData);
+    } catch (err) {
+      console.error("Error al guardar firma:", err);
+      if (canvas) {
+        onChange(canvas.toDataURL('image/png'));
+      }
     }
-
-    if (sw < 10 || sh < 10) {
-      onChange(canvas.toDataURL('image/png'));
-      return;
-    }
-
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = sw;
-    tempCanvas.height = sh;
-    const tempCtx = tempCanvas.getContext('2d');
-
-    tempCtx.drawImage(
-      canvas, 
-      sx * dpr, 
-      sy * dpr, 
-      sw * dpr, 
-      sh * dpr, 
-      0, 
-      0, 
-      sw, 
-      sh
-    );
-
-    onChange(tempCanvas.toDataURL('image/png'));
   };
 
   return (
@@ -263,6 +278,69 @@ export default function FirmaDigital({ value, onChange, label = "Firma digital" 
             )}
           </>
         )}
+      </div>
+
+      {/* Opción de Cargar Foto de Firma o Usar Firma Guardada */}
+      <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+        <span style={{ fontSize: 10, color: C.g500 }}>
+          ¿Firmó en papel? Tome foto con el celular o utilice su firma de sesión:
+        </span>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {storageKey && localStorage.getItem(storageKey) && !value && (
+            <button
+              type="button"
+              onClick={() => {
+                const cached = localStorage.getItem(storageKey);
+                if (cached) onChange(cached);
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '4px 10px',
+                borderRadius: 6,
+                background: '#F0FDF4',
+                border: '1px solid #BBF7D0',
+                color: '#15803D',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              ✨ Aplicar mi firma guardada
+            </button>
+          )}
+          <label style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '4px 10px',
+            borderRadius: 6,
+            background: C.g50,
+            border: `1px solid ${C.g200}`,
+            color: C.navy3,
+            fontSize: 11,
+            fontWeight: 700,
+            cursor: 'pointer'
+          }}>
+            Cargar foto
+            <input
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files && e.target.files[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = (evt) => {
+                    onChange(evt.target.result);
+                  };
+                  reader.readAsDataURL(file);
+                }
+              }}
+            />
+          </label>
+        </div>
       </div>
     </div>
   );

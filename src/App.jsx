@@ -19,6 +19,7 @@ import { uploadEvidencia, uploadEvidenciaDrive } from './firebase/storage';
 import ChatbotIA from './components/ChatbotIA';
 import ChangePasswordScreen from './components/ChangePasswordScreen';
 import LegalPages from './components/LegalPages';
+import JuegosFloralesModule from './components/JuegosFloralesModule';
 
 
 export default function App() {
@@ -284,16 +285,20 @@ export default function App() {
     const canExport = !user || isRole('admin') || isRole('jefatura') || isRole('personal');
     const isPublic = user && isRole('publico');
 
+    const isUserJurado = Boolean(user && (user.rol === 'jurado' || user.disciplinaId || (user.cargo && user.cargo.includes('Jurado'))));
+
     const ROLE_PERMS = {
-        admin: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio", "reportes"],
-        jefatura: ["calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio", "reportes"],
-        personal: ["calendario", "actividades", "expedientes", "reuniones", "monitoreo", "directorio", "reportes"],
+        admin: ["juegosflorales", "calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio", "reportes"],
+        jefatura: ["juegosflorales", "calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio", "reportes"],
+        personal: ["juegosflorales", "calendario", "actividades", "expedientes", "reuniones", "monitoreo", "directorio", "reportes"],
+        jurado: ["juegosflorales"],
         director: ["directorio"],
         publico: ["calendario", "reuniones"]
     };
-    const perms = user ? (ROLE_PERMS[user.rol] || []) : [];
+    const perms = isUserJurado ? ["juegosflorales"] : (user ? (ROLE_PERMS[user.rol] || []) : []);
 
     const allTabs = [
+        { id: 'juegosflorales', label: 'Juegos Florales', icon: 'clipboard' },
         { id: 'calendario', label: 'Calendario', icon: 'calendar' },
         { id: 'actividades', label: 'Actividades', icon: 'list' },
         { id: 'personal', label: 'Personal', icon: 'users' },
@@ -307,11 +312,16 @@ export default function App() {
     const tabs = allTabs.filter(t => perms.includes(t.id));
 
     useEffect(() => {
-        if (user && !perms.includes(activeTab) && tabs.length > 0) {
-            setActiveTab(perms.includes('monitoreo') ? 'monitoreo' : tabs[0].id);
+        if (!user) return;
+        if (isUserJurado) {
+            if (activeTab !== 'juegosflorales') {
+                setActiveTab('juegosflorales');
+            }
+        } else if (!perms.includes(activeTab) && tabs.length > 0) {
+            setActiveTab(tabs[0].id);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTab, user]);
+    }, [activeTab, user, isUserJurado]);
 
     if (currentPath.startsWith('/legal/') || window.location.hash.startsWith('#/legal/')) {
         const path = currentPath.startsWith('/legal/') ? currentPath : window.location.hash.replace('#', '');
@@ -449,21 +459,53 @@ export default function App() {
 
             {/* MAIN */}
             <main style={{ maxWidth: 1400, margin: '0 auto', padding: '24px 28px' }}>
-                {/* STATS */}
-                <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 14, marginBottom: 24 }}>
-                    {[
-                        { n: stats.total, label: 'Total Actividades', color: '#1E4D7B' },
-                        { n: stats.completadas, label: 'Completadas', color: '#15803D' },
-                        { n: stats.enProceso, label: 'En Proceso', color: '#B45309' },
-                        { n: stats.pendientes, label: 'Pendientes', color: '#B91C1C' },
-                    ].map((s, i) => (
-                        <div key={i} style={{ ...S.card, padding: '18px 20px', position: 'relative', overflow: 'hidden', animation: `fadeIn 0.3s ease ${i * 0.05}s both` }}>
-                            <div style={{ position: 'absolute', top: 0, left: 0, width: 4, height: '100%', background: s.color }} />
-                            <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 30, fontWeight: 600, letterSpacing: -1, lineHeight: 1, color: s.color }}>{s.n}</div>
-                            <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 6 }}>{s.label}</div>
+                {/* STATS / WELCOME BANNER */}
+                {activeTab === 'juegosflorales' ? (
+                    <div style={{
+                        background: 'linear-gradient(135deg, #0C1929 0%, #1E3A5F 50%, #122240 100%)',
+                        border: '1px solid #334155',
+                        borderLeft: '5px solid #CA8A04',
+                        borderRadius: 10,
+                        padding: '18px 24px',
+                        marginBottom: 24,
+                        boxShadow: '0 4px 14px rgba(12,25,41,0.15)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: 16
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+                            <img src="/logo-juegos-florales.png" alt="Logo Juegos Florales" style={{ height: 64, width: 'auto', objectFit: 'contain', background: '#FFFFFF', padding: 6, borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }} />
+                            <div>
+                                <h2 style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 22, color: '#FFFFFF', margin: 0, letterSpacing: 0.5 }}>
+                                    ¡BIENVENIDOS A LOS JUEGOS FLORALES ESCOLARES NACIONALES 2026!
+                                </h2>
+                                <div style={{ fontSize: 12, color: '#FDE047', fontWeight: 700, marginTop: 4, letterSpacing: 0.5 }}>
+                                    Eje Temático 2026: "Sentir, pensar y crear para convivir" &nbsp;·&nbsp; Etapa UGEL 03
+                                </div>
+                                <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
+                                    RVM N.° 106-2026-MINEDU &nbsp;·&nbsp; Comunicado 01 — Comisión Organizadora UGEL 03
+                                </div>
+                            </div>
                         </div>
-                    ))}
-                </div>
+                    </div>
+                ) : (
+                    <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 14, marginBottom: 24 }}>
+                        {[
+                            { n: stats.total, label: 'Total Actividades', color: '#1E4D7B' },
+                            { n: stats.completadas, label: 'Completadas', color: '#15803D' },
+                            { n: stats.enProceso, label: 'En Proceso', color: '#B45309' },
+                            { n: stats.pendientes, label: 'Pendientes', color: '#B91C1C' },
+                        ].map((s, i) => (
+                            <div key={i} style={{ ...S.card, padding: '18px 20px', position: 'relative', overflow: 'hidden', animation: `fadeIn 0.3s ease ${i * 0.05}s both` }}>
+                                <div style={{ position: 'absolute', top: 0, left: 0, width: 4, height: '100%', background: s.color }} />
+                                <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 30, fontWeight: 600, letterSpacing: -1, lineHeight: 1, color: s.color }}>{s.n}</div>
+                                <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 6 }}>{s.label}</div>
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 {/* TAB CONTENT: CALENDARIO */}
                 {activeTab === 'calendario' && (
@@ -761,6 +803,11 @@ export default function App() {
                 {/* REPORTES / DASHBOARD */}
                 {activeTab === 'reportes' && (
                     <ReportesModule />
+                )}
+
+                {/* JUEGOS FLORALES */}
+                {activeTab === 'juegosflorales' && (
+                    <JuegosFloralesModule />
                 )}
             </main>
 
