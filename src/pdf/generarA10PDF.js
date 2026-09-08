@@ -6,9 +6,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { aplicarFuentesArial } from './membrete';
 
-export function generarA10PDF(consolidado, bannerDataURL) {
-  // A4 Landscape (297 x 210 mm)
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+export function dibujarUnicoConsolidadoA10(doc, consolidado, bannerDataURL) {
   aplicarFuentesArial(doc);
 
   const pageW = 297;
@@ -199,8 +197,10 @@ export function generarA10PDF(consolidado, bannerDataURL) {
 
   // Fila 2: Jurado 3 centrado
   renderJuradoBox(col3X, y, j3, 3);
+}
 
-  // Pie de página oficial
+function aplicarPiePaginaA10(doc) {
+  const pageW = 297;
   const totalPaginas = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPaginas; i++) {
     doc.setPage(i);
@@ -214,7 +214,37 @@ export function generarA10PDF(consolidado, bannerDataURL) {
       { align: 'center' }
     );
   }
+}
+
+export function generarA10PDF(consolidado, bannerDataURL) {
+  // A4 Landscape (297 x 210 mm)
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  dibujarUnicoConsolidadoA10(doc, consolidado, bannerDataURL);
+  aplicarPiePaginaA10(doc);
 
   const fileName = `AnexoA10_${consolidado.disciplinaId}_${consolidado.categoria}_UGEL.pdf`;
   doc.save(fileName);
+}
+
+export function generarA10DisciplinaCompletaPDF(consolidadosList = [], disciplinaLabel = '', bannerDataURL) {
+  if (!consolidadosList || consolidadosList.length === 0) return;
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  consolidadosList.forEach((cons, idx) => {
+    if (idx > 0) {
+      doc.addPage();
+    }
+    dibujarUnicoConsolidadoA10(doc, cons, bannerDataURL);
+  });
+
+  aplicarPiePaginaA10(doc);
+
+  const discId = consolidadosList[0]?.disciplinaId || 'disciplina';
+  const discName = (disciplinaLabel || discId).replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_]/g, '_').toUpperCase();
+
+  const catsSet = new Set(consolidadosList.map(c => c.categoria).filter(Boolean));
+  const catsSuffix = Array.from(catsSet).sort().join('_');
+
+  doc.save(`AnexoA10_Consolidados_${discName}_TODAS_CATEGORIAS_${catsSuffix || 'COMPLETO'}.pdf`);
 }

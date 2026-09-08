@@ -7,8 +7,7 @@ import autoTable from 'jspdf-autotable';
 import { M, CONTENT_W, aplicarFuentesArial, drawChrome } from './membrete';
 import { mesEnLetras } from '../utils/juegosFloralesHelpers';
 
-export function generarA11PDF(acta, bannerDataURL) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+export function dibujarUnicaActaA11(doc, acta, bannerDataURL) {
   aplicarFuentesArial(doc);
 
   // 1. Chrome / Membrete
@@ -171,8 +170,9 @@ export function generarA11PDF(acta, bannerDataURL) {
   y += 24;
 
   renderJuradoBoxA11(col3X, y, j3, 3);
+}
 
-  // 7. Pie institucional en todas las páginas
+function aplicarPiePaginaA11(doc) {
   const totalPaginas = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPaginas; i++) {
     doc.setPage(i);
@@ -186,7 +186,36 @@ export function generarA11PDF(acta, bannerDataURL) {
       { align: 'center' }
     );
   }
+}
+
+export function generarA11PDF(acta, bannerDataURL) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  dibujarUnicaActaA11(doc, acta, bannerDataURL);
+  aplicarPiePaginaA11(doc);
 
   const fileName = `AnexoA11_Acta_${acta.disciplinaId}_${acta.categoria}_UGEL.pdf`;
   doc.save(fileName);
+}
+
+export function generarA11DisciplinaCompletaPDF(actasList = [], disciplinaLabel = '', bannerDataURL) {
+  if (!actasList || actasList.length === 0) return;
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  actasList.forEach((acta, idx) => {
+    if (idx > 0) {
+      doc.addPage();
+    }
+    dibujarUnicaActaA11(doc, acta, bannerDataURL);
+  });
+
+  aplicarPiePaginaA11(doc);
+
+  const discId = actasList[0]?.disciplinaId || 'disciplina';
+  const discName = (disciplinaLabel || discId).replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_]/g, '_').toUpperCase();
+
+  const catsSet = new Set(actasList.map(a => a.categoria).filter(Boolean));
+  const catsSuffix = Array.from(catsSet).sort().join('_');
+
+  doc.save(`AnexoA11_Actas_${discName}_TODAS_CATEGORIAS_${catsSuffix || 'COMPLETO'}.pdf`);
 }

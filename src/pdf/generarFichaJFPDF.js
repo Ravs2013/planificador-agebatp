@@ -5,6 +5,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { M, CONTENT_W, BODY_TOP_OTHER, aplicarFuentesArial, drawChrome } from './membrete';
+import { getRubrica } from '../data/juegosFloralesRubricas';
 
 export function dibujarUnicaFicha(doc, evaluacion, rubrica, bannerDataURL) {
   aplicarFuentesArial(doc);
@@ -280,4 +281,27 @@ export function generarTodasFichasJFPDF(evaluacionesList = [], rubrica, bannerDa
   const discId = evaluacionesList[0]?.disciplinaId || 'disciplina';
   const cat = evaluacionesList[0]?.categoria || 'cat';
   doc.save(`Fichas_Evaluacion_Consolidadas_TODAS_${discId}_Cat${cat}.pdf`);
+}
+
+export function generarFichasDisciplinaCompletaPDF(evaluacionesList = [], disciplinaLabel = '', bannerDataURL) {
+  if (!evaluacionesList || evaluacionesList.length === 0) return;
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  evaluacionesList.forEach((ev, idx) => {
+    if (idx > 0) {
+      doc.addPage();
+    }
+    const rubrica = getRubrica(ev.disciplinaId);
+    dibujarUnicaFicha(doc, ev, rubrica, bannerDataURL);
+  });
+
+  const discId = evaluacionesList[0]?.disciplinaId || 'disciplina';
+  const discName = (disciplinaLabel || discId).replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_]/g, '_').toUpperCase();
+
+  // Categorías presentes en la lista
+  const catsSet = new Set(evaluacionesList.map(e => e.categoria || e.participanteSnapshot?.categoria).filter(Boolean));
+  const catsSuffix = Array.from(catsSet).sort().join('_');
+
+  doc.save(`Fichas_Evaluacion_${discName}_TODAS_CATEGORIAS_${catsSuffix || 'COMPLETO'}.pdf`);
 }

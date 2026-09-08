@@ -2,15 +2,20 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { DISCIPLINAS_UGEL03, getCategoriasHabilitadas, getContextoEvaluacion, getDisciplinaUGEL03 } from '../data/juegosFloralesUGEL03';
 import { CATEGORIAS_JF, C } from '../data/juegosFloralesCatalogos';
 import { getJuradosDeDisciplina } from '../data/juegosFloralesCredenciales';
-import { mesEnLetras, construirActaA11, filtrarEvaluacionesValidas } from '../utils/juegosFloralesHelpers';
+import { mesEnLetras, construirActaA11, construirConsolidadoA10, filtrarEvaluacionesValidas } from '../utils/juegosFloralesHelpers';
+import { getParticipantes } from '../data/juegosFloralesPadronSICE';
 import {
   subscribeJFConsolidado,
   subscribeJFActa,
   subscribeJFEvaluaciones,
   setJFActa,
-  cerrarJFActa
+  cerrarJFActa,
+  getActasPorDisciplina,
+  getConsolidadosPorDisciplina,
+  getEvaluacionesPorDisciplina,
+  getParticipantesPorDisciplina
 } from '../firebase/dbJuegosFlorales';
-import { generarA11PDF } from '../pdf/generarA11PDF';
+import { generarA11PDF, generarA11DisciplinaCompletaPDF } from '../pdf/generarA11PDF';
 import { loadImageDataURL } from '../pdf/membrete';
 import Icon from './Icon';
 
@@ -221,6 +226,141 @@ export default function JFActaA11({ user, isRole, onToast, initialDisciplinaId }
       incluirPuntaje
     };
     generarA11PDF(actaData, banner);
+  };
+
+  const [cargandoTodoA11, setCargandoTodoA11] = useState(false);
+
+  const handleDescargarTodoA11PDF = async () => {
+    const discLabel = discInfo?.label || disciplinaId;
+    const cats = getCategoriasHabilitadas(disciplinaId);
+
+    try {
+      setCargandoTodoA11(true);
+      if (onToast) onToast(`Recopilando Actas A11 de ${discLabel} (Categorías: ${cats.join(', ')})...`, "info");
+
+      const [fsActasAll, fsConsAll, fsEvalsAll, fsPartsAll] = await Promise.all([
+        getActasPorDisciplina(disciplinaId),
+        getConsolidadosPorDisciplina(disciplinaId),
+        getEvaluacionesPorDisciplina(disciplinaId),
+        getParticipantesPorDisciplina(disciplinaId)
+      ]);
+
+      const evalsMap = new Map();
+      fsEvalsAll.forEach(ev => evalsMap.set(ev.id, ev));
+      evaluaciones.forEach(ev => {
+        if (ev.disciplinaId === disciplinaId || ev.id?.includes(disciplinaId)) {
+          evalsMap.set(ev.id, ev);
+        }
+      });
+      const totalEvalsPool = Array.from(evalsMap.values());
+
+      const actasList = [];
+
+      for (const cat of cats) {
+        const docIdCat = `JFEN-2026__UGEL__${disciplinaId}__${cat}`;
+        let actaObj = fsActasAll.find(a => a.id === docIdCat || (a.disciplinaId === disciplinaId && a.categoria === cat));
+
+        // Si es la categoría actualmente abierta en la UI y tiene resultados en vivo, usarla
+        if (cat === categoria && resultados.length > 0) {
+          actaObj = {
+            id: docIdCat,
+            disciplinaId,
+            disciplinaLabel: discInfo?.label || disciplinaId,
+            categoria: cat,
+            region,
+            provincia,
+            distrito,
+            fecha: contexto?.fecha || new Date().toISOString().slice(0, 10),
+            hora,
+            jurados: juradosFinales,
+            resultados,
+            incluirPuntaje
+          };
+        }
+
+        // Si no existe acta guardada con resultados, construirla dinámicamente desde el consolidado
+        if (!actaObj || !actaObj.resultados || actaObj.resultados.length === 0) {
+          let consObj = fsConsAll.find(c => c.id === docIdCat || (c.disciplinaId === disciplinaId && c.categoria === cat));
+          let filasCons = consObj?.filas || [];
+
+          if (filasCons.length === 0) {
+            const siceList = getParticipantes(disciplinaId, cat);
+            const pMap = new Map();
+            siceList.forEach(p => {
+              const cod = p.codigo || p.id;
+              pMap.set(cod, {
+                id: cod,
+                codigoParticipante: cod,
+                institucionNombre: p.iiee,
+                iiee: p.iiee,
+                iieeId: p.iieeId,
+                categoria: p.categoria,
+                disciplinaId: p.disciplinaId,
+                tituloObra: p.titulo,
+                seudonimo: p.seudonimo,
+                urlTrabajo: p.enlace,
+                origen: 'sice'
+              });
+            });
+
+            fsPartsAll.filter(p => p.categoria === cat).forEach(p => {
+              const cod = p.codigoParticipante || p.codigo || p.id;
+              pMap.set(cod, p);
+            });
+
+            const catParticipantes = Array.from(pMap.values());
+            const evsValidasCat = filtrarEvaluacionesValidas(totalEvalsPool, disciplinaId, cat, catParticipantes);
+            filasCons = construirConsolidadoA10(catParticipantes, evsValidasCat);
+          }
+
+          const resultadosCat = construirActaA11(filasCons);
+
+          const juradosCat = getJuradosDeDisciplina(disciplinaId, cat).map(j => {
+            const evConFirma = totalEvalsPool.find(ev => (ev.categoria === cat || ev.participanteSnapshot?.categoria === cat) && (ev.jurado?.numeroJurado === j.numeroJurado || ev.juradoId === j.numeroJurado) && ev.jurado?.firmaDataUrl);
+            return {
+              ...j,
+              firmaDataUrl: evConFirma?.jurado?.firmaDataUrl || null
+            };
+          });
+
+          actaObj = {
+            id: docIdCat,
+            eventoId: "JFEN-2026",
+            etapa: "UGEL",
+            disciplinaId,
+            disciplinaLabel: discInfo?.label || disciplinaId,
+            categoria: cat,
+            region: region || "Lima",
+            provincia: provincia || "Lima",
+            distrito: distrito || "Pueblo Libre",
+            fecha: contexto?.fecha || new Date().toISOString().slice(0, 10),
+            hora: hora || "17:00",
+            jurados: consObj?.jurados || juradosCat,
+            resultados: resultadosCat,
+            incluirPuntaje
+          };
+        }
+
+        if (actaObj && actaObj.resultados && actaObj.resultados.length > 0) {
+          actasList.push(actaObj);
+        }
+      }
+
+      if (actasList.length === 0) {
+        if (onToast) onToast(`No se encontraron resultados de Acta A11 para ${discLabel}.`, "amber");
+        return;
+      }
+
+      const banner = await loadImageDataURL('/membrete-juegos-florales.png');
+      generarA11DisciplinaCompletaPDF(actasList, discLabel, banner);
+
+      if (onToast) onToast(`¡Descarga completada! Actas A11 de toda la disciplina descargadas (${cats.join(', ')}).`, "success");
+    } catch (err) {
+      console.error("Error al descargar A11 de toda la disciplina:", err);
+      if (onToast) onToast(`Error al descargar A11 completo: ${err.message}`, "error");
+    } finally {
+      setCargandoTodoA11(false);
+    }
   };
 
   return (
@@ -499,9 +639,32 @@ export default function JFActaA11({ user, isRole, onToast, initialDisciplinaId }
 
       {/* Botones de Acción */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `2px solid ${C.border}`, paddingTop: 16 }}>
-        <div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={handleDescargarPDF} style={{ background: C.gold, color: C.navy1, border: 'none', borderRadius: 6, padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Icon name="fileText" size={14} /> Descargar PDF Anexo A11
+            <Icon name="fileText" size={14} /> Descargar A11 Cat. {categoria} (PDF)
+          </button>
+          <button
+            onClick={handleDescargarTodoA11PDF}
+            disabled={cargandoTodoA11}
+            style={{
+              background: 'linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 100%)',
+              color: C.white,
+              border: '1px solid #3B82F6',
+              borderRadius: 6,
+              padding: '8px 14px',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: cargandoTodoA11 ? 'wait' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              boxShadow: '0 2px 6px rgba(29, 78, 216, 0.25)',
+              opacity: cargandoTodoA11 ? 0.75 : 1
+            }}
+            title={`Descargar un único archivo PDF consolidando las Actas de Resultados A11 de TODAS las categorías (${categoriasHabilitadas.join(', ')}) de ${discInfo?.label}`}
+          >
+            <Icon name="download" size={14} />
+            {cargandoTodoA11 ? 'Generando A11...' : `Descargar Todo A11 (Cats. ${categoriasHabilitadas.join(', ')})`}
           </button>
         </div>
 

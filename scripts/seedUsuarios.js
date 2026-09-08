@@ -30,6 +30,17 @@ const db = admin.firestore();
 // Usuarios por defecto para sembrar
 const usuariosDePrueba = [
   {
+    email: "alinson@ugel03.gob.pe",
+    password: "123456",
+    nombre: "Alinson (Tester AGEBATP)",
+    rol: "admin",
+    cargo: "Administrador / Tester General",
+    institucion: "UGEL 03",
+    permisos: ["admin", "write_directories", "write_activities", "write_monitoreo"],
+    telefono: "999999999",
+    dni: "00000000"
+  },
+  {
     email: "admin@ugel03.gob.pe",
     password: "admin123",
     nombre: "Administrador AGEBATP",

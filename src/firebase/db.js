@@ -20,7 +20,8 @@ import {
   where,
   writeBatch,
   serverTimestamp,
-  runTransaction
+  runTransaction,
+  deleteField
 } from "firebase/firestore";
 import { computePersonas, claveDoc } from "../utils/esinadHelpers";
 
@@ -496,10 +497,18 @@ function getCebaId(item) {
   return (item.codigoModularAvanzado && String(item.codigoModularAvanzado).trim()) ||
          (item.codigoModularInicialIntermedio && String(item.codigoModularInicialIntermedio).trim()) ||
          (item.codModular && String(item.codModular).trim()) ||
+         (item.codigoLocal && `local-${String(item.codigoLocal).trim()}`) ||
          slugify(item.nombre);
 }
 
-export async function batchSetCebas(items, userId, userName) {
+const CAMPOS_LEGACY_CEBA = [
+  "alumnosInicial", "alumnosIntermedio", "alumnosAvanzado",
+  "docentesInicial", "docentesIntermedio", "docentesAvanzado",
+  "aulasInicial", "aulasIntermedio", "aulasAvanzado",
+];
+
+export async function batchSetCebas(items, userId, userName, opciones = {}) {
+  const { limpiarLegacy = false } = opciones;
   // Firestore writeBatch max = 500 operations; chunk if needed
   const BATCH_SIZE = 450;
   const directoresToCreate = [];
@@ -510,13 +519,22 @@ export async function batchSetCebas(items, userId, userName) {
     chunk.forEach((item) => {
       const id = getCebaId(item);
       const ref = doc(db, "directorioCeba", id);
-      batch.set(ref, {
+      const payload = {
         ...item,
         id,
         actualizadoPor: userName || userId || 'sistema',
         actualizadoEn: serverTimestamp(),
         updatedAt: serverTimestamp()
-      }, { merge: true });
+      };
+
+      if (limpiarLegacy) {
+        CAMPOS_LEGACY_CEBA.forEach(k => { payload[k] = deleteField(); });
+      }
+      if (JSON.stringify(item).length > 900000) {
+        console.error(`[Directorio] Documento demasiado grande: ${item.nombre}`);
+      }
+
+      batch.set(ref, payload, { merge: true });
 
       const fullName = [item.nombres, item.apellidoPaterno, item.apellidoMaterno].filter(Boolean).join(" ");
       directoresToCreate.push({
@@ -577,6 +595,7 @@ export async function deleteCetpro(id) {
 function getCetproId(item) {
   return (item.codigoModular && String(item.codigoModular).trim()) ||
          (item.codModular && String(item.codModular).trim()) ||
+         (item.codigoLocal && `local-${String(item.codigoLocal).trim()}`) ||
          slugify(item.nombre);
 }
 
@@ -590,6 +609,9 @@ export async function batchSetCetpros(items, userId, userName) {
     chunk.forEach((item) => {
       const id = getCetproId(item);
       const ref = doc(db, "directorioCetpro", id);
+      if (JSON.stringify(item).length > 900000) {
+        console.error(`[Directorio] Documento demasiado grande: ${item.nombre}`);
+      }
       batch.set(ref, {
         ...item,
         id,

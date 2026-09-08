@@ -15,9 +15,12 @@ import {
   subscribeJFEvaluaciones,
   subscribeJFConsolidado,
   setJFConsolidado,
-  cerrarJFConsolidado
+  cerrarJFConsolidado,
+  getConsolidadosPorDisciplina,
+  getEvaluacionesPorDisciplina,
+  getParticipantesPorDisciplina
 } from '../firebase/dbJuegosFlorales';
-import { generarA10PDF } from '../pdf/generarA10PDF';
+import { generarA10PDF, generarA10DisciplinaCompletaPDF } from '../pdf/generarA10PDF';
 import { loadImageDataURL } from '../pdf/membrete';
 import Icon from './Icon';
 
@@ -289,6 +292,135 @@ export default function JFConsolidadoA10({ user, isRole, onToast, onGenerarA11, 
       criterioDesempate
     };
     generarA10PDF(consData, banner);
+  };
+
+  const [cargandoTodoA10, setCargandoTodoA10] = useState(false);
+
+  const handleDescargarTodoA10PDF = async () => {
+    const discLabel = discInfo?.label || disciplinaId;
+    const cats = getCategoriasHabilitadas(disciplinaId);
+
+    try {
+      setCargandoTodoA10(true);
+      if (onToast) onToast(`Recopilando Consolidados A10 de ${discLabel} (Categorías: ${cats.join(', ')})...`, "info");
+
+      const [fsConsAll, fsEvalsAll, fsPartsAll] = await Promise.all([
+        getConsolidadosPorDisciplina(disciplinaId),
+        getEvaluacionesPorDisciplina(disciplinaId),
+        getParticipantesPorDisciplina(disciplinaId)
+      ]);
+
+      const evalsMap = new Map();
+      fsEvalsAll.forEach(ev => evalsMap.set(ev.id, ev));
+      evaluaciones.forEach(ev => {
+        if (ev.disciplinaId === disciplinaId || ev.id?.includes(disciplinaId)) {
+          evalsMap.set(ev.id, ev);
+        }
+      });
+      const totalPool = Array.from(evalsMap.values());
+
+      const consolidadosList = [];
+
+      for (const cat of cats) {
+        const docId = `JFEN-2026__UGEL__${disciplinaId}__${cat}`;
+        let consObj = fsConsAll.find(c => c.id === docId || (c.disciplinaId === disciplinaId && c.categoria === cat));
+
+        // Si es la categoría actualmente visualizada y tiene filas calculadas, usar el estado en vivo más fresco
+        if (cat === categoria && filasFinales.length > 0) {
+          consObj = {
+            id: docId,
+            eventoId: "JFEN-2026",
+            etapa: "UGEL",
+            disciplinaId,
+            disciplinaLabel: discInfo?.label || disciplinaId,
+            categoria: cat,
+            region: "Lima",
+            provincia: "Lima",
+            distrito,
+            fecha: contexto?.fecha || new Date().toISOString().slice(0, 10),
+            jurados: juradosFinales,
+            filas: filasFinales,
+            criterioDesempate,
+            mostrarOpcionales
+          };
+        }
+
+        // Si no existe consolidado guardado con filas, construirlo dinámicamente
+        if (!consObj || !consObj.filas || consObj.filas.length === 0) {
+          const siceList = getParticipantes(disciplinaId, cat);
+          const pMap = new Map();
+          siceList.forEach(p => {
+            const cod = p.codigo || p.id;
+            pMap.set(cod, {
+              id: cod,
+              codigoParticipante: cod,
+              institucionNombre: p.iiee,
+              iiee: p.iiee,
+              iieeId: p.iieeId,
+              categoria: p.categoria,
+              disciplinaId: p.disciplinaId,
+              tituloObra: p.titulo,
+              seudonimo: p.seudonimo,
+              urlTrabajo: p.enlace,
+              origen: 'sice'
+            });
+          });
+
+          fsPartsAll.filter(p => p.categoria === cat).forEach(p => {
+            const cod = p.codigoParticipante || p.codigo || p.id;
+            pMap.set(cod, p);
+          });
+
+          const catParticipantes = Array.from(pMap.values());
+          const evsValidasCat = filtrarEvaluacionesValidas(totalPool, disciplinaId, cat, catParticipantes);
+          const filasCat = construirConsolidadoA10(catParticipantes, evsValidasCat);
+
+          const juradosCat = getJuradosDeDisciplina(disciplinaId, cat).map(j => {
+            const evConFirma = evsValidasCat.find(ev => (ev.jurado?.numeroJurado === j.numeroJurado || ev.juradoId === j.numeroJurado) && ev.jurado?.firmaDataUrl);
+            return {
+              ...j,
+              firmaDataUrl: evConFirma?.jurado?.firmaDataUrl || null
+            };
+          });
+
+          consObj = {
+            id: docId,
+            eventoId: "JFEN-2026",
+            etapa: "UGEL",
+            disciplinaId,
+            disciplinaLabel: discInfo?.label || disciplinaId,
+            categoria: cat,
+            region: "Lima",
+            provincia: "Lima",
+            distrito: distrito || "Pueblo Libre",
+            fecha: contexto?.fecha || new Date().toISOString().slice(0, 10),
+            jurados: juradosCat,
+            filas: filasCat,
+            criterioDesempate: "",
+            mostrarOpcionales
+          };
+        }
+
+        if (consObj && consObj.filas && consObj.filas.length > 0) {
+          consolidadosList.push(consObj);
+        }
+      }
+
+      if (consolidadosList.length === 0) {
+        if (onToast) onToast(`No se encontraron registros de Consolidado A10 para ${discLabel}.`, "amber");
+        return;
+      }
+
+      const banner = await loadImageDataURL('/membrete-juegos-florales.png');
+      generarA10DisciplinaCompletaPDF(consolidadosList, discLabel, banner);
+
+      if (onToast) onToast(`¡Descarga completada! Consolidados A10 de toda la disciplina descargados (${cats.join(', ')}).`, "success");
+    } catch (err) {
+      console.error("Error al descargar A10 de toda la disciplina:", err);
+      if (onToast) onToast(`Error al descargar A10 completo: ${err.message}`, "error");
+    } finally {
+      setCargandoTodoA10(false);
+    }
   };
 
   const handleExportarExcel = () => {
@@ -689,12 +821,35 @@ export default function JFConsolidadoA10({ user, isRole, onToast, onGenerarA11, 
 
       {/* Botones de Acción */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `2px solid ${C.border}`, paddingTop: 16 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={handleExportarExcel} style={{ background: C.green, color: C.white, border: 'none', borderRadius: 6, padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
             <Icon name="download" size={14} /> Exportar Excel
           </button>
           <button onClick={handleExportarPDF} style={{ background: C.gold, color: C.navy1, border: 'none', borderRadius: 6, padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Icon name="fileText" size={14} /> Descargar PDF (A4 Horiz)
+            <Icon name="fileText" size={14} /> Descargar A10 Cat. {categoria} (PDF)
+          </button>
+          <button
+            onClick={handleDescargarTodoA10PDF}
+            disabled={cargandoTodoA10}
+            style={{
+              background: 'linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 100%)',
+              color: C.white,
+              border: '1px solid #3B82F6',
+              borderRadius: 6,
+              padding: '8px 14px',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: cargandoTodoA10 ? 'wait' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              boxShadow: '0 2px 6px rgba(29, 78, 216, 0.25)',
+              opacity: cargandoTodoA10 ? 0.75 : 1
+            }}
+            title={`Descargar un único archivo PDF consolidando los Formatos A10 de TODAS las categorías (${categoriasHabilitadas.join(', ')}) de ${discInfo?.label}`}
+          >
+            <Icon name="download" size={14} />
+            {cargandoTodoA10 ? 'Generando A10...' : `Descargar Todo A10 (Cats. ${categoriasHabilitadas.join(', ')})`}
           </button>
         </div>
 

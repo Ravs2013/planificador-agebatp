@@ -81,6 +81,27 @@ export async function deleteJFParticipante(id) {
   await deleteDoc(ref);
 }
 
+export async function getParticipantesPorDisciplina(disciplinaId) {
+  try {
+    const q = query(
+      collection(db, 'jfParticipantes'),
+      where('disciplinaId', '==', disciplinaId)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.error("Error al obtener participantes por disciplina:", err);
+    try {
+      const snapAll = await getDocs(collection(db, 'jfParticipantes'));
+      return snapAll.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(d => d.disciplinaId === disciplinaId || d.id?.includes(disciplinaId));
+    } catch (e2) {
+      return [];
+    }
+  }
+}
+
 /** Sortear aleatoriamente el orden de presentación 1..n de los participantes */
 export async function sortearOrdenPresentacion({ disciplinaId, categoria, usuario }) {
   if (!esCombinacionValida(disciplinaId, categoria)) {
@@ -164,6 +185,27 @@ export async function getJFEvaluacion(participanteId, juradoUid) {
   const ref = doc(db, 'jfEvaluaciones', docId);
   const snap = await getDoc(ref);
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function getEvaluacionesPorDisciplina(disciplinaId) {
+  try {
+    const q = query(
+      collection(db, 'jfEvaluaciones'),
+      where('disciplinaId', '==', disciplinaId)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.error("Error al obtener evaluaciones por disciplina:", err);
+    try {
+      const snapAll = await getDocs(collection(db, 'jfEvaluaciones'));
+      return snapAll.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(d => d.disciplinaId === disciplinaId || d.id?.includes(disciplinaId));
+    } catch (e2) {
+      return [];
+    }
+  }
 }
 
 export async function saveJFEvaluacion(data) {
@@ -379,6 +421,26 @@ export async function cerrarJFConsolidado(id, usuario) {
   });
 }
 
+export async function getConsolidadosPorDisciplina(disciplinaId) {
+  try {
+    const q = query(
+      collection(db, 'jfConsolidados'),
+      where('disciplinaId', '==', disciplinaId)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    try {
+      const snapAll = await getDocs(collection(db, 'jfConsolidados'));
+      return snapAll.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(d => d.disciplinaId === disciplinaId || d.id?.includes(disciplinaId));
+    } catch (e2) {
+      return [];
+    }
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────
    4. ACTAS A11 (jfActas)
    ───────────────────────────────────────────────────────────── */
@@ -435,6 +497,26 @@ export async function cerrarJFActa(id, usuario) {
     cerradaEn: new Date().toISOString(),
     updatedAt: serverTimestamp()
   });
+}
+
+export async function getActasPorDisciplina(disciplinaId) {
+  try {
+    const q = query(
+      collection(db, 'jfActas'),
+      where('disciplinaId', '==', disciplinaId)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    try {
+      const snapAll = await getDocs(collection(db, 'jfActas'));
+      return snapAll.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(d => d.disciplinaId === disciplinaId || d.id?.includes(disciplinaId));
+    } catch (e2) {
+      return [];
+    }
+  }
 }
 
 /** Carga masiva del padrón SICE a Firestore en lotes de máximo 450 registros */

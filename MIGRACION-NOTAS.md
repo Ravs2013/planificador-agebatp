@@ -1,141 +1,94 @@
-# Bitácora de Migración — Planificador AGEBATP (Firebase + PWA + Chatbot IA)
-
-Este documento detalla los cambios realizados en el sistema **"Planificador AGEBATP"** durante la migración de la arquitectura basada en `localStorage` y webhooks n8n (para lectura de datos) hacia **Firebase (Auth, Firestore y Storage)**, integrando soporte PWA completo y un Chatbot inteligente en español.
-
----
-
-## 1. Stack Tecnológico y Configuración
-
-- **Autenticación**: Firebase Auth para el inicio de sesión y registro de usuarios.
-- **Base de Datos**: Cloud Firestore en tiempo real con persistencia multi-pestaña offline habilitada en [config.js](file:///c:/Users/perum/Desktop/PLANIFICADOR-MENSUAL-AGEBATP/frontend/src/firebase/config.js).
-- **Almacenamiento**: Firebase Storage para la carga de evidencias de actividades (con fallback automático a n8n en caso de que `VITE_USE_FIREBASE_STORAGE` sea falso).
-- **IA**: Vertex AI en Firebase (`gemini-2.5-flash`) mediante cargas lazy para el Chatbot.
-- **PWA**: PWA offline vía `@vite-pwa/plugin` registrado en [vite.config.js](file:///c:/Users/perum/Desktop/PLANIFICADOR-MENSUAL-AGEBATP/frontend/vite.config.js).
+# Notas de Migración — Módulo Directorio v2 (CEBA y CETPRO)
+## Sistema de Planificación en Tiempo Real AGEBATP 2026 — UGEL 03
 
 ---
 
-## 2. Roles y Permisos de Usuarios
-
-La aplicación cuenta con un control de accesos basado en roles definidos en la base de datos Firestore bajo la colección `/usuarios/{uid}`:
-
-| Rol | Permisos | Acceso de Lectura | Acceso de Escritura |
-| :--- | :--- | :--- | :--- |
-| **admin** | `admin`, `write_directories`, `write_activities`, `write_monitoreo` | Completo (todas las colecciones) | Completo (todas las colecciones y configuración) |
-| **jefatura** | `write_directories`, `write_activities`, `write_monitoreo` | Completo (todas las colecciones) | Directorios, Actividades, Monitoreo y Config de pestañas |
-| **personal** | `write_activities`, `write_monitoreo` | Completo (todas las colecciones) | Actividades, Requerimientos, Monitoreo (sin poder editar pestañas del directorio) |
-| **publico** | Ninguno (usuario externo / director) | Solo Lectura de Directorios y Requerimientos | Solo creación/lectura de solicitudes de reunión propias |
+### 1. Resumen Ejecutivo
+Se implementó con éxito la modernización integral del **Módulo Directorio (CEBA y CETPRO)** según la especificación del Mega Plan de Implementación v2.
+El sistema procesa y renderiza las plantillas oficiales consolidadas **F-07-v2** (Directorio CEBA) y **F-08-v2** (Directorio CETPRO), integrando las colecciones hijas embebidas (Áreas, Sedes, Personal Nominal, Atención a Distancia, Programas de Estudio, Formación Continua y Talleres) con persistencia segura en Cloud Firestore y visualización en tiempo real.
 
 ---
 
-## 3. Modelo de Datos Firestore (Colecciones)
+### 2. Archivos Creados y Modificados
 
-### `/usuarios/{uid}`
-- `nombre` (string)
-- `email` (string)
-- `rol` (string: admin, jefatura, personal, publico)
-- `cargo` (string)
-- `institucion` (string)
-- `telefono` (string)
-- `permisos` (array de strings)
+#### A. Nuevas Utilidades y Componentes
+- `frontend/src/utils/directorioFormato.js`: Módulo unificado de helpers de presencia de datos (`hayDato`, `metricaVisible`, `fmt`, `numeroFormulario`), badges de gestión (`gestionMeta`), nombres de directores, badges de situación de personal y coberturas.
+- `frontend/src/utils/directorioExcel.js`: Parsers multi-hoja de alta fidelidad (`parseDirectorioCebaV2`, `parseDirectorioCetproV2`), detección de formatos (`detectarFormato`, `FORMATOS`), sanitización de artefactos y compatibilidad con versiones legacy.
+- `frontend/src/components/directorio/TablaDirectorio.jsx`: Tabla reutilizable estilizada con scroll horizontal, fuentes tipográficas gubernamentales (`DM Sans`, `JetBrains Mono`) y fila de totales condicional.
+- `frontend/src/components/directorio/PestanasDetalle.jsx`: Barra de pestañas fijas para modales de detalle con ocultamiento automático de pestañas sin contenido (Regla R-3e).
 
-### `/actividades/{actId}`
-- `actividad` (string)
-- `descripcion` (string)
-- `acciones` (number)
-- `estado` (string: pendiente, en_proceso, completado)
-- `progreso` (number: auto-calculado)
-- `evidenciasCount` (number)
-- `checklistCount` (number)
-- `checklist` (array de items `{ id, texto, completado }`)
-- `fechaInicio` / `fechaFin` (timestamp/string)
-
-### `/reuniones/{reunionId}`
-- `tipoSolicitud` (string)
-- `motivo` (string)
-- `fechaReunion` (string)
-- `horaReunion` (string)
-- `estado` (string: pendiente, aceptada, rechazada)
-- `correoSolicitante` (string)
-
-### `/monitoreoSemanal/{id}` & `/monitoreoAcumulado/{id}`
-- Datos e importaciones de avance del plan de monitoreo mensual.
-
-### `/esinadSemanas/{id}`
-- `semana` (string: ej. "Semana 1")
-- `expedientes` (number)
-- `completados` (number)
-- `pendientes` (number)
-- `porcentaje` (number)
-
-### `/directorioCeba/{modularCode}` & `/directorioCetpro/{modularCode}`
-- Directorios institucionales de las CEBA y CETPRO con todos sus datos estadísticos, directivos y sedes dinámicas.
-
-### `/config/{id}`
-- Configuración global. El documento `/config/directorioTabs` contiene los nombres asignados a los sub-tabs en tiempo real.
+#### B. Componentes y Servicios Actualizados
+- `frontend/src/firebase/db.js`:
+  - Estrategia de ID documentales preservada con fallback `local-${codigoLocal}`.
+  - Soporte para eliminación limpia de 32 campos legacy de CEBA (`limpiarLegacy: true` con `deleteField()`).
+  - Límite de seguridad contra desbordamiento de payload en Firestore (< 900 KB).
+- `frontend/src/components/DirectorioCEBA.jsx`:
+  - Normalización en suscripción Firestore (`normalizarCeba`).
+  - KPIs ordenados con regla R-3f (solo valores > 0, métricas de aulas omitidas).
+  - Tarjetas con 3 estados de gestión (`ESTATAL`, `PARROQUIAL`, `CONVENIO`), badge de `FICHA PENDIENTE`, baldosas estadísticas filtradas (R-3c) y regla de borde (R-3h/R-3j).
+  - Modal de detalle con navegación por pestañas (`Resumen`, `Sedes`, `Áreas`, `Personal`, `A distancia`).
+  - Modal de carga en 4 bloques con detección de formato e incidencias.
+  - Formulario de edición manual sin coerción arbitraria a cero (`numeroFormulario`).
+  - Exportación PDF limpia sin emojis ni datos nulos.
+- `frontend/src/components/DirectorioCETPRO.jsx`:
+  - Normalización en suscripción Firestore (`normalizarCetpro`).
+  - KPIs con métricas R-3f (`Total CETPRO`, `Estudiantes`, `Docentes`, `Talleres`, `Programas`, `Personal Admin`, `Distritos`).
+  - Modal de detalle con pestañas (`Resumen`, `Programas`, `Formación continua`, `Talleres y sedes`, `Personal`).
+  - Descarte automático de filas de artefacto en Formación Continua (Regla D1).
+  - Modal de carga en 4 bloques con validación cruzada entre CEBA y CETPRO.
+  - Exportación PDF optimizada.
 
 ---
 
-## 4. Archivos de Reglas de Seguridad
+### 3. Reglas Críticas Implementadas
 
-### Firestore: `firestore.rules`
-Define restricciones a nivel de servidor:
-- `/usuarios`: solo lectura para autenticados, escritura para el rol `admin`.
-- `/actividades`: lectura para autenticados, escritura para personal, jefatura o admin.
-- `/directorioCeba` y `/directorioCetpro`: lectura para todos los autenticados, escritura restringida a `admin` y `jefatura`.
-- `/config`: lectura para todos, escritura restringida a `admin` y `jefatura`.
-
-### Storage: `storage.rules`
-- Permite lectura pública (`allow read: if true;`) para visualización de evidencias.
-- Permite escritura (`allow write: if request.auth != null;`) a cualquier usuario autenticado de la UGEL.
-
----
-
-## 5. Instrucciones de Siembra e Inicialización
-
-Para crear los usuarios base del sistema, primero instala `firebase-admin` si no está en la carpeta de scripts, y luego ejecuta el script de siembra.
-
-### 5.1 Requisitos Previos
-1. Descarga el archivo de claves de cuenta de servicio en formato JSON desde la consola de Firebase.
-2. Nómbralo como `serviceAccountKey.json` y colócalo en la raíz de la carpeta `frontend/`.
-
-### 5.2 Ejecutar Siembra
-Desde la terminal en el directorio `frontend/`:
-```bash
-# Instala firebase-admin en el entorno de desarrollo
-npm install -D firebase-admin
-
-# Ejecuta el script de siembra
-node scripts/seedUsuarios.js
-```
+| Regla | Descripción | Estado |
+| :--- | :--- | :--- |
+| **R1: Cero Emojis** | Uso exclusivo de iconos SVG inline (`Icons` / `SvgIcon`). Ningún emoji en código, UI ni documentos. | Verificado (0 emojis en todo el módulo). |
+| **R2: Sin dependencias nuevas** | Implementación pura con React 18, xlsx 0.18.5, recharts, jsPDF y Firebase SDK. | Cumplido. |
+| **R3: Tokens de diseño** | Tipografías `DM Serif Display`, `DM Sans`, `JetBrains Mono` y paleta `C`. | Cumplido. |
+| **R4: Alcance acotado** | Solo se intervino el módulo de Directorio sin afectar otros módulos del sistema. | Cumplido. |
+| **R5: Jerarquía de IDs** | Precedencia de identificador Firestore respetada estrictamente. | Cumplido. |
+| **R6: Celdas vacías son null** | Prohibido el uso de `\|\| 0` en inputs de Excel. Celdas vacías no renderizan valores ficticios. | Cumplido (`numeroFormulario`, `hayDato`). |
+| **D1: Artefactos CETPRO** | Descarte de las 4 filas de cabecera duplicada en Formación Continua (28 módulos útiles). | Cumplido. |
+| **D2: Fichas Pendientes** | Identificación de `NUESTRA SEÑORA DE MONTSERRAT` y `SAN FRANCISCO DE SALES`. | Cumplido (`fichaPendiente: true`). |
+| **D3: Sentinela Distrito** | `Por confirmar` excluido del conteo de distritos y mostrado en gris (`C.g300`). | Cumplido. |
+| **D5: Badges de Gestión** | Normalización a `ESTATAL`, `PARROQUIAL` y `CONVENIO`. | Cumplido. |
 
 ---
 
-## 6. Integración del Chatbot con IA (Gemini 2.5 Flash)
+### 4. Resultados de la Validación Numérica Automatizada
 
-### 6.1 Requisitos de Activación
-Para usar el chatbot en producción:
-1. Accede a la consola de Firebase del proyecto.
-2. Dirígete a la sección **Build > Vertex AI in Firebase** y haz clic en **Comenzar** para habilitar las APIs necesarias en Google Cloud.
-3. Asegúrate de tener configurado el plan de pago (Pay-as-you-go / Blaze) de Firebase, requerido para el uso de Vertex AI SDK.
+Pruebas ejecutadas con los archivos Excel oficiales de la UGEL 03:
 
-### 6.2 Lógica Contextual
-El chatbot (`ChatbotIA.jsx`) inyecta automáticamente en sus instrucciones de sistema un resumen actualizado del estado del planificador:
-- Número de actividades pendientes, en proceso y completadas.
-- Cantidad de solicitudes de reuniones pendientes.
-- Avance total de expedientes E-SINAD.
-Esto le permite responder preguntas específicas como *"¿Qué reuniones tenemos pendientes hoy?"* o *"¿Cómo va el progreso de las actividades?"* sin necesidad de buscar manualmente.
+#### Directorio CEBA (`DIRECTORIO_CEBA_UGEL03.xlsx`)
+- **A1. Instituciones:** 19 (100% match)
+- **A2. Total Estudiantes:** 5,147 (100% match)
+- **A3. Cobertura Matrícula:** 17 de 19 instituciones (100% match)
+- **A4. Total Docentes:** 323 (100% match)
+- **A5. Desglose Docente:** 204 Nombrados / 102 Contratados / 17 Directivos (100% match)
+- **A6. Periféricos:** 48 (100% match)
+- **A7. Áreas Curriculares:** 76 (100% match)
+- **A8. Sedes y Locales:** 76 (100% match)
+- **A9. Personal Docente Nominal:** 328 (100% match)
+- **A10. Fichas de Atención a Distancia:** 16 instituciones (100% match)
+- **A11. Estudiantes a Distancia:** 1,543 (100% match)
+- **A12. Distritos Atendidos:** 9 distritos (excluyendo "Por confirmar") (100% match)
+- **A13. Fichas Pendientes:** 2 (`NUESTRA SEÑORA DE MONTSERRAT`, `SAN FRANCISCO DE SALES`)
+- **A14. Gestión:** 16 Estatal, 2 Parroquial, 1 Convenio (100% match)
+- **A15. Situación Nominal:** 201 Nombrados, 100 Contratados, 11 Designados, 6 Encargados, 3 Vacantes, 1 Destacado (100% match)
 
----
-
-## 7. Instrucciones para Desarrollo y Producción
-
-### 7.1 Servidor de Desarrollo
-```bash
-npm run dev
-```
-
-### 7.2 Compilar para Producción
-```bash
-npm run build
-```
-Esto generará los assets optimizados en la carpeta `dist/` e inicializará el archivo de Service Worker para el soporte PWA offline.
+#### Directorio CETPRO (`DIRECTORIO_CETPRO_UGEL03.xlsx`)
+- **B1. Instituciones:** 21 (100% match)
+- **B2. Total Estudiantes:** 10,880 (100% match)
+- **B3. Total Docentes:** 515 (100% match)
+- **B4. Desglose Docente:** 286 Nombrados / 187 Contratados / 42 Directivos (100% match)
+- **B5. Total Talleres:** 543 (100% match)
+- **B6. Total Programas de Estudio:** 271 (100% match)
+- **B7. Personal Administrativo:** 48 (29 Nombrados + 19 Contratados) (100% match)
+- **B8. Distritos Atendidos:** 7 distritos (100% match)
+- **B9. Formación Continua Útil:** 28 módulos (100% match, 4 artefactos purgados)
+- **B10. Personal Docente Nominal:** 459 (100% match)
+- **B11. Talleres y Sedes:** 21 (100% match)
+- **B12. Gestión:** 15 Estatal, 5 Parroquial, 1 Convenio (100% match)
+- **B13. Situación Nominal:** 250 Nombrados, 165 Contratados, 28 Encargados, 13 Designados, 2 Vacantes, 1 Destacado (100% match)

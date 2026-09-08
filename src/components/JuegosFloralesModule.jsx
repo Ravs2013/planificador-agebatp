@@ -19,11 +19,13 @@ import {
   reabrirJFEvaluacion,
   limpiarEvaluacionesCategoria,
   limpiarEvaluacionesHuerfanas,
-  batchImportarPadronSICE
+  batchImportarPadronSICE,
+  getEvaluacionesPorDisciplina,
+  getParticipantesPorDisciplina
 } from '../firebase/dbJuegosFlorales';
 import { parsearExcelSICE, filtrarEvaluacionesValidas } from '../utils/juegosFloralesHelpers';
 import { getRubrica } from '../data/juegosFloralesRubricas';
-import { generarTodasFichasJFPDF } from '../pdf/generarFichaJFPDF';
+import { generarTodasFichasJFPDF, generarFichasDisciplinaCompletaPDF } from '../pdf/generarFichaJFPDF';
 import { loadImageDataURL } from '../pdf/membrete';
 import JFFichaEvaluacion from './JFFichaEvaluacion';
 import JFConsolidadoA10 from './JFConsolidadoA10';
@@ -186,18 +188,114 @@ export default function JuegosFloralesModule() {
       const evsForCategory = filtrarEvaluacionesValidas(fsEvaluaciones, disciplinaId, categoria, participantes);
 
       if (evsForCategory.length === 0) {
-        addToast("No se encontraron evaluaciones registradas en esta disciplina y categoría para descargar.", "amber");
+        addToast(`No se encontraron evaluaciones registradas en ${discInfo?.label || 'esta disciplina'} — Categoría ${categoria} para descargar.`, "amber");
         return;
       }
 
-      addToast(`Generando PDF consolidado de ${evsForCategory.length} fichas de evaluación...`, "info");
+      addToast(`Generando PDF consolidado de ${evsForCategory.length} fichas de evaluación (Categoría ${categoria})...`, "info");
       const banner = await loadImageDataURL('/membrete-juegos-florales.png');
       const rubrica = getRubrica(disciplinaId);
       generarTodasFichasJFPDF(evsForCategory, rubrica, banner);
-      addToast("Descarga masiva de fichas PDF completada.", "success");
+      addToast("Descarga de fichas PDF completada.", "success");
     } catch (err) {
       console.error("Error al descargar fichas masivas:", err);
       addToast(`Error al descargar fichas masivas: ${err.message}`, "error");
+    }
+  };
+
+  const [cargandoDescargaTodaDisciplina, setCargandoDescargaTodaDisciplina] = useState(false);
+
+  const handleDescargarTodaLaDisciplinaPDF = async () => {
+    const discLabel = discInfo?.label || disciplinaId;
+    const cats = getCategoriasHabilitadas(disciplinaId);
+
+    try {
+      setCargandoDescargaTodaDisciplina(true);
+      addToast(`Recopilando fichas de ${discLabel} (Categorías: ${cats.join(', ')})...`, "info");
+
+      // 1. Obtener todas las evaluaciones y participantes registrados en Firestore
+      const [fsEvalsAll, fsPartsAll] = await Promise.all([
+        getEvaluacionesPorDisciplina(disciplinaId),
+        getParticipantesPorDisciplina(disciplinaId)
+      ]);
+
+      // Combinar con las evaluaciones locales en memoria
+      const evalsMap = new Map();
+      fsEvalsAll.forEach(ev => evalsMap.set(ev.id, ev));
+      fsEvaluaciones.forEach(ev => {
+        if (ev.disciplinaId === disciplinaId || ev.id?.includes(disciplinaId)) {
+          evalsMap.set(ev.id, ev);
+        }
+      });
+      const totalEvaluacionesPool = Array.from(evalsMap.values());
+
+      // 2. Iterar ordenadamente por cada categoría habilitada
+      const todasEvaluaciones = [];
+
+      for (const cat of cats) {
+        // Participantes de esta categoría (SICE + Firestore)
+        const siceList = getParticipantes(disciplinaId, cat);
+        const pMap = new Map();
+        siceList.forEach(p => {
+          const cod = p.codigo || p.id;
+          pMap.set(cod, {
+            id: cod,
+            codigoParticipante: cod,
+            institucionNombre: p.iiee,
+            iiee: p.iiee,
+            iieeId: p.iieeId,
+            categoria: p.categoria,
+            disciplinaId: p.disciplinaId,
+            tituloObra: p.titulo,
+            seudonimo: p.seudonimo,
+            urlTrabajo: p.enlace,
+            origen: 'sice'
+          });
+        });
+
+        fsPartsAll.filter(p => p.categoria === cat).forEach(p => {
+          const cod = p.codigoParticipante || p.codigo || p.id;
+          pMap.set(cod, p);
+        });
+
+        const catParticipantes = Array.from(pMap.values());
+
+        // Filtrar y desduplicar evaluaciones válidas para esta categoría
+        const evsValidasCat = filtrarEvaluacionesValidas(totalEvaluacionesPool, disciplinaId, cat, catParticipantes);
+
+        // Ordenar por orden de presentación / código de participante y luego por número de jurado
+        evsValidasCat.sort((a, b) => {
+          const ordA = a.participanteSnapshot?.ordenPresentacion || a.ordenPresentacion || 0;
+          const ordB = b.participanteSnapshot?.ordenPresentacion || b.ordenPresentacion || 0;
+          if (ordA !== ordB) return ordA - ordB;
+
+          const codA = a.participanteSnapshot?.codigoParticipante || a.codigoParticipante || '';
+          const codB = b.participanteSnapshot?.codigoParticipante || b.codigoParticipante || '';
+          if (codA !== codB) return codA.localeCompare(codB);
+
+          const jurA = a.jurado?.numeroJurado || a.juradoId || 1;
+          const jurB = b.jurado?.numeroJurado || b.juradoId || 1;
+          return jurA - jurB;
+        });
+
+        todasEvaluaciones.push(...evsValidasCat);
+      }
+
+      if (todasEvaluaciones.length === 0) {
+        addToast(`No se encontraron evaluaciones registradas en ninguna categoría (${cats.join(', ')}) para ${discLabel}.`, "amber");
+        return;
+      }
+
+      addToast(`Generando PDF consolidado de ${todasEvaluaciones.length} fichas de evaluación de toda la disciplina...`, "info");
+      const banner = await loadImageDataURL('/membrete-juegos-florales.png');
+      generarFichasDisciplinaCompletaPDF(todasEvaluaciones, discLabel, banner);
+
+      addToast(`¡Descarga completada! ${todasEvaluaciones.length} fichas descargadas (${cats.join(', ')}).`, "success");
+    } catch (err) {
+      console.error("Error al descargar fichas de toda la disciplina:", err);
+      addToast(`Error al descargar fichas completas: ${err.message}`, "error");
+    } finally {
+      setCargandoDescargaTodaDisciplina(false);
     }
   };
 
@@ -680,9 +778,33 @@ export default function JuegosFloralesModule() {
                     <button
                       onClick={handleDescargarTodasLasFichasPDF}
                       style={{ background: C.navy3, color: C.white, border: 'none', borderRadius: 6, padding: '8px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                      title="Descargar un único archivo PDF consolidado conteniendo todas las fichas de evaluación de esta categoría para imprimir directamente"
+                      title={`Descargar un archivo PDF consolidado conteniendo las fichas de evaluación de la Categoría ${categoria}`}
                     >
-                      <Icon name="download" size={14} /> Descargar Fichas PDF (Masivo)
+                      <Icon name="download" size={14} /> Fichas Cat. {categoria} (PDF)
+                    </button>
+
+                    <button
+                      onClick={handleDescargarTodaLaDisciplinaPDF}
+                      disabled={cargandoDescargaTodaDisciplina}
+                      style={{
+                        background: 'linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 100%)',
+                        color: C.white,
+                        border: '1px solid #3B82F6',
+                        borderRadius: 6,
+                        padding: '8px 14px',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: cargandoDescargaTodaDisciplina ? 'wait' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        boxShadow: '0 2px 6px rgba(29, 78, 216, 0.25)',
+                        opacity: cargandoDescargaTodaDisciplina ? 0.75 : 1
+                      }}
+                      title={`Descargar un único archivo PDF consolidando TODAS las fichas de TODAS las categorías (${categoriasHabilitadas.join(', ')}) de ${discInfo?.label}`}
+                    >
+                      <Icon name="download" size={14} />
+                      {cargandoDescargaTodaDisciplina ? 'Generando PDF...' : `Descargar Toda la Disciplina (Cats. ${categoriasHabilitadas.join(', ')})`}
                     </button>
 
                     {(isRole('admin') || isRole('jefatura')) && (
