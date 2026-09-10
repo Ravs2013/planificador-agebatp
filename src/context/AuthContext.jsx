@@ -14,11 +14,34 @@ import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firest
 import { construirBloqueJurado } from '../data/juegosFloralesCredenciales';
 import { descomponerCredencialCYE, getJuradoCYEPorCorreo } from '../data/creaEmprendeJurados';
 import { categoriasDeGrupo } from '../data/creaEmprendeConfig';
+import { descomponerCredencialEureka } from '../data/eurekaCredenciales';
 
 const AuthContext = createContext(null);
 
 function enrichUserWithJuradoInfo(baseUser) {
     if (!baseUser || !baseUser.email) return baseUser;
+
+    // Jurados de Eureka: credencial eurekagrado{1y2|3y4|5y6}jurado{1..4}@ugel03.gob.pe o modulo eureka
+    const credencialEureka = descomponerCredencialEureka(baseUser.email);
+    if (credencialEureka || baseUser.modulo === 'eureka') {
+        const nombre = credencialEureka?.nombreCompleto || baseUser.nombreCompleto || baseUser.nombre || '';
+        const dni = credencialEureka?.dni || baseUser.dni || '';
+        const cat = credencialEureka?.categoria || baseUser.categoria || 'A';
+        const num = Number(baseUser.numeroJurado || credencialEureka?.numeroJurado) || 1;
+        return {
+            ...baseUser,
+            rol: 'jurado',
+            modulo: 'eureka',
+            grupo: cat,
+            categoria: cat,
+            numeroJurado: num,
+            nombre,
+            nombreCompleto: nombre,
+            dni,
+            cargo: baseUser.cargo || `Jurado calificador — Eureka 2026 (${credencialEureka?.grados || `Cat. ${cat}`})`,
+            permisos: ['eureka']
+        };
+    }
 
     // Jurados de Crea y Emprende: credencial grupo{G}jurado{N}@ugel03.gob.pe o perfil creado desde el módulo.
     const credencialCYE = descomponerCredencialCYE(baseUser.email);

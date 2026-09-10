@@ -157,7 +157,7 @@ service cloud.firestore {
 
     match /eurekaParticipantes/{id} {
       allow read: if isAuthenticated();
-      allow write: if isStaff();
+      allow write: if isStaff() || isJurado();
     }
 
     match /eurekaEvaluaciones/{id} {

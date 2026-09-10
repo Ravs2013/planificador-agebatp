@@ -288,18 +288,23 @@ export default function App() {
     const canExport = !user || isRole('admin') || isRole('jefatura') || isRole('personal');
     const isPublic = user && isRole('publico');
 
-    const isUserJurado = Boolean(user && (user.rol === 'jurado' || user.disciplinaId || (user.cargo && user.cargo.includes('Jurado'))));
+    const isUserJuradoEureka = Boolean(user && (user.modulo === 'eureka' || (user.email && user.email.toLowerCase().startsWith('eureka'))));
     const isUserJuradoCYE = Boolean(user && (user.modulo === 'creayemprende' || esCorreoJuradoCYE(user.email)));
+    const isUserJurado = Boolean(user && (user.rol === 'jurado' || user.disciplinaId || (user.cargo && user.cargo.includes('Jurado'))));
 
     const ROLE_PERMS = {
         admin: ["juegosflorales", "eureka", "creayemprende", "calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio", "reportes"],
         jefatura: ["juegosflorales", "eureka", "creayemprende", "calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio", "reportes"],
         personal: ["juegosflorales", "eureka", "creayemprende", "calendario", "actividades", "expedientes", "reuniones", "monitoreo", "directorio", "reportes"],
-        jurado: ["juegosflorales", "eureka"],
+        jurado: ["juegosflorales", "eureka", "creayemprende"],
         director: ["directorio"],
         publico: ["calendario", "reuniones"]
     };
-    const perms = isUserJuradoCYE ? ["creayemprende"] : (isUserJurado ? ["juegosflorales", "eureka"] : (user ? (ROLE_PERMS[user.rol] || []) : []));
+    const perms = isUserJuradoCYE
+        ? ["creayemprende"]
+        : (isUserJuradoEureka
+            ? ["eureka"]
+            : (isUserJurado ? ["juegosflorales"] : (user ? (ROLE_PERMS[user.rol] || []) : [])));
 
     const allTabs = [
         { id: 'juegosflorales', label: 'Juegos Florales', icon: 'clipboard' },
@@ -323,6 +328,10 @@ export default function App() {
             if (!perms.includes(activeTab)) {
                 setActiveTab('creayemprende');
             }
+        } else if (isUserJuradoEureka) {
+            if (!perms.includes(activeTab)) {
+                setActiveTab('eureka');
+            }
         } else if (isUserJurado) {
             if (!perms.includes(activeTab)) {
                 setActiveTab('juegosflorales');
@@ -331,7 +340,7 @@ export default function App() {
             setActiveTab(tabs[0].id);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTab, user, isUserJurado, isUserJuradoCYE]);
+    }, [activeTab, user, isUserJurado, isUserJuradoCYE, isUserJuradoEureka]);
 
     if (currentPath.startsWith('/legal/') || window.location.hash.startsWith('#/legal/')) {
         const path = currentPath.startsWith('/legal/') ? currentPath : window.location.hash.replace('#', '');

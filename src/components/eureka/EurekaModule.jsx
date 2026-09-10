@@ -36,10 +36,10 @@ import EKBannerPanelPendiente from './EKBannerPanelPendiente';
 
 const SUB_PESTANAS = [
   { id: 'fichas', label: 'Fichas de evaluación', icon: 'clipboard' },
-  { id: 'consolidado', label: 'Anexo E19 — Consolidado', icon: 'fileText' },
-  { id: 'acta', label: 'Anexo E20 — Acta', icon: 'check' },
-  { id: 'programacion', label: 'Programación', icon: 'calendar' },
-  { id: 'padron', label: 'Padrón SICE', icon: 'users' }
+  { id: 'consolidado', label: 'Anexo E19 — Consolidado', icon: 'fileText', soloComision: true },
+  { id: 'acta', label: 'Anexo E20 — Acta', icon: 'check', soloComision: true },
+  { id: 'programacion', label: 'Programación', icon: 'calendar', soloComision: true },
+  { id: 'padron', label: 'Padrón SICE', icon: 'users', soloComision: true }
 ];
 
 /**
@@ -50,12 +50,23 @@ export default function EurekaModule() {
 
   const esAdministrador = isRole('admin');
   const esStaff = esAdministrador || isRole('jefatura') || isRole('personal');
+  const esJuradoEureka = !esStaff && Boolean(user?.modulo === 'eureka' || isRole('jurado'));
+  const categoriaSesion = user?.categoria || null;
+  const numeroJuradoSesion = user?.numeroJurado ? Math.min(Number(user.numeroJurado), 3) : 1;
 
   const [subTab, setSubTab] = useState('fichas');
   const [showBases, setShowBases] = useState(false);
-  const [categoria, setCategoria] = useState('A');
-  const [areaId, setAreaId] = useState(() => getAreasDeCategoria('A')[0]?.id || '');
-  const [numeroJurado, setNumeroJurado] = useState(1);
+  const [categoria, setCategoria] = useState(() => (esJuradoEureka && categoriaSesion) ? categoriaSesion : 'A');
+  const [areaId, setAreaId] = useState(() => getAreasDeCategoria((esJuradoEureka && categoriaSesion) ? categoriaSesion : 'A')[0]?.id || '');
+  const [numeroJurado, setNumeroJurado] = useState(() => (esJuradoEureka && numeroJuradoSesion) ? numeroJuradoSesion : 1);
+
+  // Sincronizar con la sesión del jurado oficial de Eureka
+  useEffect(() => {
+    if (esJuradoEureka && categoriaSesion) {
+      setCategoria(categoriaSesion);
+      if (numeroJuradoSesion) setNumeroJurado(numeroJuradoSesion);
+    }
+  }, [esJuradoEureka, categoriaSesion, numeroJuradoSesion]);
 
   const [participantes, setParticipantes] = useState([]);
   const [evaluaciones, setEvaluaciones] = useState([]);
@@ -377,6 +388,74 @@ export default function EurekaModule() {
     }
   };
 
+  const handleLimpiarFichaItem = async (p, ev) => {
+    const inst = p.institucion?.nombre || p.institucionNombre || 'la I. E.';
+    const slot = numeroJurado;
+    if (!window.confirm(`¿Está seguro de limpiar la ficha de "${inst}"?\n\nSe restablecerán los puntajes y se eliminará la evaluación del casillero Jurado N.° ${slot}.`)) return;
+
+    try {
+      const docId = ev?.id || evaluacionId(p.id, slot);
+      await deleteEKEvaluacion(docId);
+      if (p.noSePresento) {
+        await updateEKParticipante(p.id, { noSePresento: false });
+      }
+      addToast(`Ficha de "${inst}" restablecida en blanco.`, 'info');
+    } catch (err) {
+      addToast(`Error al limpiar ficha: ${err.message}`, 'error');
+    }
+  };
+
+  const handleMarcarNSPItem = async (p) => {
+    const inst = p.institucion?.nombre || p.institucionNombre || 'la I. E.';
+    if (!window.confirm(`¿Confirmar INCOMPARECENCIA (NSP) para la I. E. "${inst}"?\n\nEl proyecto quedará registrado con 0 puntos / incomparecencia.`)) return;
+
+    try {
+      const slot = numeroJurado;
+      const anexoNum = p.anexoEvaluacion || resolverAnexoPorDefecto(categoria, areaId);
+      const payload = {
+        participanteId: p.id,
+        categoria,
+        areaId: p.areaId || areaId,
+        lineaId: p.lineaId || null,
+        anexoEvaluacion: anexoNum,
+        jurado: { numeroJurado: slot },
+        participanteSnapshot: {
+          id: p.id,
+          codigoParticipante: p.codigoParticipante || p.id,
+          tituloProyecto: p.tituloProyecto || '',
+          pseudonimo: p.pseudonimo || '',
+          institucionNombre: inst,
+          institucion: p.institucion || {},
+          estudiantes: p.estudiantes || [],
+          docenteAsesor: p.docenteAsesor || {},
+          ordenPresentacion: p.ordenPresentacion || 0,
+          noSePresento: true
+        },
+        puntajes: {},
+        puntajeBruto: 0,
+        puntajePonderado: 0,
+        puntajeTotal: 0,
+        puntajeMaximo: 100,
+        penalizaciones: [],
+        duracionEjecutada: '00:00',
+        excedioTiempo: false,
+        observacionesJurado: 'INCOMPARECENCIA — EL PARTICIPANTE NO SE PRESENTÓ A LA EVALUACIÓN',
+        acreditacion: {},
+        incomparecencia: true,
+        noProsigue: false,
+        fecha: EUREKA_CONFIG.fechaEvaluacion,
+        estado: 'registrada',
+        noSePresento: true
+      };
+
+      await saveEKEvaluacion(payload, { usuario: user, accion: 'incomparecencia' });
+      await updateEKParticipante(p.id, { noSePresento: true });
+      addToast(`I. E. "${inst}" registrada con Incomparecencia (NSP).`, 'alerta');
+    } catch (err) {
+      addToast(`Error al marcar incomparecencia: ${err.message}`, 'error');
+    }
+  };
+
   const irAlPanel = () => {
     setSubTab('consolidado');
     setPanelAbierto(true);
@@ -471,7 +550,7 @@ export default function EurekaModule() {
 
       {/* Barra de sub-pestañas estilo Juegos Florales */}
       <div style={{ display: 'flex', background: '#FFFFFF', borderBottom: '2px solid #D6DCE8', overflowX: 'auto', marginBottom: 20 }}>
-        {SUB_PESTANAS.map(tab => {
+        {SUB_PESTANAS.filter(t => !t.soloComision || esStaff).map(tab => {
           const activo = subTab === tab.id;
           return (
             <button
@@ -557,15 +636,24 @@ export default function EurekaModule() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, background: '#F8FAFC', border: '1px solid #D6DCE8', borderRadius: 8, padding: 16, marginBottom: 20 }}>
                   <div>
                     <label style={{ fontSize: 11, fontWeight: 700, color: '#64748B', display: 'block', marginBottom: 4 }}>CATEGORÍA HABILITADA</label>
-                    <select
-                      value={categoria}
-                      onChange={e => { setCategoria(e.target.value); setSeleccionado(null); }}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: 4, border: '1px solid #D6DCE8', fontSize: 13, fontWeight: 700, color: '#122240', background: '#FFFFFF' }}
-                    >
-                      {CATEGORIAS.map(c => (
-                        <option key={c.id} value={c.id}>{c.nombre} — {c.grados}</option>
-                      ))}
-                    </select>
+                    {esJuradoEureka && categoriaSesion ? (
+                      <input
+                        type="text"
+                        readOnly
+                        value={`${cat?.nombre || categoria} — ${cat?.grados || ''}`}
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: 4, border: '1px solid #D6DCE8', background: '#F1F5F9', fontSize: 13, fontWeight: 700, color: '#122240' }}
+                      />
+                    ) : (
+                      <select
+                        value={categoria}
+                        onChange={e => { setCategoria(e.target.value); setSeleccionado(null); }}
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: 4, border: '1px solid #D6DCE8', fontSize: 13, fontWeight: 700, color: '#122240', background: '#FFFFFF' }}
+                      >
+                        {CATEGORIAS.map(c => (
+                          <option key={c.id} value={c.id}>{c.nombre} — {c.grados}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
 
                   <div>
@@ -718,6 +806,9 @@ export default function EurekaModule() {
                   categoria={categoria}
                   areaId={areaId}
                   numeroJuradoActivo={numeroJurado}
+                  esStaff={esStaff}
+                  onLimpiarFicha={handleLimpiarFichaItem}
+                  onMarcarNSP={handleMarcarNSPItem}
                 />
               </div>
             ) : (

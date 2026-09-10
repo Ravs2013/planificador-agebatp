@@ -11,7 +11,7 @@ import {
   calcularPuntajeEvaluacion, sumaPenalizaciones, nombresEstudiantes, resolverVariante, resolverAnexoPorDefecto
 } from '../../utils/eurekaHelpers';
 import { resolverFirmanteDeFicha, esPreliminar } from '../../utils/eurekaFirmas';
-import { saveEKEvaluacion, evaluacionId } from '../../firebase/dbEureka';
+import { saveEKEvaluacion, evaluacionId, deleteEKEvaluacion, updateEKParticipante } from '../../firebase/dbEureka';
 import { generarFichaEurekaPDF } from '../../pdf/generarFichaEurekaPDF';
 import { obtenerMembreteEureka } from '../../pdf/membreteEureka';
 
@@ -245,6 +245,78 @@ export default function EKFichaEvaluacion({
     }
   };
 
+  const handleLimpiarFicha = async () => {
+    if (!window.confirm(`¿Está seguro de LIMPIAR la ficha del Jurado N.° ${numeroJurado}?\n\nSe eliminarán los puntajes guardados en la nube y la ficha quedará completamente en blanco.`)) return;
+    try {
+      setGuardando(true);
+      if (idEsperado) {
+        await deleteEKEvaluacion(idEsperado);
+      }
+      if (participante?.noSePresento) {
+        await updateEKParticipante(participante.id, { noSePresento: false });
+      }
+      setPuntajes({});
+      setObservaciones('');
+      setPenalizaciones([]);
+      setAcreditacion({});
+      setSegundos(0);
+      setUltimoGuardado(new Date());
+      if (onToast) onToast(`Ficha del Jurado N.° ${numeroJurado} limpiada y restablecida en blanco.`, 'info');
+    } catch (err) {
+      if (onToast) onToast(`Error al limpiar ficha: ${err.message}`, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const handleMarcarNSPInterno = async () => {
+    const inst = participante?.institucion?.nombre || participante?.institucionNombre || 'la I. E.';
+    if (!window.confirm(`¿Confirmar INCOMPARECENCIA (NSP) para "${inst}"?\n\nLa ficha se registrará con 0 puntos y el participante se marcará como no presentado.`)) return;
+
+    try {
+      setGuardando(true);
+      const payload = {
+        ...construirPayload('registrada'),
+        puntajes: {},
+        puntajeBruto: 0,
+        puntajePonderado: 0,
+        puntajeTotal: 0,
+        incomparecencia: true,
+        noSePresento: true,
+        observacionesJurado: 'INCOMPARECENCIA — EL PARTICIPANTE NO SE PRESENTÓ A LA EVALUACIÓN'
+      };
+      await saveEKEvaluacion(payload, { usuario, accion: 'incomparecencia' });
+      await updateEKParticipante(participante.id, { noSePresento: true });
+      setPuntajes({});
+      setObservaciones('INCOMPARECENCIA — EL PARTICIPANTE NO SE PRESENTÓ A LA EVALUACIÓN');
+      setUltimoGuardado(new Date());
+      if (onToast) onToast(`Incomparecencia (NSP) registrada formalmente para "${inst}".`, 'alerta');
+    } catch (err) {
+      if (onToast) onToast(`Error al registrar incomparecencia: ${err.message}`, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const handleRevertirNSP = async () => {
+    if (!window.confirm('¿Desea revertir la incomparecencia y habilitar la calificación de este proyecto?')) return;
+    try {
+      setGuardando(true);
+      await updateEKParticipante(participante.id, { noSePresento: false });
+      if (idEsperado) {
+        await deleteEKEvaluacion(idEsperado);
+      }
+      setPuntajes({});
+      setObservaciones('');
+      setUltimoGuardado(new Date());
+      if (onToast) onToast('Incomparecencia revertida. La ficha está habilitada para calificar.', 'exito');
+    } catch (err) {
+      if (onToast) onToast(`Error al revertir incomparecencia: ${err.message}`, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
   const hacerScrollACriterio = (criterioId) => {
     const el = document.getElementById(`criterio-${criterioId}`) || document.getElementById(`aspecto-${criterioId}`);
     if (el) {
@@ -310,40 +382,59 @@ export default function EKFichaEvaluacion({
           </div>
         </div>
 
-        {/* Segmento de cambio de casillero de jurado */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: C.blanco, opacity: 0.8, marginRight: 4 }}>Cambiar casillero:</span>
-          {SLOTS_JURADO.map(slot => {
-            const activo = numeroJurado === slot;
-            return (
-              <button
-                key={slot}
-                type="button"
-                onClick={() => onCambiarJurado(slot)}
-                style={{
-                  minHeight: 40,
-                  padding: '8px 16px',
-                  borderRadius: 6,
-                  fontSize: 13.5,
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  background: activo ? CE.verdeEureka : 'rgba(255,255,255,0.12)',
-                  color: C.blanco,
-                  border: `2px solid ${activo ? CE.verdeHalo : 'rgba(255,255,255,0.2)'}`,
-                  boxShadow: activo ? '0 2px 8px rgba(110,158,35,0.4)' : 'none',
-                  transition: 'all 0.15s ease',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6
-                }}
-              >
-                <Icon name="user" size={14} color={C.blanco} />
-                <span>Jurado {slot}</span>
-              </button>
-            );
-          })}
-        </div>
+        {/* Segmento de cambio de casillero de jurado o casillero bloqueado */}
+        {usuario?.modulo === 'eureka' && usuario?.numeroJurado && Number(usuario.numeroJurado) <= 3 ? (
+          <div style={{
+            background: 'rgba(255,255,255,0.14)',
+            border: '1.5px solid #4ADE80',
+            color: C.blanco,
+            borderRadius: 6,
+            padding: '8px 16px',
+            fontSize: 13,
+            fontWeight: 800,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            boxShadow: '0 2px 8px rgba(74,222,128,0.2)'
+          }}>
+            <Icon name="lock" size={14} color="#4ADE80" />
+            <span>CASILLERO ASIGNADO: JURADO N.° {numeroJurado}</span>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: C.blanco, opacity: 0.8, marginRight: 4 }}>Cambiar casillero:</span>
+            {SLOTS_JURADO.map(slot => {
+              const activo = numeroJurado === slot;
+              return (
+                <button
+                  key={slot}
+                  type="button"
+                  onClick={() => onCambiarJurado(slot)}
+                  style={{
+                    minHeight: 40,
+                    padding: '8px 16px',
+                    borderRadius: 6,
+                    fontSize: 13.5,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    background: activo ? CE.verdeEureka : 'rgba(255,255,255,0.12)',
+                    color: C.blanco,
+                    border: `2px solid ${activo ? CE.verdeHalo : 'rgba(255,255,255,0.2)'}`,
+                    boxShadow: activo ? '0 2px 8px rgba(110,158,35,0.4)' : 'none',
+                    transition: 'all 0.15s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Icon name="user" size={14} color={C.blanco} />
+                  <span>Jurado {slot}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── 2. TARJETA DESTACADA DEL PROYECTO EVALUADO ── */}
@@ -508,6 +599,80 @@ export default function EKFichaEvaluacion({
           )}
         </div>
       </div>
+
+      {/* ── ALERTA DE INCOMPARECENCIA (NSP) ── */}
+      {(participante.noSePresento || evaluacionInicial?.incomparecencia || evaluacionInicial?.noSePresento) && (
+        <div style={{
+          background: '#FEF2F2',
+          border: '1.5px solid #F87171',
+          borderLeft: '6px solid #DC2626',
+          borderRadius: 8,
+          padding: '16px 20px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 14,
+          boxShadow: '0 2px 8px rgba(220,38,38,0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Icon name="alert" size={24} color="#DC2626" />
+            <div>
+              <div style={{ color: '#991B1B', fontSize: 14.5, fontWeight: 800 }}>
+                PARTICIPANTE REGISTRADO CON INCOMPARECENCIA (NO SE PRESENTÓ)
+              </div>
+              <div style={{ fontSize: 12.5, color: '#B91C1C', marginTop: 2 }}>
+                La calificación se encuentra fijada en 0 puntos según las bases oficiales. Si el estudiante se presentó a la exposición, puede revertir la incomparecencia para habilitar la rúbrica.
+              </div>
+            </div>
+          </div>
+          {!soloLectura && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={handleRevertirNSP}
+                disabled={guardando}
+                style={{
+                  background: '#15803D',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  padding: '9px 16px',
+                  borderRadius: 6,
+                  fontSize: 12.5,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  boxShadow: '0 2px 6px rgba(21,128,61,0.25)'
+                }}
+              >
+                <Icon name="refresh" size={13} color="#FFFFFF" /> Revertir NSP (Habilitar Evaluación)
+              </button>
+              <button
+                type="button"
+                onClick={handleLimpiarFicha}
+                disabled={guardando}
+                style={{
+                  background: '#FFFFFF',
+                  color: '#DC2626',
+                  border: '1px solid #FCA5A5',
+                  padding: '9px 16px',
+                  borderRadius: 6,
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                <Icon name="trash" size={13} color="#DC2626" /> Limpiar Ficha
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── 2.1 FORMULARIO OFICIAL DE EVALUACIÓN SEGÚN BASES MINEDU ── */}
       {rubrica && (
@@ -968,11 +1133,7 @@ export default function EKFichaEvaluacion({
             {!soloLectura && (
               <button
                 type="button"
-                onClick={() => {
-                  if (window.confirm('¿Está seguro de poner en blanco todos los puntajes de esta ficha?')) {
-                    setPuntajes({});
-                  }
-                }}
+                onClick={handleLimpiarFicha}
                 disabled={guardando}
                 style={{
                   padding: '9px 14px',
@@ -987,9 +1148,33 @@ export default function EKFichaEvaluacion({
                   alignItems: 'center',
                   gap: 6
                 }}
-                title="Restablecer todos los puntajes a 0 / sin calificar"
+                title="Eliminar la evaluación registrada y dejar la ficha en blanco"
               >
-                <Icon name="refresh" size={13} color="#B91C1C" /> Poner en Blanco
+                <Icon name="trash" size={13} color="#B91C1C" /> Limpiar Ficha
+              </button>
+            )}
+
+            {!soloLectura && !participante.noSePresento && !calculo.incomparecencia && (
+              <button
+                type="button"
+                onClick={handleMarcarNSPInterno}
+                disabled={guardando}
+                style={{
+                  padding: '9px 14px',
+                  borderRadius: 6,
+                  border: '1px solid #FCA5A5',
+                  background: '#FEF2F2',
+                  color: '#DC2626',
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+                title="Marcar que el participante no se presentó a la evaluación (NSP)"
+              >
+                <Icon name="x" size={13} color="#DC2626" /> Incomparecencia (NSP)
               </button>
             )}
 
