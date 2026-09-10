@@ -134,26 +134,42 @@ export default function CYESelectorProyecto({
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', paddingTop: 10, borderTop: `1px solid ${C.g100}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: C.g500 }}>Jurados:</span>
-                  {SLOTS_JURADO.map(slot => {
-                    const e = evs[slot];
-                    const reg = e?.estado === 'registrada';
-                    return (
-                      <span
-                        key={slot}
-                        title={`Jurado ${slot}: ${reg ? 'registrada' : (e ? 'borrador' : 'sin calificar')}`}
-                        style={{
-                          width: 24, height: 24, borderRadius: 4, fontSize: 10.5, fontWeight: 800,
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          background: reg ? C.green : (e ? C.gold : C.g200),
-                          color: reg || e ? C.white : C.g500,
-                          outline: slot === numeroJuradoActivo ? `2px solid ${C.navy1}` : 'none', outlineOffset: 1
-                        }}
-                      >
-                        {reg ? <Icon name="check" size={12} color={C.white} /> : slot}
+                  {esStaff ? (
+                    <>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: C.g500 }}>Jurados:</span>
+                      {SLOTS_JURADO.map(slot => {
+                        const e = evs[slot];
+                        const reg = e?.estado === 'registrada';
+                        return (
+                          <span
+                            key={slot}
+                            title={`Jurado ${slot}: ${reg ? 'registrada' : (e ? 'borrador' : 'sin calificar')}`}
+                            style={{
+                              width: 24, height: 24, borderRadius: 4, fontSize: 10.5, fontWeight: 800,
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              background: reg ? C.green : (e ? C.gold : C.g200),
+                              color: reg || e ? C.white : C.g500,
+                              outline: slot === numeroJuradoActivo ? `2px solid ${C.navy1}` : 'none', outlineOffset: 1
+                            }}
+                          >
+                            {reg ? <Icon name="check" size={12} color={C.white} /> : slot}
+                          </span>
+                        );
+                      })}
+                    </>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: C.g500 }}>Su estado:</span>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                        background: registrada ? '#F0FDF4' : (borrador ? '#EFF6FF' : C.g100),
+                        color: registrada ? C.green : (borrador ? C.navy3 : C.g500),
+                        border: `1px solid ${registrada ? '#BBF7D0' : (borrador ? '#BFDBFE' : C.g200)}`
+                      }}>
+                        {registrada ? 'Calificación registrada' : (borrador ? 'Borrador en curso' : 'Pendiente de calificar')}
                       </span>
-                    );
-                  })}
+                    </div>
+                  )}
                   {p.enlaceWeb && (
                     <a
                       href={p.enlaceWeb}

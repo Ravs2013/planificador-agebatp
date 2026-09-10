@@ -188,6 +188,22 @@ export async function deleteCYEEvaluacion(id) {
   await deleteDoc(doc(db, 'cyeEvaluaciones', id));
 }
 
+/**
+ * Elimina todas las evaluaciones de una categoría (para pruebas o reinicio oficial por la comisión).
+ */
+export async function limpiarEvaluacionesCategoriaCYE(categoria) {
+  const ref = collection(db, 'cyeEvaluaciones');
+  const q = categoria ? query(ref, where('categoria', '==', categoria)) : ref;
+  const snap = await getDocs(q);
+  if (snap.empty) return 0;
+  const batch = writeBatch(db);
+  snap.docs.forEach(d => {
+    batch.delete(d.ref);
+  });
+  await batch.commit();
+  return snap.docs.length;
+}
+
 /* ─────────────────────────────────────────────────────────────
    4. PANEL DE FIRMAS OFICIAL
    ───────────────────────────────────────────────────────────── */

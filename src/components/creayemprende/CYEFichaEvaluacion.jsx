@@ -8,7 +8,7 @@ import {
   calcularFicha, evaluacionIdCYE, resumenGradoSeccion, nombresIntegrantes
 } from '../../utils/creaEmprendeHelpers';
 import { firmanteDelCasillero } from '../../utils/creaEmprendeFirmas';
-import { saveCYEEvaluacion, reabrirCYEEvaluacion, CasilleroOcupadoError } from '../../firebase/dbCreaEmprende';
+import { saveCYEEvaluacion, reabrirCYEEvaluacion, deleteCYEEvaluacion, CasilleroOcupadoError } from '../../firebase/dbCreaEmprende';
 import { generarFichaCYEPDF } from '../../pdf/generarFichaCYEPDF';
 import { obtenerMembreteCYE } from '../../pdf/membreteCreaEmprende';
 
@@ -225,6 +225,24 @@ export default function CYEFichaEvaluacion({
     }
   };
 
+  const limpiarFicha = async () => {
+    if (soloLectura && !esStaff) return;
+    if (!window.confirm(`¿Está seguro de limpiar esta ficha del Jurado N.° ${numeroJurado}?\n\nSe restablecerán todos los puntajes y observaciones a blanco.`)) return;
+    try {
+      clearTimeout(debounceRef.current);
+      sucioRef.current = false;
+      setPuntajes(VACIO);
+      setObservaciones('');
+      if (idEvaluacion) {
+        await deleteCYEEvaluacion(idEvaluacion);
+      }
+      setUltimoGuardado(null);
+      if (onToast) onToast(`Ficha del Jurado N.° ${numeroJurado} restablecida en blanco.`, 'info');
+    } catch (err) {
+      if (onToast) onToast(`Error al limpiar ficha: ${err.message}`, 'error');
+    }
+  };
+
   const descargarPDF = async () => {
     try {
       const banner = await obtenerMembreteCYE();
@@ -270,36 +288,45 @@ export default function CYEFichaEvaluacion({
             <div style={{ fontSize: 11.5, color: '#CBD5E1', marginTop: 2 }}>{usuario.nombreCompleto}</div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {ocupacion.map(item => {
-            const activo = item.slot === numeroJurado;
-            const bloqueado = item.ocupado && !esStaff;
-            return (
-              <button
-                key={item.slot}
-                type="button"
-                onClick={() => cambiarCasillero(item)}
-                title={item.ocupado ? `Calificado por ${item.evaluador}` : (item.propio ? 'Su casillero' : 'Casillero libre')}
-                style={{
-                  minWidth: 64, padding: '6px 10px', borderRadius: 6, cursor: bloqueado ? 'not-allowed' : 'pointer',
-                  background: activo ? C.gold : 'rgba(255,255,255,0.10)',
-                  color: activo ? C.navy1 : C.white,
-                  border: `1px solid ${activo ? C.gold : 'rgba(255,255,255,0.25)'}`,
-                  opacity: bloqueado ? 0.55 : 1, fontFamily: FUENTES.sans, textAlign: 'center'
-                }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                  {item.registrada ? <Icon name="check" size={12} color={activo ? C.navy1 : '#86EFAC'} /> : null}
-                  {bloqueado ? <Icon name="lock" size={11} color={C.white} /> : null}
-                  J{item.slot}
-                </div>
-                <div style={{ fontSize: 9.5, fontWeight: 700, opacity: 0.85 }}>
-                  {item.propio ? 'Suyo' : (item.ocupado ? 'Ocupado' : 'Libre')}
-                </div>
-              </button>
-            );
-          })}
-        </div>
+        {esStaff ? (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {ocupacion.map(item => {
+              const activo = item.slot === numeroJurado;
+              return (
+                <button
+                  key={item.slot}
+                  type="button"
+                  onClick={() => cambiarCasillero(item)}
+                  title={item.ocupado ? `Calificado por ${item.evaluador}` : (item.propio ? 'Su casillero' : 'Casillero libre')}
+                  style={{
+                    minWidth: 64, padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
+                    background: activo ? C.gold : 'rgba(255,255,255,0.10)',
+                    color: activo ? C.navy1 : C.white,
+                    border: `1px solid ${activo ? C.gold : 'rgba(255,255,255,0.25)'}`,
+                    fontFamily: FUENTES.sans, textAlign: 'center'
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                    {item.registrada ? <Icon name="check" size={12} color={activo ? C.navy1 : '#86EFAC'} /> : null}
+                    J{item.slot}
+                  </div>
+                  <div style={{ fontSize: 9.5, fontWeight: 700, opacity: 0.85 }}>
+                    {item.propio ? 'Suyo' : (item.ocupado ? 'Ocupado' : 'Libre')}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{
+            padding: '8px 16px', borderRadius: 6, background: 'rgba(255,255,255,0.10)',
+            border: `1px solid ${C.gold}`, color: C.goldLight, fontSize: 12.5, fontWeight: 800,
+            display: 'inline-flex', alignItems: 'center', gap: 8, letterSpacing: 0.5
+          }}>
+            <Icon name="shield" size={14} color={C.goldLight} />
+            CASILLERO ASIGNADO: J{numeroJurado}
+          </div>
+        )}
       </div>
 
       {/* ── Proyecto evaluado ── */}
@@ -466,6 +493,27 @@ export default function CYEFichaEvaluacion({
           </div>
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {(!soloLectura || esStaff) && !bloqueadoPorSellado && (
+              <button
+                type="button"
+                onClick={limpiarFicha}
+                disabled={guardando}
+                style={{
+                  ...btn('contorno'),
+                  borderColor: '#FECDD3',
+                  color: '#B91C1C',
+                  background: '#FFF1F2'
+                }}
+                title="Restablecer todos los puntajes y observaciones a blanco"
+              >
+                <Icon name="trash" size={13} color="#B91C1C" /> Limpiar ficha
+              </button>
+            )}
+            {registrada && !bloqueadoPorSellado && (
+              <button type="button" onClick={corregir} style={btn('contorno')}>
+                <Icon name="refresh" size={13} /> Corregir ficha
+              </button>
+            )}
             {!soloLectura && (
               <button type="button" onClick={() => guardar('borrador', false)} disabled={guardando} style={btn('contorno')}>
                 <Icon name="save" size={13} /> Guardar borrador

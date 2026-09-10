@@ -18,7 +18,7 @@ import { resolverPanelFirmasCYE, esPreliminarCYE } from '../../utils/creaEmprend
 import {
   subscribeCYEParticipantes, subscribeCYEProyectoEstado, subscribeCYEEvaluaciones, subscribeCYEPaneles,
   subscribeCYEConsolidados, subscribeCYEActas, subscribeCYEJurados, subscribeCYECalibracionConfig,
-  subscribeCYECalibracionFichas
+  subscribeCYECalibracionFichas, limpiarEvaluacionesCategoriaCYE
 } from '../../firebase/dbCreaEmprende';
 import { obtenerMembreteCYE } from '../../pdf/membreteCreaEmprende';
 import { generarFichasCYEPDF } from '../../pdf/generarFichaCYEPDF';
@@ -36,9 +36,9 @@ import CYEPanelFirmasOficial from './CYEPanelFirmasOficial';
 const SUB_PESTANAS = [
   { id: 'fichas', label: 'Fichas de evaluación', icon: 'clipboard' },
   { id: 'calibracion', label: 'Calibración', icon: 'users' },
-  { id: 'd13', label: 'Anexo D13 — Por jurado', icon: 'list' },
-  { id: 'd14', label: 'Anexo D14 — Consolidado', icon: 'fileText' },
-  { id: 'd15', label: 'Anexo D15 — Acta', icon: 'check' },
+  { id: 'd13', label: 'Anexo D13 — Por jurado', icon: 'list', soloComision: true },
+  { id: 'd14', label: 'Anexo D14 — Consolidado', icon: 'fileText', soloComision: true },
+  { id: 'd15', label: 'Anexo D15 — Acta', icon: 'check', soloComision: true },
   { id: 'padron', label: 'Padrón y admisión', icon: 'shield', soloComision: true }
 ];
 
@@ -217,6 +217,21 @@ export default function CreaEmprendeModule() {
     }
   };
 
+  const handleLimpiarFichasCategoria = async () => {
+    if (!esStaff) return;
+    if (!window.confirm(`¿Está seguro de ELIMINAR TODAS las evaluaciones registradas en la Categoría ${categoria}?\n\nEsta acción dejará todas las fichas completamente en blanco para la evaluación oficial.`)) return;
+
+    try {
+      marcar('limpiando', true);
+      const borrados = await limpiarEvaluacionesCategoriaCYE(categoria);
+      addToast(`Se eliminaron ${borrados} evaluaciones de prueba. Fichas de la Categoría ${categoria} dejadas en blanco.`, 'info');
+    } catch (err) {
+      addToast(`Error al limpiar evaluaciones: ${err.message}`, 'error');
+    } finally {
+      marcar('limpiando', false);
+    }
+  };
+
   const cat = getCategoriaCYE(categoria);
   const pestanas = SUB_PESTANAS.filter(t => !t.soloComision || esStaff);
 
@@ -337,6 +352,21 @@ export default function CreaEmprendeModule() {
                 >
                   <Icon name="play" size={13} color={C.white} /> Iniciar evaluación
                 </button>
+                {esStaff && (
+                  <button
+                    type="button"
+                    onClick={handleLimpiarFichasCategoria}
+                    disabled={cargando.limpiando}
+                    style={{
+                      background: '#FFF1F2', color: '#B91C1C', border: '1px solid #FECDD3',
+                      borderRadius: 6, padding: '8px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: 6
+                    }}
+                    title={`Limpiar todas las evaluaciones de prueba registradas en la Categoría ${categoria}`}
+                  >
+                    <Icon name="trash" size={13} color="#B91C1C" /> Limpiar Fichas
+                  </button>
+                )}
                 {esStaff && (
                   <button type="button" onClick={descargarFichasCategoria} disabled={cargando.fichas} style={cargando.fichas ? btnDeshabilitado(btn('real')) : btn('real')}>
                     <Icon name="download" size={13} color={C.white} /> {cargando.fichas ? 'Generando...' : `Fichas de la Cat. ${categoria} (PDF)`}

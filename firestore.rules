@@ -230,7 +230,9 @@ service cloud.firestore {
             && (isStaff()
                 || (isJurado() && (!('evaluadorOperativo' in resource.data)
                     || resource.data.evaluadorOperativo.uid == request.auth.uid))));
-      allow delete: if isRole('admin');
+      allow delete: if isStaff()
+        || (isJurado() && !cyeCategoriaSellada(resource.data.categoria)
+            && (!('evaluadorOperativo' in resource.data) || resource.data.evaluadorOperativo.uid == request.auth.uid));
     }
 
     match /cyePanelFirmas/{scopeId} {
