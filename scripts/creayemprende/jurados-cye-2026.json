@@ -1,0 +1,200 @@
+[
+  {
+    "grupo": 1,
+    "numeroCredencial": 1,
+    "correo": "grupo1jurado1@ugel03.gob.pe",
+    "apellidos": "Alejos Flores",
+    "nombres": "Alex Gerardo",
+    "nombreCompleto": "ALEJOS FLORES, ALEX GERARDO",
+    "dni": "40443422",
+    "cargo": "Director",
+    "institucion": "CETPRO Magdalena",
+    "perfil": "Educación técnico-productiva",
+    "categorias": [
+      "A",
+      "C"
+    ]
+  },
+  {
+    "grupo": 1,
+    "numeroCredencial": 2,
+    "correo": "grupo1jurado2@ugel03.gob.pe",
+    "apellidos": "Quenaya Mayo",
+    "nombres": "Celia",
+    "nombreCompleto": "QUENAYA MAYO, CELIA",
+    "dni": "10089476",
+    "cargo": "Especialista del sector educación",
+    "institucion": "Oficina de la UNESCO en el Perú",
+    "perfil": "Política educativa",
+    "categorias": [
+      "A",
+      "C"
+    ]
+  },
+  {
+    "grupo": 1,
+    "numeroCredencial": 3,
+    "correo": "grupo1jurado3@ugel03.gob.pe",
+    "apellidos": "Sifuentes León",
+    "nombres": "Melka",
+    "nombreCompleto": "SIFUENTES LEÓN, MELKA",
+    "dni": "40298666",
+    "cargo": "Directora",
+    "institucion": "Colegio San Roque (Los Olivos)",
+    "perfil": "Directivo de educación básica",
+    "categorias": [
+      "A",
+      "C"
+    ]
+  },
+  {
+    "grupo": 2,
+    "numeroCredencial": 1,
+    "correo": "grupo2jurado1@ugel03.gob.pe",
+    "apellidos": "Calle Alcahuaman de Navarro",
+    "nombres": "Eliana Elizabeth",
+    "nombreCompleto": "CALLE ALCAHUAMAN DE NAVARRO, ELIANA ELIZABETH",
+    "dni": "10294372",
+    "cargo": "Docente",
+    "institucion": "CETPRO Nuestra Señora de Montserrat",
+    "perfil": "Educación técnico-productiva",
+    "categorias": [
+      "A"
+    ]
+  },
+  {
+    "grupo": 2,
+    "numeroCredencial": 2,
+    "correo": "grupo2jurado2@ugel03.gob.pe",
+    "apellidos": "Díaz Díaz",
+    "nombres": "Frida Yovanna",
+    "nombreCompleto": "DÍAZ DÍAZ, FRIDA YOVANNA",
+    "dni": "09709123",
+    "cargo": "Directora",
+    "institucion": "Colegio Miss Frida",
+    "perfil": "Directivo de educación básica",
+    "categorias": [
+      "A"
+    ]
+  },
+  {
+    "grupo": 2,
+    "numeroCredencial": 3,
+    "correo": "grupo2jurado3@ugel03.gob.pe",
+    "apellidos": "Mendoza Retamozo",
+    "nombres": "Noemí",
+    "nombreCompleto": "MENDOZA RETAMOZO, NOEMÍ",
+    "dni": "23271871",
+    "cargo": "Catedrática",
+    "institucion": "Universidad César Vallejo",
+    "perfil": "Académico",
+    "categorias": [
+      "A"
+    ]
+  },
+  {
+    "grupo": 3,
+    "numeroCredencial": 1,
+    "correo": "grupo3jurado1@ugel03.gob.pe",
+    "apellidos": "Brañez Medrano",
+    "nombres": "Nick Josias",
+    "nombreCompleto": "BRAÑEZ MEDRANO, NICK JOSIAS",
+    "dni": "42965455",
+    "cargo": "Director de la EP de Ciencias de la Comunicación",
+    "institucion": "Universidad Peruana Unión",
+    "perfil": "Académico",
+    "categorias": [
+      "B"
+    ]
+  },
+  {
+    "grupo": 3,
+    "numeroCredencial": 2,
+    "correo": "grupo3jurado2@ugel03.gob.pe",
+    "apellidos": "Calderón Torres",
+    "nombres": "Jossy Delina",
+    "nombreCompleto": "CALDERÓN TORRES, JOSSY DELINA",
+    "dni": "10747499",
+    "cargo": "Directora",
+    "institucion": "IEP Guadalupe Nueva Generación (Ventanilla)",
+    "perfil": "Directivo de educación básica",
+    "categorias": [
+      "B"
+    ]
+  },
+  {
+    "grupo": 3,
+    "numeroCredencial": 3,
+    "correo": "grupo3jurado3@ugel03.gob.pe",
+    "apellidos": "Reyes Salazar",
+    "nombres": "Saida",
+    "nombreCompleto": "REYES SALAZAR, SAIDA",
+    "dni": "47463619",
+    "cargo": "Docente",
+    "institucion": "CETPRO Nuestra Señora de Montserrat",
+    "perfil": "Educación técnico-productiva",
+    "categorias": [
+      "B"
+    ]
+  },
+  {
+    "grupo": 3,
+    "numeroCredencial": 4,
+    "correo": "grupo3jurado4@ugel03.gob.pe",
+    "apellidos": "Ugarte Rojas",
+    "nombres": "Liz Estrella",
+    "nombreCompleto": "UGARTE ROJAS, LIZ ESTRELLA",
+    "dni": "07627730",
+    "cargo": "Directora",
+    "institucion": "CETPRO PROMAE Breña",
+    "perfil": "Educación técnico-productiva",
+    "categorias": [
+      "B"
+    ]
+  },
+  {
+    "grupo": 4,
+    "numeroCredencial": 1,
+    "correo": "grupo4jurado1@ugel03.gob.pe",
+    "apellidos": "Alvarez Salazar",
+    "nombres": "Edery Leon",
+    "nombreCompleto": "ALVAREZ SALAZAR, EDERY LEON",
+    "dni": "45409675",
+    "cargo": "Catedrático",
+    "institucion": "Universidad Nacional Federico Villarreal",
+    "perfil": "Académico",
+    "categorias": [
+      "B"
+    ]
+  },
+  {
+    "grupo": 4,
+    "numeroCredencial": 2,
+    "correo": "grupo4jurado2@ugel03.gob.pe",
+    "apellidos": "Ibarra Segura",
+    "nombres": "Paula",
+    "nombreCompleto": "IBARRA SEGURA, PAULA",
+    "dni": "42888716",
+    "cargo": "Docente",
+    "institucion": "CETPRO Nuestra Señora de Montserrat",
+    "perfil": "Educación técnico-productiva",
+    "categorias": [
+      "B"
+    ]
+  },
+  {
+    "grupo": 4,
+    "numeroCredencial": 3,
+    "correo": "grupo4jurado3@ugel03.gob.pe",
+    "apellidos": "Moscoso Pacheco de Perez",
+    "nombres": "Silvia Yolanda",
+    "nombreCompleto": "MOSCOSO PACHECO DE PEREZ, SILVIA YOLANDA",
+    "dni": "07019505",
+    "cargo": "Directora",
+    "institucion": "Colegio Le D'Alembert",
+    "perfil": "Directivo de educación básica",
+    "categorias": [
+      "B"
+    ]
+  }
+]

@@ -196,6 +196,77 @@ service cloud.firestore {
       allow write: if isRole('admin') || isRole('jefatura');
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // Módulo Crea y Emprende 2026 (Etapa UGEL 03)
+    // Solo la comisión y los jurados leen: los usuarios públicos no ven datos de estudiantes.
+    // Con el panel de firmas sellado, un no administrador ya no altera un puntaje.
+    // ═══════════════════════════════════════════════════════════════
+
+    function cyePanelSellado(scopeId) {
+      return exists(/databases/$(database)/documents/cyePanelFirmas/$(scopeId))
+        && get(/databases/$(database)/documents/cyePanelFirmas/$(scopeId)).data.estado == 'sellado';
+    }
+
+    function cyeCategoriaSellada(categoria) {
+      return cyePanelSellado('CAT_' + categoria) || cyePanelSellado('GLOBAL');
+    }
+
+    match /cyeParticipantes/{id} {
+      allow read: if isStaff() || isJurado();
+      allow write: if isStaff();
+    }
+
+    match /cyeProyectoEstado/{id} {
+      allow read: if isStaff() || isJurado();
+      allow write: if isStaff();
+    }
+
+    match /cyeEvaluaciones/{id} {
+      allow read: if isStaff() || isJurado();
+      allow create: if (isStaff() || isJurado()) && !cyeCategoriaSellada(request.resource.data.categoria);
+      // Un jurado solo modifica la ficha que él capturó; la comisión puede transcribir o corregir.
+      allow update: if isRole('admin')
+        || (!cyeCategoriaSellada(resource.data.categoria)
+            && (isStaff()
+                || (isJurado() && (!('evaluadorOperativo' in resource.data)
+                    || resource.data.evaluadorOperativo.uid == request.auth.uid))));
+      allow delete: if isRole('admin');
+    }
+
+    match /cyePanelFirmas/{scopeId} {
+      allow read: if isStaff() || isJurado();
+      allow create: if isStaff();
+      // La comisión guarda borradores y sella; reabrir un panel sellado es exclusivo del administrador.
+      allow update: if isRole('admin') || (isStaff() && resource.data.estado != 'sellado');
+      allow delete: if isRole('admin');
+    }
+
+    match /cyeConsolidados/{id} {
+      allow read: if isStaff() || isJurado();
+      allow write: if isStaff();
+    }
+
+    match /cyeActas/{id} {
+      allow read: if isStaff() || isJurado();
+      allow write: if isStaff();
+    }
+
+    match /cyeJurados/{id} {
+      allow read: if isStaff() || isJurado();
+      allow write: if isStaff();
+    }
+
+    match /cyeCalibracionConfig/{id} {
+      allow read: if isStaff() || isJurado();
+      allow write: if isStaff();
+    }
+
+    match /cyeCalibracionFichas/{id} {
+      allow read: if isStaff() || isJurado();
+      allow create, update: if isStaff() || (isJurado() && request.resource.data.jurado.uid == request.auth.uid);
+      allow delete: if isRole('admin');
+    }
+
     // Configuración general:
     match /config/{id} {
       allow read: if isAuthenticated();

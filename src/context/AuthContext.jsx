@@ -12,11 +12,34 @@ import {
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 import { construirBloqueJurado } from '../data/juegosFloralesCredenciales';
+import { descomponerCredencialCYE, getJuradoCYEPorCorreo } from '../data/creaEmprendeJurados';
+import { categoriasDeGrupo } from '../data/creaEmprendeConfig';
 
 const AuthContext = createContext(null);
 
 function enrichUserWithJuradoInfo(baseUser) {
     if (!baseUser || !baseUser.email) return baseUser;
+
+    // Jurados de Crea y Emprende: credencial grupo{G}jurado{N}@ugel03.gob.pe o perfil creado desde el módulo.
+    const credencialCYE = descomponerCredencialCYE(baseUser.email);
+    if (credencialCYE || baseUser.modulo === 'creayemprende') {
+        const padron = getJuradoCYEPorCorreo(baseUser.email);
+        const grupo = Number(baseUser.grupo || credencialCYE?.grupo || padron?.grupo) || null;
+        const nombre = padron?.nombreCompleto || baseUser.nombreCompleto || baseUser.nombre || '';
+        return {
+            ...baseUser,
+            rol: 'jurado',
+            modulo: 'creayemprende',
+            grupo,
+            numeroCredencial: Number(baseUser.numeroCredencial || credencialCYE?.numeroCredencial || padron?.numeroCredencial) || null,
+            categoriasCYE: baseUser.categoriasCYE || padron?.categorias || categoriasDeGrupo(grupo),
+            nombre,
+            nombreCompleto: nombre,
+            dni: padron?.dni || baseUser.dni || '',
+            cargo: baseUser.cargo || `Jurado calificador — Crea y Emprende (Grupo ${grupo || '—'})`
+        };
+    }
+
     const juradoInfo = construirBloqueJurado(baseUser.email);
     if (juradoInfo) {
         const baseNombreIsPlaceholder = baseUser.nombre && baseUser.nombre.toUpperCase().startsWith('JURADO');

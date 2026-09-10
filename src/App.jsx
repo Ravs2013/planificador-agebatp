@@ -21,6 +21,8 @@ import ChangePasswordScreen from './components/ChangePasswordScreen';
 import LegalPages from './components/LegalPages';
 import JuegosFloralesModule from './components/JuegosFloralesModule';
 import EurekaModule from './components/eureka/EurekaModule';
+import CreaEmprendeModule from './components/creayemprende/CreaEmprendeModule';
+import { esCorreoJuradoCYE } from './data/creaEmprendeJurados';
 
 
 export default function App() {
@@ -287,20 +289,22 @@ export default function App() {
     const isPublic = user && isRole('publico');
 
     const isUserJurado = Boolean(user && (user.rol === 'jurado' || user.disciplinaId || (user.cargo && user.cargo.includes('Jurado'))));
+    const isUserJuradoCYE = Boolean(user && (user.modulo === 'creayemprende' || esCorreoJuradoCYE(user.email)));
 
     const ROLE_PERMS = {
-        admin: ["juegosflorales", "eureka", "calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio", "reportes"],
-        jefatura: ["juegosflorales", "eureka", "calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio", "reportes"],
-        personal: ["juegosflorales", "eureka", "calendario", "actividades", "expedientes", "reuniones", "monitoreo", "directorio", "reportes"],
+        admin: ["juegosflorales", "eureka", "creayemprende", "calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio", "reportes"],
+        jefatura: ["juegosflorales", "eureka", "creayemprende", "calendario", "actividades", "personal", "expedientes", "reuniones", "monitoreo", "requerimientos", "directorio", "reportes"],
+        personal: ["juegosflorales", "eureka", "creayemprende", "calendario", "actividades", "expedientes", "reuniones", "monitoreo", "directorio", "reportes"],
         jurado: ["juegosflorales", "eureka"],
         director: ["directorio"],
         publico: ["calendario", "reuniones"]
     };
-    const perms = isUserJurado ? ["juegosflorales", "eureka"] : (user ? (ROLE_PERMS[user.rol] || []) : []);
+    const perms = isUserJuradoCYE ? ["creayemprende"] : (isUserJurado ? ["juegosflorales", "eureka"] : (user ? (ROLE_PERMS[user.rol] || []) : []));
 
     const allTabs = [
         { id: 'juegosflorales', label: 'Juegos Florales', icon: 'clipboard' },
         { id: 'eureka', label: 'Eureka', icon: 'graduationCap' },
+        { id: 'creayemprende', label: 'Crea y Emprende', icon: 'award' },
         { id: 'calendario', label: 'Calendario', icon: 'calendar' },
         { id: 'actividades', label: 'Actividades', icon: 'list' },
         { id: 'personal', label: 'Personal', icon: 'users' },
@@ -315,7 +319,11 @@ export default function App() {
 
     useEffect(() => {
         if (!user) return;
-        if (isUserJurado) {
+        if (isUserJuradoCYE) {
+            if (!perms.includes(activeTab)) {
+                setActiveTab('creayemprende');
+            }
+        } else if (isUserJurado) {
             if (!perms.includes(activeTab)) {
                 setActiveTab('juegosflorales');
             }
@@ -323,7 +331,7 @@ export default function App() {
             setActiveTab(tabs[0].id);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTab, user, isUserJurado]);
+    }, [activeTab, user, isUserJurado, isUserJuradoCYE]);
 
     if (currentPath.startsWith('/legal/') || window.location.hash.startsWith('#/legal/')) {
         const path = currentPath.startsWith('/legal/') ? currentPath : window.location.hash.replace('#', '');
@@ -462,7 +470,37 @@ export default function App() {
             {/* MAIN */}
             <main style={{ maxWidth: 1400, margin: '0 auto', padding: '24px 28px' }}>
                 {/* STATS / WELCOME BANNER */}
-                {activeTab === 'eureka' ? (
+                {activeTab === 'creayemprende' ? (
+                    <div style={{
+                        background: 'linear-gradient(135deg, #0C1929 0%, #1E3A5F 50%, #122240 100%)',
+                        border: '1px solid #334155',
+                        borderLeft: '5px solid #CA8A04',
+                        borderRadius: 10,
+                        padding: '18px 24px',
+                        marginBottom: 24,
+                        boxShadow: '0 4px 14px rgba(12,25,41,0.15)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: 16
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+                            <img src="/logo-crea-emprende.png" alt="Logo Crea y Emprende" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/logo-agebatp.jpeg'; }} style={{ height: 64, width: 'auto', objectFit: 'contain', background: '#FFFFFF', padding: 6, borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }} />
+                            <div>
+                                <h2 style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 22, color: '#FFFFFF', margin: 0, letterSpacing: 0.5 }}>
+                                    ¡BIENVENIDOS AL CONCURSO NACIONAL CREA Y EMPRENDE 2026!
+                                </h2>
+                                <div style={{ fontSize: 12, color: '#FDE047', fontWeight: 700, marginTop: 4, letterSpacing: 0.5 }}>
+                                    Etapa UGEL 03 &nbsp;·&nbsp; Evaluación: 16 de setiembre de 2026 &nbsp;·&nbsp; Expoferia presencial
+                                </div>
+                                <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
+                                    Bases Específicas 2026 — Anexo D &nbsp;·&nbsp; Comisión Organizadora UGEL 03
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : activeTab === 'eureka' ? (
                     <div style={{
                         background: 'linear-gradient(135deg, #0C1929 0%, #1E3A5F 50%, #122240 100%)',
                         border: '1px solid #334155',
@@ -845,6 +883,11 @@ export default function App() {
                 {/* EUREKA — Feria Escolar Nacional de Ciencia y Tecnologia */}
                 {activeTab === 'eureka' && (
                     <EurekaModule />
+                )}
+
+                {/* CREA Y EMPRENDE — Concurso Nacional Crea y Emprende 2026 */}
+                {activeTab === 'creayemprende' && (
+                    <CreaEmprendeModule />
                 )}
             </main>
 
