@@ -135,6 +135,67 @@ service cloud.firestore {
       allow write: if isStaff();
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // Módulo Eureka (Feria Escolar Nacional de Ciencia y Tecnología 2026)
+    //
+    // La regla capital es la de eurekaEvaluaciones: una vez que el panel de firmas
+    // aplicable está sellado, un no administrador ya no puede alterar un puntaje. Eso es
+    // lo que da valor probatorio al consolidado suscrito por el jurado calificador.
+    // ═══════════════════════════════════════════════════════════════
+
+    function panelSellado(scopeId) {
+      return exists(/databases/$(database)/documents/eurekaPanelFirmas/$(scopeId))
+        && get(/databases/$(database)/documents/eurekaPanelFirmas/$(scopeId)).data.estado == 'sellado';
+    }
+
+    // Un alcance está sellado si lo está el panel específico, el de su categoría o el global.
+    function alcanceSellado(categoria, areaId) {
+      return panelSellado('CAT_' + categoria + '__AREA_' + areaId)
+        || panelSellado('CAT_' + categoria)
+        || panelSellado('GLOBAL');
+    }
+
+    match /eurekaParticipantes/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isStaff();
+    }
+
+    match /eurekaEvaluaciones/{id} {
+      allow read: if isAuthenticated();
+      // El evaluador autenticado captura y corrige mientras el panel siga en borrador.
+      allow create: if isStaff() || isJurado();
+      allow update, delete: if isRole('admin')
+        || ((isStaff() || isJurado())
+            && !alcanceSellado(resource.data.categoria, resource.data.areaId));
+    }
+
+    match /eurekaPanelFirmas/{scopeId} {
+      allow read: if isAuthenticated();
+      allow create: if isStaff();
+      // La transición de 'sellado' a 'borrador' es exclusiva del administrador y exige
+      // que la escritura incluya el historial con el motivo de la reapertura.
+      allow update: if isRole('admin')
+        || (isStaff()
+            && resource.data.estado != 'sellado'
+            && request.resource.data.estado != 'borrador');
+      allow delete: if isRole('admin');
+    }
+
+    match /eurekaConsolidados/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isStaff();
+    }
+
+    match /eurekaActas/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isStaff();
+    }
+
+    match /eurekaJuradosEvaluadores/{dni} {
+      allow read: if isAuthenticated();
+      allow write: if isRole('admin') || isRole('jefatura');
+    }
+
     // Configuración general:
     match /config/{id} {
       allow read: if isAuthenticated();
