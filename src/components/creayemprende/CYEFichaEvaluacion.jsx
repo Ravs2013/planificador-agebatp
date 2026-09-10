@@ -8,7 +8,10 @@ import {
   calcularFicha, evaluacionIdCYE, resumenGradoSeccion, nombresIntegrantes
 } from '../../utils/creaEmprendeHelpers';
 import { firmanteDelCasillero } from '../../utils/creaEmprendeFirmas';
-import { saveCYEEvaluacion, reabrirCYEEvaluacion, deleteCYEEvaluacion, CasilleroOcupadoError } from '../../firebase/dbCreaEmprende';
+import {
+  saveCYEEvaluacion, reabrirCYEEvaluacion, deleteCYEEvaluacion,
+  actualizarEstadoProyectoCYE, CasilleroOcupadoError
+} from '../../firebase/dbCreaEmprende';
 import { generarFichaCYEPDF } from '../../pdf/generarFichaCYEPDF';
 import { obtenerMembreteCYE } from '../../pdf/membreteCreaEmprende';
 
@@ -52,6 +55,7 @@ export default function CYEFichaEvaluacion({
   const [abierto, setAbierto] = useState('D10');
   const [guardando, setGuardando] = useState(false);
   const [ultimoGuardado, setUltimoGuardado] = useState(null);
+  const [showNSPModal, setShowNSPModal] = useState(false);
 
   const cargaRef = useRef({ id: null, conDatos: false });
   const sucioRef = useRef(false);
@@ -81,7 +85,7 @@ export default function CYEFichaEvaluacion({
   const evaluador = evaluacionInicial?.evaluadorOperativo || null;
   const ocupadoPorOtro = Boolean(evaluador?.uid && usuario?.uid && evaluador.uid !== usuario.uid && !esStaff);
   const registrada = evaluacionInicial?.estado === 'registrada';
-  const noSePresento = Boolean(participante?.noSePresento);
+  const noSePresento = Boolean(participante?.noSePresento || evaluacionInicial?.incomparecencia || evaluacionInicial?.noSePresento);
   const soloLectura = bloqueadoPorSellado || ocupadoPorOtro || registrada || noSePresento;
 
   const ocupacion = useMemo(() => SLOTS_JURADO.map(slot => {
@@ -226,9 +230,10 @@ export default function CYEFichaEvaluacion({
   };
 
   const limpiarFicha = async () => {
-    if (soloLectura && !esStaff) return;
+    if (bloqueadoPorSellado) return;
     if (!window.confirm(`¿Está seguro de limpiar esta ficha del Jurado N.° ${numeroJurado}?\n\nSe restablecerán todos los puntajes y observaciones a blanco.`)) return;
     try {
+      setGuardando(true);
       clearTimeout(debounceRef.current);
       sucioRef.current = false;
       setPuntajes(VACIO);
@@ -236,10 +241,99 @@ export default function CYEFichaEvaluacion({
       if (idEvaluacion) {
         await deleteCYEEvaluacion(idEvaluacion);
       }
+      if (participante?.noSePresento) {
+        await actualizarEstadoProyectoCYE(participante.id, { noSePresento: false }, usuario, {
+          accion: 'restablecer',
+          motivo: 'Ficha limpiada'
+        });
+      }
       setUltimoGuardado(null);
       if (onToast) onToast(`Ficha del Jurado N.° ${numeroJurado} restablecida en blanco.`, 'info');
     } catch (err) {
       if (onToast) onToast(`Error al limpiar ficha: ${err.message}`, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const handleMarcarNSP = async () => {
+    if (bloqueadoPorSellado) return;
+    try {
+      setGuardando(true);
+      clearTimeout(debounceRef.current);
+      const obsNSP = observaciones.trim()
+        ? `${observaciones.trim()} | INCOMPARECENCIA — NO SE PRESENTÓ`
+        : 'INCOMPARECENCIA — EL PARTICIPANTE NO SE PRESENTÓ A LA EVALUACIÓN';
+
+      const payload = {
+        participanteId: participante.id,
+        categoria,
+        jurado: { numeroJurado },
+        participanteSnapshot: {
+          id: participante.id,
+          numero: participante.numero || null,
+          institucionNombre: participante.institucion?.nombre || '',
+          codigoModular: participante.institucion?.codigoModular || '',
+          tituloProyecto: participante.tituloProyecto || '',
+          gradoSeccion: resumenGradoSeccion(participante.integrantes),
+          grupo: participante.grupo || null
+        },
+        puntajes: VACIO,
+        subtotales: { D10: 0, D11: 0, D12: 0 },
+        puntajeTotal: 0,
+        puntajeMaximo: calculo.maximoTotal,
+        anexosCompletos: 0,
+        completa: false,
+        observacionesJurado: obsNSP,
+        fecha: CYE_CONFIG.fechaEvaluacion,
+        estado: 'registrada',
+        incomparecencia: true,
+        noSePresento: true
+      };
+
+      await saveCYEEvaluacion(payload, {
+        usuario,
+        esStaff,
+        accion: 'incomparecencia'
+      });
+
+      await actualizarEstadoProyectoCYE(participante.id, { noSePresento: true }, usuario, {
+        accion: 'inasistencia',
+        motivo: 'Incomparecencia a la Expoferia'
+      });
+
+      setPuntajes(VACIO);
+      setObservaciones(obsNSP);
+      sucioRef.current = false;
+      setShowNSPModal(false);
+      if (onToast) onToast(`I. E. "${participante.institucion?.nombre}" registrada con Incomparecencia (NSP).`, 'warning');
+    } catch (err) {
+      if (onToast) onToast(`Error al marcar incomparecencia: ${err.message}`, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const revertirNSP = async () => {
+    if (bloqueadoPorSellado) return;
+    if (!window.confirm(`¿Revertir la incomparecencia (NSP) de la I. E. "${participante.institucion?.nombre}"?\n\nEl proyecto quedará habilitado nuevamente para ser calificado.`)) return;
+    try {
+      setGuardando(true);
+      await actualizarEstadoProyectoCYE(participante.id, { noSePresento: false }, usuario, {
+        accion: 'restablecer',
+        motivo: 'Reversión de incomparecencia'
+      });
+      if (idEvaluacion) {
+        await deleteCYEEvaluacion(idEvaluacion);
+      }
+      setPuntajes(VACIO);
+      setObservaciones('');
+      sucioRef.current = false;
+      if (onToast) onToast('Incomparecencia revertida. Ficha habilitada para calificar.', 'success');
+    } catch (err) {
+      if (onToast) onToast(`Error al revertir incomparecencia: ${err.message}`, 'error');
+    } finally {
+      setGuardando(false);
     }
   };
 
@@ -379,7 +473,74 @@ export default function CYEFichaEvaluacion({
 
       {/* ── Estado de la ficha (solo cuando corresponde) ── */}
       {noSePresento && (
-        <div style={aviso('error')}>La comisión registró que el equipo no se presentó a la Expoferia. Esta ficha no se califica.</div>
+        <div style={{
+          ...aviso('error'),
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+          flexWrap: 'wrap',
+          padding: '14px 18px',
+          background: '#FEF2F2',
+          border: '1px solid #FCA5A5',
+          borderRadius: 8
+        }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: '#991B1B', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="x" size={16} color="#DC2626" />
+              INCOMPARECENCIA (NSP) — EL EQUIPO NO SE PRESENTÓ
+            </div>
+            <div style={{ fontSize: 12, color: '#7F1D1D', marginTop: 3 }}>
+              Se registró incomparecencia a la Expoferia. Puntaje asignado: 0 (cero).
+            </div>
+          </div>
+          {!bloqueadoPorSellado && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={revertirNSP}
+                disabled={guardando}
+                style={{
+                  background: '#FFFFFF',
+                  color: '#B91C1C',
+                  border: '1px solid #FCA5A5',
+                  borderRadius: 6,
+                  padding: '7px 12px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5
+                }}
+                title="Revertir la incomparecencia para habilitar la calificación"
+              >
+                <Icon name="refresh" size={13} color="#B91C1C" /> Revertir NSP
+              </button>
+              <button
+                type="button"
+                onClick={limpiarFicha}
+                disabled={guardando}
+                style={{
+                  background: '#FFF1F2',
+                  color: '#B91C1C',
+                  border: '1px solid #FECDD3',
+                  borderRadius: 6,
+                  padding: '7px 12px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5
+                }}
+                title="Restablecer todos los puntajes y observaciones a blanco"
+              >
+                <Icon name="trash" size={13} color="#B91C1C" /> Limpiar ficha
+              </button>
+            </div>
+          )}
+        </div>
       )}
       {!noSePresento && bloqueadoPorSellado && (
         <div style={aviso('alerta')}>El Panel de Firmas Oficial está sellado. Las calificaciones quedaron cerradas; solo un administrador puede reabrirlas.</div>
@@ -493,7 +654,7 @@ export default function CYEFichaEvaluacion({
           </div>
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {(!soloLectura || esStaff) && !bloqueadoPorSellado && (
+            {!bloqueadoPorSellado && (
               <button
                 type="button"
                 onClick={limpiarFicha}
@@ -509,7 +670,39 @@ export default function CYEFichaEvaluacion({
                 <Icon name="trash" size={13} color="#B91C1C" /> Limpiar ficha
               </button>
             )}
-            {registrada && !bloqueadoPorSellado && (
+            {!noSePresento && !bloqueadoPorSellado && !ocupadoPorOtro && (
+              <button
+                type="button"
+                onClick={() => setShowNSPModal(true)}
+                disabled={guardando}
+                style={{
+                  ...btn('contorno'),
+                  borderColor: '#FCA5A5',
+                  color: '#DC2626',
+                  background: '#FEF2F2'
+                }}
+                title="Marcar si el participante no se presentó a la evaluación (Puntaje 0)"
+              >
+                <Icon name="x" size={13} color="#DC2626" /> Incomparecencia (NSP)
+              </button>
+            )}
+            {noSePresento && !bloqueadoPorSellado && (
+              <button
+                type="button"
+                onClick={revertirNSP}
+                disabled={guardando}
+                style={{
+                  ...btn('contorno'),
+                  borderColor: '#BAE6FD',
+                  color: '#0284C7',
+                  background: '#F0F9FF'
+                }}
+                title="Revertir la incomparecencia para habilitar la calificación del proyecto"
+              >
+                <Icon name="refresh" size={13} color="#0284C7" /> Revertir NSP
+              </button>
+            )}
+            {registrada && !noSePresento && !bloqueadoPorSellado && (
               <button type="button" onClick={corregir} style={btn('contorno')}>
                 <Icon name="refresh" size={13} /> Corregir ficha
               </button>
@@ -536,6 +729,59 @@ export default function CYEFichaEvaluacion({
           </div>
         </div>
       </div>
+
+      {/* Modal de confirmación para Incomparecencia (NSP) */}
+      {showNSPModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.65)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+          backdropFilter: 'blur(3px)', padding: 16
+        }}>
+          <div style={{
+            background: C.white, borderRadius: 12, padding: 24, maxWidth: 440, width: '100%',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)', border: '1px solid #FECDD3'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="x" size={20} color="#DC2626" />
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#991B1B' }}>
+                ¿Marcar Incomparecencia (NSP)?
+              </div>
+            </div>
+            <p style={{ fontSize: 13, color: C.g700, lineHeight: 1.5, margin: '0 0 18px 0' }}>
+              Esta acción registrará que el equipo de la I. E. <strong>{participante.institucion?.nombre}</strong> <strong>NO SE PRESENTÓ</strong> a la evaluación de la Expoferia.
+              <br /><br />
+              Se asignará puntaje <strong>0 (cero)</strong> y quedará registrada la observación oficial de incomparecencia.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setShowNSPModal(false)}
+                disabled={guardando}
+                style={{ ...btn('contorno'), padding: '8px 14px', fontSize: 12 }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNSPModal(false);
+                  handleMarcarNSP();
+                }}
+                disabled={guardando}
+                style={{
+                  background: '#DC2626', color: C.white, border: 'none',
+                  borderRadius: 6, padding: '8px 16px', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(220,38,38,0.3)'
+                }}
+              >
+                {guardando ? 'Guardando...' : 'Confirmar NSP'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

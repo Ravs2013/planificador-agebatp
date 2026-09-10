@@ -218,7 +218,7 @@ service cloud.firestore {
 
     match /cyeProyectoEstado/{id} {
       allow read: if isStaff() || isJurado();
-      allow write: if isStaff();
+      allow write: if isStaff() || isJurado();
     }
 
     match /cyeEvaluaciones/{id} {

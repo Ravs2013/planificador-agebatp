@@ -13,7 +13,9 @@ export default function CYESelectorProyecto({
   evaluaciones = [],
   numeroJuradoActivo = 1,
   onSeleccionar,
-  esStaff = false
+  esStaff = false,
+  onLimpiarFicha,
+  onMarcarNSP
 }) {
   const [pestana, setPestana] = useState('todos');
   const [busqueda, setBusqueda] = useState('');
@@ -97,7 +99,8 @@ export default function CYESelectorProyecto({
           const registrada = mia?.estado === 'registrada';
           const borrador = mia && !registrada;
           const puntos = mia ? calcularFicha(p.categoria, mia.puntajes).puntajeTotal : null;
-          const nsp = p.noSePresento;
+          const nsp = Boolean(p.noSePresento || mia?.incomparecencia || mia?.noSePresento);
+          const tieneEvaluacion = Boolean(mia || (esStaff && Object.values(evs).some(Boolean)) || nsp);
           const colorBorde = nsp ? C.red : (registrada ? C.green : C.navy3);
 
           return (
@@ -124,8 +127,8 @@ export default function CYESelectorProyecto({
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                  {nsp && <span style={S.chip('#FEE2E2', C.red, '#FCA5A5')}>NO SE PRESENTÓ</span>}
-                  {!nsp && registrada && <span style={S.chip('#F0FDF4', C.green, '#BBF7D0')}>REGISTRADA ({puntos} pts)</span>}
+                  {nsp && <span style={S.chip('#FEE2E2', C.red, '#FCA5A5')}>INCOMPARECENCIA (NSP)</span>}
+                  {!nsp && registrada && <span style={S.chip('#F0FDF4', C.green, '#BBF7D0')}>EVALUADA / CERRADA ({puntos} pts)</span>}
                   {!nsp && borrador && <span style={S.chip('#EFF6FF', C.navy3, '#BFDBFE')}>EN BORRADOR ({puntos} pts)</span>}
                   {!nsp && !mia && <span style={S.chip(C.g50, C.g500, C.g200)}>PENDIENTE</span>}
                   {esStaff && p.estadoAdmision === 'observado' && <span style={S.chip('#FFFBEB', C.amber, '#FDE68A')}>OBSERVADO</span>}
@@ -185,16 +188,55 @@ export default function CYESelectorProyecto({
                     </a>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={e => { e.stopPropagation(); onSeleccionar(p); }}
-                  style={{
-                    background: nsp ? C.red : (registrada ? C.green : C.navy3), color: C.white, border: 'none', borderRadius: 6,
-                    padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6
-                  }}
-                >
-                  {registrada || nsp ? 'Ver ficha' : 'Evaluar ficha'} <Icon name="arrowRight" size={13} color={C.white} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {tieneEvaluacion && onLimpiarFicha && (
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation();
+                        onLimpiarFicha(p, mia || Object.values(evs).find(Boolean));
+                      }}
+                      style={{
+                        background: '#FFF1F2', color: '#B91C1C', border: '1px solid #FECDD3',
+                        borderRadius: 6, padding: '7px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', gap: 5, transition: 'all 0.15s'
+                      }}
+                      title="Limpiar la ficha de este proyecto y dejarla en blanco"
+                    >
+                      <Icon name="trash" size={12} color="#B91C1C" /> Limpiar Ficha
+                    </button>
+                  )}
+
+                  {!nsp && !registrada && onMarcarNSP && (
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation();
+                        onMarcarNSP(p);
+                      }}
+                      style={{
+                        background: '#FEF2F2', color: '#DC2626', border: '1px solid #FCA5A5',
+                        borderRadius: 6, padding: '7px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', gap: 5, transition: 'all 0.15s'
+                      }}
+                      title="Marcar incomparecencia (NSP) sin ingresar a la ficha"
+                    >
+                      <Icon name="x" size={12} color="#DC2626" /> Marcar NSP
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); onSeleccionar(p); }}
+                    style={{
+                      background: nsp ? C.red : (registrada ? C.green : C.navy3), color: C.white, border: 'none', borderRadius: 6,
+                      padding: '7px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                      boxShadow: nsp ? '0 2px 6px rgba(220,38,38,0.25)' : (registrada ? '0 2px 6px rgba(22,163,74,0.25)' : '0 2px 6px rgba(12,25,41,0.25)')
+                    }}
+                  >
+                    {nsp ? 'Ver Ficha NSP →' : (registrada ? 'Ver Ficha →' : 'Evaluar Ficha →')}
+                  </button>
+                </div>
               </div>
             </div>
           );

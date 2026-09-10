@@ -18,7 +18,8 @@ import { resolverPanelFirmasCYE, esPreliminarCYE } from '../../utils/creaEmprend
 import {
   subscribeCYEParticipantes, subscribeCYEProyectoEstado, subscribeCYEEvaluaciones, subscribeCYEPaneles,
   subscribeCYEConsolidados, subscribeCYEActas, subscribeCYEJurados, subscribeCYECalibracionConfig,
-  subscribeCYECalibracionFichas, limpiarEvaluacionesCategoriaCYE
+  subscribeCYECalibracionFichas, limpiarEvaluacionesCategoriaCYE, deleteCYEEvaluacion,
+  saveCYEEvaluacion, actualizarEstadoProyectoCYE
 } from '../../firebase/dbCreaEmprende';
 import { obtenerMembreteCYE } from '../../pdf/membreteCreaEmprende';
 import { generarFichasCYEPDF } from '../../pdf/generarFichaCYEPDF';
@@ -232,6 +233,70 @@ export default function CreaEmprendeModule() {
     }
   };
 
+  const handleLimpiarFichaItem = async (p, ev) => {
+    const inst = p.institucion?.nombre || 'la I. E.';
+    if (!window.confirm(`¿Está seguro de limpiar la ficha de "${inst}"?\n\nSe restablecerán los puntajes y se eliminará la evaluación del casillero.`)) return;
+
+    try {
+      if (ev?.id) {
+        await deleteCYEEvaluacion(ev.id);
+      }
+      if (p.noSePresento) {
+        await actualizarEstadoProyectoCYE(p.id, { noSePresento: false }, user, {
+          accion: 'restablecer',
+          motivo: 'Ficha limpiada desde el listado'
+        });
+      }
+      addToast(`Ficha de "${inst}" restablecida en blanco.`, 'info');
+    } catch (err) {
+      addToast(`Error al limpiar ficha: ${err.message}`, 'error');
+    }
+  };
+
+  const handleMarcarNSPItem = async (p) => {
+    const inst = p.institucion?.nombre || 'la I. E.';
+    if (!window.confirm(`¿Confirmar INCOMPARECENCIA (NSP) para la I. E. "${inst}"?\n\nEl proyecto quedará registrado con 0 puntos / incomparecencia.`)) return;
+
+    try {
+      const slot = casilleroPorDefecto(p);
+      const obsNSP = 'INCOMPARECENCIA — EL PARTICIPANTE NO SE PRESENTÓ A LA EVALUACIÓN';
+      const payload = {
+        participanteId: p.id,
+        categoria: p.categoria || categoria,
+        jurado: { numeroJurado: slot },
+        participanteSnapshot: {
+          id: p.id,
+          numero: p.numero || null,
+          institucionNombre: inst,
+          codigoModular: p.institucion?.codigoModular || '',
+          tituloProyecto: p.tituloProyecto || '',
+          gradoSeccion: resumenGradoSeccion(p.integrantes),
+          grupo: p.grupo || null
+        },
+        puntajes: { D10: {}, D11: {}, D12: {} },
+        subtotales: { D10: 0, D11: 0, D12: 0 },
+        puntajeTotal: 0,
+        puntajeMaximo: 100,
+        anexosCompletos: 0,
+        completa: false,
+        observacionesJurado: obsNSP,
+        fecha: CYE_CONFIG.fechaEvaluacion,
+        estado: 'registrada',
+        incomparecencia: true,
+        noSePresento: true
+      };
+
+      await saveCYEEvaluacion(payload, { usuario: user, esStaff, accion: 'incomparecencia' });
+      await actualizarEstadoProyectoCYE(p.id, { noSePresento: true }, user, {
+        accion: 'inasistencia',
+        motivo: 'Incomparecencia a la Expoferia'
+      });
+      addToast(`I. E. "${inst}" registrada con Incomparecencia (NSP).`, 'warning');
+    } catch (err) {
+      addToast(`Error al marcar incomparecencia: ${err.message}`, 'error');
+    }
+  };
+
   const cat = getCategoriaCYE(categoria);
   const pestanas = SUB_PESTANAS.filter(t => !t.soloComision || esStaff);
 
@@ -386,6 +451,8 @@ export default function CreaEmprendeModule() {
               numeroJuradoActivo={esJuradoCYE && numeroCredencial && numeroCredencial <= 3 ? numeroCredencial : numeroJurado}
               onSeleccionar={abrirProyecto}
               esStaff={esStaff}
+              onLimpiarFicha={handleLimpiarFichaItem}
+              onMarcarNSP={handleMarcarNSPItem}
             />
           </div>
         )}
