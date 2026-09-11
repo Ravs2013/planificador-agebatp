@@ -32,7 +32,7 @@ export function TarjetaPanelFirmas({ panel, onAbrir, esStaff }) {
           </div>
         )}
       </div>
-      {onAbrir && (esStaff || sellado) && (
+      {onAbrir && (
         <button type="button" onClick={onAbrir} style={btn(sellado ? 'secundario' : 'primario')}>
           <Icon name="penTool" size={13} color={sellado ? C.navy2 : C.white} /> {sellado ? 'Ver panel' : 'Abrir Panel de Firmas'}
         </button>

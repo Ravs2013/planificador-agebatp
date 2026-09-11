@@ -37,9 +37,9 @@ import CYEPanelFirmasOficial from './CYEPanelFirmasOficial';
 const SUB_PESTANAS = [
   { id: 'fichas', label: 'Fichas de evaluación', icon: 'clipboard' },
   { id: 'calibracion', label: 'Calibración', icon: 'users', soloComision: true },
-  { id: 'd13', label: 'Anexo D13 — Por jurado', icon: 'list', soloComision: true },
-  { id: 'd14', label: 'Anexo D14 — Consolidado', icon: 'fileText', soloComision: true },
-  { id: 'd15', label: 'Anexo D15 — Acta', icon: 'check', soloComision: true },
+  { id: 'd13', label: 'Anexo D13 — Por jurado', icon: 'list' },
+  { id: 'd14', label: 'Anexo D14 — Consolidado', icon: 'fileText' },
+  { id: 'd15', label: 'Anexo D15 — Acta', icon: 'check' },
   { id: 'padron', label: 'Padrón y admisión', icon: 'shield', soloComision: true }
 ];
 
@@ -492,7 +492,7 @@ export default function CreaEmprendeModule() {
               esStaff={esStaff}
               bloqueadoPorSellado={bloqueadoPorSellado}
               onToast={addToast}
-              onIrAlPanel={esStaff ? () => setPanelAbierto(true) : null}
+              onIrAlPanel={() => setPanelAbierto(true)}
               acuerdos={acuerdos}
               notaRotacion={notaRotacion}
             />
