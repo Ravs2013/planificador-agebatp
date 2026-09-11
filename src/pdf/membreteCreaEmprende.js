@@ -5,6 +5,9 @@
 
 import { aplicarFuentesArial, loadImageDataURL } from './membrete';
 import { TEXTOS_LEGALES_CYE } from '../data/creaEmprendeConfig';
+import { dibujarFirmasJurado, alturaFirmasJurado, tablaConCierre } from './pdfDiseno';
+
+export { alturaFirmasJurado, tablaConCierre };
 
 export { aplicarFuentesArial, loadImageDataURL };
 
@@ -74,7 +77,7 @@ export function drawChromeCYE(doc, { orientacion = 'portrait', titulo = '', subt
   } else {
     y += 4;
   }
-  doc.setFillColor(...RGB_CYE.dorado);
+  doc.setFillColor(...RGB_CYE.navy3);
   doc.rect(M.left, y, contentW, 0.9, 'F');
   y += 4.5;
   if (titulo) {
@@ -104,7 +107,7 @@ export function aplicarPiePaginasCYE(doc, { preliminar = false } = {}) {
     const ancho = doc.internal.pageSize.getWidth();
     const alto = doc.internal.pageSize.getHeight();
     const yFranja = alto - M.bottom + 2;
-    doc.setFillColor(...RGB_CYE.dorado);
+    doc.setFillColor(...RGB_CYE.navy3);
     doc.rect(M.left, yFranja, ancho - M.left - M.right, 0.7, 'F');
     doc.setFont('Arial', 'italic');
     doc.setFontSize(7);
@@ -184,16 +187,7 @@ export function drawBloqueFirmaCYE(doc, { x, y, ancho = 70, firmante = null, num
   return cursor + 3.4;
 }
 
-export function drawFilaFirmasCYE(doc, { bloques = [], y, orientacion = 'portrait', conInstitucion = true }) {
-  const contentW = anchoContenido(orientacion);
-  const n = Math.max(1, bloques.length);
-  const anchoCol = contentW / n;
-  const anchoBloque = Math.min(anchoCol - 8, 80);
-  let maxY = y;
-  bloques.forEach((bloque, i) => {
-    const x = M.left + i * anchoCol + (anchoCol - anchoBloque) / 2;
-    const fin = drawBloqueFirmaCYE(doc, { x, y, ancho: anchoBloque, firmante: bloque, numeroJurado: bloque?.numeroJurado || i + 1, conInstitucion, compacto: n > 2 });
-    if (fin > maxY) maxY = fin;
-  });
-  return maxY;
+export function drawFilaFirmasCYE(doc, { bloques = [], y, orientacion = 'portrait', conInstitucion = false }) {
+  // Esquema de los Anexos A10 y A11 de Juegos Florales: dos firmas arriba y la tercera al centro.
+  return dibujarFirmasJurado(doc, { y, bloques, orientacion, conInstitucion });
 }

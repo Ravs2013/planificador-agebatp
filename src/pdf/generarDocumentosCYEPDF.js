@@ -13,7 +13,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
   M, A4, A4_APAISADO, anchoContenido, drawChromeCYE, medirChromeCYE, aplicarPiePaginasCYE,
-  aplicarFuentesArial, drawBloqueFirmaCYE, drawFilaFirmasCYE, cederHilo, limiteCuerpo, RGB_CYE
+  aplicarFuentesArial, drawBloqueFirmaCYE, drawFilaFirmasCYE, cederHilo, limiteCuerpo, RGB_CYE,
+  alturaFirmasJurado, tablaConCierre
 } from './membreteCreaEmprende';
 import { dibujarFichaCYE } from './generarFichaCYEPDF';
 import { CYE_CONFIG, SLOTS_JURADO, TEXTOS_LEGALES_CYE, PROTOCOLO_CALIBRACION_CYE, getCategoriaCYE } from '../data/creaEmprendeConfig';
@@ -74,7 +75,7 @@ export function dibujarD13(doc, { categoria, filas = [], numeroJurado = 1, panel
   let y = drawChromeCYE(doc, chromeOpts);
   const top = medirChromeCYE(doc, chromeOpts);
   y = encabezadoOficial(doc, { categoria, y, orientacion, etapaComoCasillas: true });
-  autoTable(doc, {
+  const opcionesD13 = {
     startY: y,
     margin: { left: M.left, right: M.right, top, bottom: M.bottom + 6 },
     tableWidth: W,
@@ -93,14 +94,15 @@ export function dibujarD13(doc, { categoria, filas = [], numeroJurado = 1, panel
       f.d10 ?? '', f.d11 ?? '', f.d12 ?? '', f.total ?? ''
     ]),
     didDrawPage: data => { if (data.pageNumber > 1) drawChromeCYE(doc, chromeOpts); }
-  });
-  y = doc.lastAutoTable.finalY + 4;
+  };
+  // Nota de puntajes (5 mm) y firma (38 mm) viajan con las últimas filas: la firma nunca queda sola.
+  y = tablaConCierre(doc, { opciones: opcionesD13, orientacion, alturaCierre: 48, encabezado: d => drawChromeCYE(d, chromeOpts) }).y + 4;
   const max = Object.fromEntries(getInstrumentosCategoria(categoria).map(r => [r.anexo, r.maximo]));
   doc.setFont('Arial', 'normal');
   doc.setFontSize(7);
   doc.setTextColor(...RGB_CYE.gris700);
   doc.text(`Puntajes máximos de la categoría ${categoria}: rúbrica del proyecto ${max.D10} · rúbrica del portafolio ${max.D11} · presentación en la Expoferia ${max.D12} · total ${maximoCategoria(categoria)}.`, M.left, y);
-  y = espacioOPagina(doc, y + 4, 36, orientacion, chromeOpts);
+  y += 6;
   drawBloqueFirmaCYE(doc, {
     x: A4_APAISADO.ancho / 2 - 45, y, ancho: 90,
     firmante: bloqueFirmaCYE(firmanteDelCasillero(panel, numeroJurado), numeroJurado),
@@ -130,7 +132,7 @@ export function dibujarD14(doc, { categoria, filas = [], panel = null, banner = 
   let y = drawChromeCYE(doc, chromeOpts);
   const top = medirChromeCYE(doc, chromeOpts);
   y = encabezadoOficial(doc, { categoria, y, orientacion, etapaComoCasillas: false });
-  autoTable(doc, {
+  const opcionesD14 = {
     startY: y,
     margin: { left: M.left, right: M.right, top, bottom: M.bottom + 6 },
     tableWidth: W,
@@ -148,8 +150,8 @@ export function dibujarD14(doc, { categoria, filas = [], panel = null, banner = 
       f.jurado1 ?? '', f.jurado2 ?? '', f.jurado3 ?? '', f.total ?? ''
     ]),
     didDrawPage: data => { if (data.pageNumber > 1) drawChromeCYE(doc, chromeOpts); }
-  });
-  y = doc.lastAutoTable.finalY + 4;
+  };
+  y = tablaConCierre(doc, { opciones: opcionesD14, orientacion, alturaCierre: (criterioDesempate ? 14 : 0) + 10 + alturaFirmasJurado(3), encabezado: d => drawChromeCYE(d, chromeOpts) }).y + 4;
   if (criterioDesempate) {
     doc.setFont('Arial', 'italic');
     doc.setFontSize(7.2);
@@ -158,7 +160,7 @@ export function dibujarD14(doc, { categoria, filas = [], panel = null, banner = 
     doc.text(lineas, M.left, y);
     y += lineas.length * 3.2 + 2;
   }
-  y = espacioOPagina(doc, y + 4, 40, orientacion, chromeOpts);
+  y += 6;
   drawFilaFirmasCYE(doc, { bloques: bloquesFirmaDePanelCYE(panel), y, orientacion, conInstitucion: false });
 }
 
@@ -224,7 +226,7 @@ export function dibujarD15(doc, { categoria, datos = {}, resultados = [], panel 
     doc.text(l, M.left, y);
     y += l.length * 3.6 + 3;
   }
-  y = espacioOPagina(doc, y + 12, 40, orientacion, chromeOpts);
+  y = espacioOPagina(doc, y + 12, alturaFirmasJurado(3), orientacion, chromeOpts);
   drawFilaFirmasCYE(doc, { bloques: bloquesFirmaDePanelCYE(panel), y, orientacion, conInstitucion: false });
 }
 
@@ -250,7 +252,7 @@ function caratula(doc, { categoria, banner, proyectos, fichas }) {
   doc.setTextColor(...RGB_CYE.navy2);
   doc.text('CONCURSO NACIONAL CREA Y EMPRENDE 2026', A4.ancho / 2, y, { align: 'center' });
   y += 12;
-  doc.setFillColor(...RGB_CYE.dorado);
+  doc.setFillColor(...RGB_CYE.navy3);
   doc.rect(M.left + 30, y, W - 60, 0.9, 'F');
   y += 12;
   doc.setFontSize(14);

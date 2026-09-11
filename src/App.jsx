@@ -15,6 +15,8 @@ import { STAFF, priorityConfig, statusConfig, typeConfig, monthNames, dayNames, 
 import { calcularSLA } from './utils/slaCalculator';
 import { subscribeActividades, addActividad, updateActividad, deleteActividad, subscribeEvidencias, addEvidencia, subscribeUsuarios, subscribeReuniones } from './firebase/db';
 import { uploadEvidencia, uploadEvidenciaDrive } from './firebase/storage';
+import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from './firebase/config';
 
 import ChatbotIA from './components/ChatbotIA';
 import ChangePasswordScreen from './components/ChangePasswordScreen';
@@ -495,7 +497,7 @@ export default function App() {
                         gap: 16
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-                            <img src="/logo-crea-emprende.png" alt="Logo Crea y Emprende" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/logo-agebatp.jpeg'; }} style={{ height: 64, width: 'auto', objectFit: 'contain', background: '#FFFFFF', padding: 6, borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }} />
+                            <img src="/logo-crea-emprende.png" alt="Logo Crea y Emprende" onError={(e) => { e.currentTarget.style.display = 'none'; }} style={{ height: 64, width: 'auto', objectFit: 'contain', background: '#FFFFFF', padding: 6, borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }} />
                             <div>
                                 <h2 style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 22, color: '#FFFFFF', margin: 0, letterSpacing: 0.5 }}>
                                     ¡BIENVENIDOS AL CONCURSO NACIONAL CREA Y EMPRENDE 2026!

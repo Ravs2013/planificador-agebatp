@@ -1,189 +1,125 @@
 /* ═══════════════════════════════════════════════════════════════
    EUREKA 2026 — ANEXO E19 — FORMATO CONSOLIDADO DE EVALUACIÓN
-   A4 apaisado (297 x 210 mm). Equivalente del Anexo A10 de Juegos Florales.
-
-   Las columnas de jurado se generan iterando EUREKA_CONFIG.numeroJuradosPorFicha.
-   Nunca se escriben a mano: si MINEDU exige pasar a 4 firmantes debe bastar con cambiar
-   ese número.
+   A4 apaisado, con el diseño del Anexo A10 de Juegos Florales. Las columnas de jurado se
+   generan desde SLOTS_JURADO y el bloque de firmas nunca queda solo en una hoja.
    ═══════════════════════════════════════════════════════════════ */
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
-  M, A4_APAISADO, anchoContenido, drawChromeEureka, aplicarPiePaginasEureka,
-  aplicarFuentesArial, drawFilaFirmas, limiteCuerpo, cederHilo
+  A4_APAISADO, anchoContenido, drawChromeEureka, medirChromeEureka, aplicarPiePaginasEureka, aplicarFuentesArial, cederHilo
 } from './membreteEureka';
-import { RGB, TEXTOS_LEGALES } from '../data/eurekaCatalogos';
+import { AZUL, MARGEN, tablaConCierre, dibujarFirmasJurado, alturaFirmasJurado } from './pdfDiseno';
+import { TEXTOS_LEGALES } from '../data/eurekaCatalogos';
 import { EUREKA_CONFIG, SLOTS_JURADO, getArea, getCategoria } from '../data/eurekaConfigUGEL03';
 import { bloquesFirmaDePanel, esPreliminar, resolverPanelFirmas } from '../utils/eurekaFirmas';
 import { sanitizarNombreArchivo, ordenArea } from '../utils/eurekaHelpers';
 
-const CONTENT_W = anchoContenido('landscape');
+const O = 'landscape';
+const W = anchoContenido(O);
+const PT = 0.3528;
 
-function encabezadoE19(doc, consolidado, y) {
-  const cat = getCategoria(consolidado.categoria);
-  const area = getArea(consolidado.areaId);
-  const etapa = consolidado.etapa || EUREKA_CONFIG.etapa;
-  const marca = valor => (etapa === valor ? 'X' : ' ');
-
-  autoTable(doc, {
-    startY: y,
-    margin: { left: M.left, right: M.right },
-    tableWidth: CONTENT_W,
-    theme: 'grid',
-    styles: { font: 'Arial', fontSize: 8, cellPadding: 1.8, lineColor: RGB.gris300 },
-    columnStyles: {
-      0: { cellWidth: 26, fontStyle: 'bold', fillColor: RGB.gris100 },
-      1: { cellWidth: CONTENT_W / 2 - 26 },
-      2: { cellWidth: 34, fontStyle: 'bold', fillColor: RGB.gris100 },
-      3: { cellWidth: CONTENT_W / 2 - 34 }
-    },
-    body: [
-      [
-        'Categoría:', cat ? `${cat.nombre} — ${cat.grados}` : consolidado.categoria,
-        'Área de Participación:', area ? area.nombre : consolidado.areaId
-      ],
-      [
-        'Etapa:',
-        `IE (${marca('IE')})   UGEL (${marca('UGEL')})   DRE (${marca('DRE')})   NACIONAL (${marca('NACIONAL')})`,
-        'Fecha:', consolidado.fecha || EUREKA_CONFIG.fechaEvaluacion
-      ],
-      [
-        'DRE/GRE:', consolidado.dre || EUREKA_CONFIG.dre,
-        'UGEL:', consolidado.ugel || EUREKA_CONFIG.ugel
-      ]
-    ]
-  });
-
-  return doc.lastAutoTable.finalY + 3;
+function fechaCorta(iso) {
+  const [a, m, d] = String(iso || '').slice(0, 10).split('-');
+  return d ? `${d}/${m}/${a}` : String(iso || '');
 }
 
-function tablaE19(doc, consolidado, y, chromeOpts) {
-  const slots = SLOTS_JURADO;
-
-  const head = [[
-    'N.°', 'Título del proyecto', 'I. E.',
-    ...slots.map(s => `Jurado ${s}`),
-    'Puntaje total', 'Promedio', 'Puesto'
-  ]];
-
-  const filas = consolidado.filas || [];
-  const body = filas.map((f, idx) => {
-    const notas = slots.map(s => {
-      const v = f[`jurado${s}`];
-      return v != null ? String(v) : '—';
-    });
-    let marca = '';
-    if (f.noSePresento || f.incomparecencia) marca = ' (NSP)';
-    else if (f.noProsigue) marca = ' (No prosigue)';
-
-    return [
-      String(f.ordenPresentacion || idx + 1),
-      (f.tituloProyecto || 'Sin título registrado') + marca,
-      f.institucion || '—',
-      ...notas,
-      f.completo && f.suma != null ? String(f.suma) : '—',
-      f.promedio != null ? f.promedio.toFixed(EUREKA_CONFIG.decimalesPromedio) : '—',
-      f.puesto ? `${f.puesto}.°` : '—'
-    ];
-  });
-
-  // Ancho reservado por las columnas de medida fija. El título toma el resto.
-  const anchoFijo = 12 + 46 + slots.length * 20 + 24 + 22 + 18;
-  const columnStyles = {
-    0: { cellWidth: 12, halign: 'center' },
-    1: { cellWidth: Math.max(40, CONTENT_W - anchoFijo) },
-    2: { cellWidth: 46 }
-  };
-  slots.forEach((_, i) => { columnStyles[3 + i] = { cellWidth: 20, halign: 'center' }; });
-  columnStyles[3 + slots.length] = { cellWidth: 24, halign: 'center', fontStyle: 'bold' };
-  columnStyles[4 + slots.length] = { cellWidth: 22, halign: 'center', fontStyle: 'bold' };
-  columnStyles[5 + slots.length] = { cellWidth: 18, halign: 'center', fontStyle: 'bold' };
-
-  const idxPuesto = 5 + slots.length;
-
-  autoTable(doc, {
-    startY: y,
-    margin: { left: M.left, right: M.right, top: M.top + 24, bottom: M.bottom + 6 },
-    tableWidth: CONTENT_W,
-    theme: 'grid',
-    head,
-    headStyles: {
-      fillColor: RGB.verdeEureka, textColor: RGB.blanco, fontStyle: 'bold',
-      fontSize: 7.5, halign: 'center'
-    },
-    styles: { font: 'Arial', fontSize: 7.2, cellPadding: 1.6, overflow: 'linebreak', lineColor: RGB.gris300 },
-    columnStyles,
-    body,
-    didParseCell: data => {
-      if (data.section !== 'body') return;
-      const puesto = data.row.raw[idxPuesto];
-      if (puesto === '1.°' || puesto === '2.°' || puesto === '3.°') {
-        data.cell.styles.fillColor = RGB.verdeFondo;
-      }
-    },
-    didDrawPage: data => {
-      if (data.pageNumber > 1) drawChromeEureka(doc, chromeOpts);
-    }
-  });
-
-  return doc.lastAutoTable.finalY + 4;
-}
-
-/**
- * Dibuja un consolidado E19 completo. `panel` es el Panel de Firmas ya resuelto.
- */
 export function dibujarUnicoE19(doc, { consolidado, panel = null, banner = null, nuevaPagina = false }) {
   const cat = getCategoria(consolidado.categoria);
   const area = getArea(consolidado.areaId);
-
-  const chromeOpts = {
-    orientacion: 'landscape',
+  const chrome = {
+    orientacion: O,
     titulo: 'ANEXO E19 — FORMATO CONSOLIDADO DE EVALUACIÓN',
-    subtitulo: `${EUREKA_CONFIG.edicion} ${EUREKA_CONFIG.anio} · Etapa ${EUREKA_CONFIG.etapa} · ${cat ? cat.nombre : consolidado.categoria} · ${area ? area.nombre : consolidado.areaId}`,
+    subtitulo: `${EUREKA_CONFIG.edicion} ${EUREKA_CONFIG.anio}`,
     banner
   };
-
   if (nuevaPagina) doc.addPage([A4_APAISADO.ancho, A4_APAISADO.alto], 'landscape');
+  let y = drawChromeEureka(doc, chrome);
+  const top = medirChromeEureka(doc, chrome);
 
-  let y = drawChromeEureka(doc, chromeOpts);
-  y = encabezadoE19(doc, consolidado, y);
-  y = tablaE19(doc, consolidado, y, chromeOpts);
+  const etapa = consolidado.etapa || EUREKA_CONFIG.etapa;
+  const marca = v => (etapa === v ? 'X' : '  ');
+  autoTable(doc, {
+    startY: y,
+    margin: { left: MARGEN.left, right: MARGEN.right },
+    tableWidth: W,
+    theme: 'plain',
+    styles: { font: 'Arial', fontSize: 8.6, cellPadding: { top: 0.9, bottom: 0.9, left: 0, right: 3 }, textColor: AZUL.texto },
+    columnStyles: { 0: { cellWidth: W * 0.44 }, 1: { cellWidth: W * 0.34 }, 2: { cellWidth: W * 0.22 } },
+    body: [
+      [`Categoría: ${cat ? `${cat.nombre} — ${cat.grados}` : consolidado.categoria}`, `Área de participación: ${area?.nombre || consolidado.areaId}`, `Fecha: ${fechaCorta(consolidado.fecha || EUREKA_CONFIG.fechaEvaluacion)}`],
+      [`Etapa: IE (${marca('IE')})   UGEL (${marca('UGEL')})   DRE (${marca('DRE')})   NACIONAL (${marca('NACIONAL')})`, `DRE/GRE: ${consolidado.dre || EUREKA_CONFIG.dre}`, `UGEL: ${consolidado.ugel || EUREKA_CONFIG.ugel}`]
+    ]
+  });
+  y = doc.lastAutoTable.finalY + 3;
 
-  // Sustento de dirimencia colegiada, si el jurado resolvió algún empate.
-  const dirimencias = consolidado.dirimencias || [];
-  if (dirimencias.length > 0) {
-    doc.setFont('Arial', 'italic');
-    doc.setFontSize(7);
-    doc.setTextColor(...RGB.alerta);
-    dirimencias.slice(0, 3).forEach(d => {
-      const linea = doc.splitTextToSize(`Dirimencia del jurado calificador: ${d.motivo}`, CONTENT_W);
-      doc.text(linea, M.left, y);
-      y += linea.length * 3;
-    });
-    y += 2;
-  }
+  const slots = SLOTS_JURADO;
+  const filas = consolidado.filas || [];
+  const idxPuesto = 5 + slots.length;
+  const body = filas.map((f, i) => {
+    let marcaFila = '';
+    if (f.noSePresento || f.incomparecencia) marcaFila = ' (no se presentó)';
+    else if (f.noProsigue) marcaFila = ' (no prosigue)';
+    return [
+      String(f.ordenPresentacion || i + 1),
+      `${f.tituloProyecto || 'Sin título registrado'}${marcaFila}`,
+      f.institucion || '—',
+      ...slots.map(s => (f[`jurado${s}`] != null ? String(f[`jurado${s}`]) : '—')),
+      f.completo && f.suma != null ? String(f.suma) : '—',
+      f.promedio != null ? Number(f.promedio).toFixed(EUREKA_CONFIG.decimalesPromedio) : '—',
+      f.puesto ? `${f.puesto}.°` : '—'
+    ];
+  });
+  const anchoFijo = 11 + 58 + slots.length * 19 + 22 + 20 + 16;
+  const columnStyles = { 0: { cellWidth: 11, halign: 'center' }, 1: { cellWidth: W - anchoFijo }, 2: { cellWidth: 58 } };
+  slots.forEach((_, i) => { columnStyles[3 + i] = { cellWidth: 19, halign: 'center' }; });
+  columnStyles[3 + slots.length] = { cellWidth: 22, halign: 'center', fontStyle: 'bold' };
+  columnStyles[4 + slots.length] = { cellWidth: 20, halign: 'center', fontStyle: 'bold' };
+  columnStyles[5 + slots.length] = { cellWidth: 16, halign: 'center', fontStyle: 'bold' };
 
-  // Declaración ética, texto literal del anexo, antes de las firmas.
-  const alturaFirmas = 44;
-  if (y > limiteCuerpo('landscape') - alturaFirmas - 14) {
-    doc.addPage([A4_APAISADO.ancho, A4_APAISADO.alto], 'landscape');
-    y = drawChromeEureka(doc, chromeOpts);
-  }
+  const opciones = {
+    startY: y,
+    margin: { left: MARGEN.left, right: MARGEN.right, top, bottom: MARGEN.bottom + 6 },
+    tableWidth: W,
+    theme: 'grid',
+    head: [['N.°', 'Título del proyecto', 'I. E.', ...slots.map(s => `Jurado ${s}`), 'Puntaje total', 'Promedio', 'Puesto']],
+    headStyles: { fillColor: AZUL.navy3, textColor: AZUL.blanco, fontStyle: 'bold', fontSize: 8, halign: 'center', valign: 'middle' },
+    styles: { font: 'Arial', fontSize: 7.8, cellPadding: 1.9, overflow: 'linebreak', lineColor: AZUL.borde, lineWidth: 0.2, textColor: AZUL.texto, valign: 'middle' },
+    columnStyles,
+    rowPageBreak: 'avoid',
+    body,
+    didParseCell: dato => {
+      if (dato.section !== 'body') return;
+      const puesto = dato.row.raw[idxPuesto];
+      if (puesto === '1.°' || puesto === '2.°' || puesto === '3.°') dato.cell.styles.fillColor = AZUL.fondo;
+    },
+    didDrawPage: dato => { if (dato.pageNumber > 1) drawChromeEureka(doc, chrome); }
+  };
 
   doc.setFont('Arial', 'italic');
+  doc.setFontSize(8);
+  const declaracion = doc.splitTextToSize(TEXTOS_LEGALES.declaracionEticaE19, W);
   doc.setFontSize(7.6);
-  doc.setTextColor(...RGB.gris700);
-  const declaracion = doc.splitTextToSize(TEXTOS_LEGALES.declaracionEticaE19, CONTENT_W);
-  doc.text(declaracion, M.left, y, { maxWidth: CONTENT_W, align: 'justify' });
-  y += declaracion.length * 3.4 + 4;
+  const dirimencias = (consolidado.dirimencias || []).slice(0, 3).map(d => doc.splitTextToSize(`Dirimencia del jurado calificador: ${d.motivo}`, W));
+  const altoDirimencias = dirimencias.reduce((s, l) => s + l.length * 7.6 * 1.2 * PT, 0) + (dirimencias.length ? 2 : 0);
+  const altoCierre = 6 + altoDirimencias + declaracion.length * 8 * 1.25 * PT + 6 + alturaFirmasJurado(slots.length);
 
-  drawFilaFirmas(doc, {
-    bloques: bloquesFirmaDePanel(panel),
-    y,
-    orientacion: 'landscape',
-    conInstitucion: true
-  });
+  y = tablaConCierre(doc, { opciones, orientacion: O, alturaCierre: altoCierre, encabezado: d => drawChromeEureka(d, chrome) }).y + 5;
+
+  if (dirimencias.length) {
+    doc.setFont('Arial', 'italic');
+    doc.setFontSize(7.6);
+    doc.setTextColor(...AZUL.ambar);
+    dirimencias.forEach(l => { doc.text(l, MARGEN.left, y, { lineHeightFactor: 1.2 }); y += l.length * 7.6 * 1.2 * PT; });
+    y += 2;
+  }
+  doc.setFont('Arial', 'italic');
+  doc.setFontSize(8);
+  doc.setTextColor(...AZUL.gris700);
+  doc.text(declaracion, MARGEN.left, y, { maxWidth: W, lineHeightFactor: 1.25 });
+  y += declaracion.length * 8 * 1.25 * PT + 6;
+
+  dibujarFirmasJurado(doc, { y, bloques: bloquesFirmaDePanel(panel), orientacion: O });
 }
 
 function nombreArchivoE19(consolidado) {
@@ -191,39 +127,33 @@ function nombreArchivoE19(consolidado) {
   return `AnexoE19_Consolidado_Cat${consolidado.categoria}_${area}.pdf`;
 }
 
-/** Un solo consolidado. */
-export function generarE19PDF(consolidado, { panel = null, banner = null } = {}) {
+export function generarE19PDF(consolidado, { panel = null, banner = null, guardar = true } = {}) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   aplicarFuentesArial(doc);
   dibujarUnicoE19(doc, { consolidado, panel, banner });
   aplicarPiePaginasEureka(doc, { preliminar: esPreliminar(panel) });
-  doc.save(nombreArchivoE19(consolidado));
+  if (guardar) doc.save(nombreArchivoE19(consolidado));
+  return doc;
 }
 
-/** Nivel 3 — todos los consolidados E19 de una categoría. */
-export async function generarE19CategoriaCompletaPDF(consolidados = [], {
-  categoria, panelesMap = {}, banner = null
-} = {}) {
+export async function generarE19CategoriaCompletaPDF(consolidados = [], { categoria, panelesMap = {}, banner = null, guardar = true } = {}) {
   if (!consolidados.length) throw new Error('No hay consolidados que compilar.');
-
   const ordenados = [...consolidados].sort((a, b) => ordenArea(a.areaId) - ordenArea(b.areaId));
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   aplicarFuentesArial(doc);
-
   let algunPreliminar = false;
-  for (let i = 0; i < ordenados.length; i++) {
+  for (let i = 0; i < ordenados.length; i += 1) {
     const cons = ordenados[i];
     const panel = resolverPanelFirmas(panelesMap, { categoria: cons.categoria, areaId: cons.areaId });
     if (esPreliminar(panel)) algunPreliminar = true;
     try {
       dibujarUnicoE19(doc, { consolidado: cons, panel, banner, nuevaPagina: i > 0 });
     } catch (err) {
-      console.warn(`Consolidado omitido (${cons.id}):`, err);
+      console.warn(`Consolidado omitido (${cons.areaId}):`, err);
     }
     if (i % 10 === 9) await cederHilo();
   }
-
   aplicarPiePaginasEureka(doc, { preliminar: algunPreliminar });
-  doc.save(`AnexoE19_Consolidados_Categoria_${categoria || ordenados[0].categoria}.pdf`);
+  if (guardar) doc.save(`AnexoE19_Consolidados_Categoria_${categoria || ordenados[0].categoria}.pdf`);
   return ordenados.length;
 }

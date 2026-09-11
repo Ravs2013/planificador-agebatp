@@ -440,3 +440,119 @@ export function resumenImportacion(resultado, codigosExistentes = new Set()) {
     avisos: resultado.avisos
   };
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   REPORTE COMPLETO DE GANADORES (ReporteGanadoresEUREKA)
+
+   Trae dos filas de encabezado: la primera agrupa las columnas por bloque («Datos Generales»,
+   «Datos Director», «Datos del Concurso», «Datos Participante», «Datos Docente Asesor»,
+   «Datos del Padre o Apoderado») y la segunda repite nombres entre bloques: dos «Área»,
+   cuatro «Nombres». Por eso cada columna se busca DENTRO de su bloque.
+   No se leen DNI, fechas de nacimiento, teléfonos, correos ni datos del apoderado.
+   ═══════════════════════════════════════════════════════════════ */
+
+export function esReporteCompletoSICE(filas = []) {
+  return filas.slice(0, 10).some(f => (f || []).map(norm).includes('DATOS DEL CONCURSO'));
+}
+
+function fechaISOLocal(valor) {
+  if (!valor) return '';
+  const d = valor instanceof Date ? valor : new Date(String(valor).replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return String(valor);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+export function parsearReporteCompletoSICE(filas = []) {
+  const vacio = { proyectos: [], errores: [], totalFilas: 0 };
+  const iGrupo = filas.findIndex((f, i) => i < 10 && (f || []).map(norm).includes('DATOS DEL CONCURSO'));
+  if (iGrupo === -1) {
+    return { ...vacio, error: 'El archivo no tiene el formato del reporte de ganadores de SICE (no se encontró el bloque «Datos del Concurso»).' };
+  }
+  const grupo = filas[iGrupo] || [];
+  const encabezado = (filas[iGrupo + 1] || []).map(norm);
+  const secciones = [];
+  let actual = null;
+  for (let c = 0; c < Math.max(grupo.length, encabezado.length); c += 1) {
+    const g = norm(grupo[c]);
+    if (g) { actual = { nombre: g, desde: c, hasta: c }; secciones.push(actual); } else if (actual) actual.hasta = c;
+  }
+  const col = (bloque, ...nombres) => {
+    const s = secciones.find(x => x.nombre.startsWith(bloque));
+    if (!s) return -1;
+    for (let c = s.desde; c <= s.hasta; c += 1) if (nombres.includes(encabezado[c])) return c;
+    return -1;
+  };
+  const K = {
+    ie: col('DATOS GENERALES', 'NOMBRE IIEE', 'NOMBRE IE'),
+    codMod: col('DATOS GENERALES', 'COD. MOD.', 'COD MOD', 'CODIGO MODULAR'),
+    gestion: col('DATOS GENERALES', 'TIPO GESTION'),
+    nivel: col('DATOS GENERALES', 'NIVEL EDUCATIVO'),
+    distrito: col('DATOS GENERALES', 'DISTRITO'),
+    fecha: col('DATOS DEL CONCURSO', 'FECHA REGISTRO'),
+    categoria: col('DATOS DEL CONCURSO', 'CATEGORIA'),
+    area: col('DATOS DEL CONCURSO', 'AREA'),
+    titulo: col('DATOS DEL CONCURSO', 'TITULO DEL TRABAJO'),
+    pseudonimo: col('DATOS DEL CONCURSO', 'PSEUDONIMO'),
+    enlace: col('DATOS DEL CONCURSO', 'ENLACE WEB'),
+    estPaterno: col('DATOS PARTICIPANTE', 'PATERNO'),
+    estMaterno: col('DATOS PARTICIPANTE', 'MATERNO'),
+    estNombres: col('DATOS PARTICIPANTE', 'NOMBRES'),
+    estSexo: col('DATOS PARTICIPANTE', 'SEXO'),
+    estGrado: col('DATOS PARTICIPANTE', 'GRADO'),
+    estSeccion: col('DATOS PARTICIPANTE', 'SECCION'),
+    docPaterno: col('DATOS DOCENTE', 'PATERNO'),
+    docMaterno: col('DATOS DOCENTE', 'MATERNO'),
+    docNombres: col('DATOS DOCENTE', 'NOMBRES'),
+    docEspecialidad: col('DATOS DOCENTE', 'CARGO/ESPECIALIDAD', 'ESPECIALIDAD')
+  };
+  const faltan = ['ie', 'categoria', 'area', 'titulo'].filter(k => K[k] < 0);
+  if (faltan.length) return { ...vacio, error: `Faltan columnas obligatorias en el reporte: ${faltan.join(', ')}.` };
+
+  const porId = new Map();
+  const errores = [];
+  let totalFilas = 0;
+  filas.slice(iGrupo + 2).forEach((fila, i) => {
+    if (!fila || fila.every(v => String(v ?? '').trim() === '')) return;
+    const v = k => (K[k] >= 0 ? String(fila[K[k]] ?? '').replace(/\s+/g, ' ').trim() : '');
+    const categoria = resolverCategoria(v('categoria'));
+    const areaId = resolverAreaId(v('area'), categoria);
+    const institucionNombre = v('ie');
+    const tituloProyecto = v('titulo');
+    if (!categoria || !areaId || !institucionNombre || !tituloProyecto) {
+      errores.push(`Fila ${iGrupo + 3 + i}: falta la categoría, el área, la I. E. o el título.`);
+      return;
+    }
+    totalFilas += 1;
+    const id = codigoDerivado({ categoria, institucionNombre, tituloProyecto });
+    if (!porId.has(id)) {
+      const apellidos = [v('docPaterno'), v('docMaterno')].filter(Boolean).join(' ');
+      const codMod = v('codMod').replace(/\D/g, '');
+      porId.set(id, {
+        id, codigoParticipante: id, categoria, areaId, tituloProyecto,
+        pseudonimo: v('pseudonimo'), urlTrabajo: v('enlace'),
+        fechaRegistro: K.fecha >= 0 ? fechaISOLocal(fila[K.fecha]) : '',
+        institucion: { nombre: institucionNombre, codigoModular: codMod ? codMod.padStart(7, '0') : '', tipoGestion: v('gestion'), nivel: v('nivel'), distrito: v('distrito') },
+        estudiantes: [],
+        docenteAsesor: {
+          nombres: v('docNombres'), apellidoPaterno: v('docPaterno'), apellidoMaterno: v('docMaterno'),
+          nombreCompleto: [apellidos, v('docNombres')].filter(Boolean).join(', '),
+          especialidad: v('docEspecialidad')
+        },
+        filas: 0
+      });
+    }
+    const p = porId.get(id);
+    p.filas += 1;
+    const est = {
+      apellidoPaterno: v('estPaterno'), apellidoMaterno: v('estMaterno'), nombres: v('estNombres'),
+      sexo: v('estSexo').toUpperCase().startsWith('F') ? 'F' : (v('estSexo') ? 'M' : ''),
+      grado: v('estGrado'), seccion: v('estSeccion')
+    };
+    const clave = norm(`${est.apellidoPaterno} ${est.apellidoMaterno} ${est.nombres}`);
+    if (clave && !p.estudiantes.some(e => norm(`${e.apellidoPaterno} ${e.apellidoMaterno} ${e.nombres}`) === clave)) {
+      p.estudiantes.push(est);
+    }
+  });
+  return { error: null, proyectos: Array.from(porId.values()), errores, totalFilas };
+}

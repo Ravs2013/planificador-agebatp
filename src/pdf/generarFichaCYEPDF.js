@@ -198,11 +198,14 @@ export function dibujarFichaCYE(doc, { evaluacion, participante, panel = null, b
   });
 
   const calc = calcularFicha(evaluacion.categoria, puntajes);
-  y = nuevaPaginaSiFalta(doc, y, 16, chromeOpts);
+  // Resumen, observaciones y firma se mueven juntos: la firma nunca queda sola en una hoja.
+  doc.setFont('Arial', 'normal');
+  doc.setFontSize(6.9);
+  const lineasObs = doc.splitTextToSize(evaluacion.observacionesJurado || 'Sin observaciones.', W - 4).length;
+  const altoCierre = 16 + Math.min(26, Math.max(9, lineasObs * 3 + 3)) + 5 + 40;
+  y = nuevaPaginaSiFalta(doc, y, altoCierre, chromeOpts);
   y = resumen(doc, calc, y);
-  y = nuevaPaginaSiFalta(doc, y, 22, chromeOpts);
   y = observaciones(doc, evaluacion, y);
-  y = nuevaPaginaSiFalta(doc, y, 34, chromeOpts);
   drawBloqueFirmaCYE(doc, {
     x: A4.ancho / 2 - 42, y: y + 2, ancho: 84,
     firmante: bloqueFirmaCYE(firmanteDelCasillero(panel, slot), slot),

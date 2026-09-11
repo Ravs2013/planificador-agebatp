@@ -29,10 +29,13 @@ export const C = {
 
 /** Acento cromático propio del módulo Eureka (logotipo oficial). */
 export const CE = {
-  verdeEureka: '#6E9E23',
-  verdeOscuro: '#4F7318',
-  verdeHalo: '#B5CC8E',
-  verdeFondo: '#F2F7EA',
+  // Los nombres se conservan por compatibilidad; los valores siguen la paleta azul
+  // institucional de Juegos Florales y Crea y Emprende.
+  verdeEureka: '#1B3A5C',
+  verdeOscuro: '#122240',
+  verdeHalo: '#BFDBFE',
+  verdeFondo: '#EFF6FF',
+  verdeBorde: '#BFDBFE',
   marronTexto: '#3D3128',
   acentoMorado: '#9B1B7C',
   acentoNaranja: '#E8663C',
@@ -43,10 +46,11 @@ export const CE = {
 
 /** Equivalentes RGB para jsPDF (setFillColor / setTextColor). */
 export const RGB = {
-  verdeEureka: [110, 158, 35],
-  verdeOscuro: [79, 115, 24],
-  verdeHalo: [181, 204, 142],
-  verdeFondo: [242, 247, 234],
+  // Paleta azul institucional en los PDF (sin verde), como en los demás módulos.
+  verdeEureka: [27, 58, 92],
+  verdeOscuro: [18, 34, 64],
+  verdeHalo: [219, 234, 254],
+  verdeFondo: [241, 245, 249],
   navy: [12, 25, 41],
   navy2: [18, 34, 64],
   navy3: [27, 58, 92],

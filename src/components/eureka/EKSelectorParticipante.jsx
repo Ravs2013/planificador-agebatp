@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import Icon from '../Icon';
-import { C, CE, S, btn } from './ekEstilos';
+import { S } from './ekEstilos';
 import { SLOTS_JURADO, getLinea } from '../../data/eurekaConfigUGEL03';
 import { nombresEstudiantes, resolverAnexoPorDefecto } from '../../utils/eurekaHelpers';
 
@@ -70,14 +70,6 @@ export default function EKSelectorParticipante({
       return est[numeroJuradoActivo] === 'registrada';
     }).length,
     [participantes, estadoPorParticipante, numeroJuradoActivo]
-  );
-
-  const completadosTresJurados = useMemo(
-    () => participantes.filter(p => {
-      const est = estadoPorParticipante.get(p.id) || {};
-      return SLOTS_JURADO.every(s => est[s] === 'registrada');
-    }).length,
-    [participantes, estadoPorParticipante]
   );
 
   return (
@@ -189,7 +181,7 @@ export default function EKSelectorParticipante({
           const puntos = miEval?.puntajeTotal != null ? miEval.puntajeTotal : null;
           const tieneEvaluacion = Boolean(miEval || isNSP || (esStaff && Object.values(est).some(Boolean)));
           const linea = getLinea(areaId || p.areaId, p.lineaId);
-          const anexoNum = p.anexoEvaluacion || resolverAnexoPorDefecto(categoria || p.categoria, areaId || p.areaId);
+          const anexoNum = p.anexoClave || p.anexoEvaluacion || resolverAnexoPorDefecto(categoria || p.categoria, areaId || p.areaId);
           const colorBorde = isNSP ? '#DC2626' : (isRegistrado ? '#15803D' : '#1B3A5C');
 
           return (
@@ -228,9 +220,15 @@ export default function EKSelectorParticipante({
                     <span>Código SICE: {p.codigoParticipante || p.codigo || '—'}</span>
                     {p.ordenPresentacion > 0 && <span>Orden: N.° {p.ordenPresentacion}</span>}
                     {linea && <span>Línea: {linea.nombre}</span>}
-                    <span style={{ fontWeight: 700, color: '#1E4D7B' }}>
-                      Anexo E{anexoNum}
+                    <span style={{ fontWeight: 800, color: '#1E4D7B' }}>
+                      Anexo {anexoNum}{p.anexoOrigen === 'comision' ? ' · asignado por la comisión' : ''}
                     </span>
+                    {esStaff && p.estadoAdmision === 'observado' && (
+                      <span style={{ fontWeight: 800, color: '#B45309' }}>Observado</span>
+                    )}
+                    {esStaff && p.anexoOrigen !== 'comision' && p.confianzaAnexo === 'baja' && ['A', 'B', 'C'].includes(p.categoria) && (
+                      <span style={{ fontWeight: 800, color: '#B45309' }}>Anexo por revisar</span>
+                    )}
                   </div>
                 </div>
 
@@ -422,7 +420,7 @@ export default function EKSelectorParticipante({
                         : '0 2px 6px rgba(27,58,92,0.25)'
                     }}
                   >
-                    {isNSP ? 'Ver Ficha NSP →' : isRegistrado ? 'Ver Ficha →' : `Evaluar Ficha E${anexoNum} →`}
+                    {isNSP ? 'Ver ficha' : isRegistrado ? 'Ver ficha' : `Evaluar con ${anexoNum}`}
                   </button>
                 </div>
               </div>

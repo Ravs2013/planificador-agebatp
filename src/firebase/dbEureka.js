@@ -12,7 +12,7 @@
 
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
-  query, where, onSnapshot, serverTimestamp, writeBatch
+  query, where, onSnapshot, serverTimestamp, writeBatch, arrayUnion
 } from 'firebase/firestore';
 import { db } from './config';
 import {
@@ -85,7 +85,123 @@ export async function addEKParticipante(data) {
 }
 
 export async function updateEKParticipante(id, data) {
-  await updateDoc(doc(db, 'eurekaParticipantes', id), { ...data, updatedAt: serverTimestamp() });
+  // setDoc con merge: un proyecto del padrón precargado puede no tener documento todavía.
+  await setDoc(doc(db, 'eurekaParticipantes', id), { ...data, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+/* ───── Estado del proyecto en la jornada: anexo, admisión e importación SICE ───── */
+
+function basePersistenteEK(p) {
+  return {
+    id: p.id,
+    codigoParticipante: p.codigoParticipante || p.id,
+    categoria: p.categoria,
+    areaId: p.areaId,
+    tituloProyecto: p.tituloProyecto || '',
+    institucionNombre: p.institucion?.nombre || p.institucionNombre || '',
+    eventoId: EUREKA_CONFIG.eventoId,
+    etapa: EUREKA_CONFIG.etapa
+  };
+}
+
+function auditorEK(usuario) {
+  return {
+    uid: usuario?.uid || 'anon',
+    correo: sanearCorreo(usuario?.correo || usuario?.email || ''),
+    nombre: usuario?.nombreCompleto || usuario?.nombre || ''
+  };
+}
+
+/** Suscripción a todo el padrón: se combina con la semilla en memoria. */
+export function subscribeEKParticipantesTodos(cb) {
+  return onSnapshot(collection(db, 'eurekaParticipantes'), snapshot => {
+    cb(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+  }, error => {
+    console.error('Error subscribiendo eurekaParticipantes:', error);
+    cb([]);
+  });
+}
+
+/** Actualiza un proyecto conservando los campos que lo identifican en consultas por categoría. */
+export async function actualizarParticipanteEK(p, cambios = {}) {
+  await setDoc(doc(db, 'eurekaParticipantes', p.id), {
+    ...basePersistenteEK(p), ...cambios, updatedAt: serverTimestamp()
+  }, { merge: true });
+}
+
+/**
+ * Asigna el anexo con el que los TRES jurados califican el proyecto.
+ * Elegir la opción recomendada borra la decisión manual y vuelve a regir la recomendación.
+ */
+export async function aplicarAnexoProyectoEK(p, { anexo, variante = null, motivo = '', restablecer = false }, usuario) {
+  const texto = String(motivo || '').trim();
+  if (texto.length < 10) throw new Error('Explique el motivo del cambio en al menos 10 caracteres.');
+  if (!anexo) throw new Error('Elija el anexo que se aplicará.');
+  const quien = auditorEK(usuario);
+  const en = new Date().toISOString();
+  const varianteFinal = anexo === 'E15' ? (variante === 'B' ? 'B' : 'A') : null;
+  const anterior = { anexo: p.anexoEvaluacion || null, variante: p.varianteRubrica || null, origen: p.anexoOrigen || null };
+  await setDoc(doc(db, 'eurekaParticipantes', p.id), {
+    ...basePersistenteEK(p),
+    anexoAplicado: restablecer ? null : { anexo, variante: varianteFinal, motivo: texto, ...quien, en, anterior },
+    anexoEvaluacion: anexo,
+    varianteRubrica: varianteFinal,
+    historialAnexo: arrayUnion({ accion: restablecer ? 'restablecer_recomendado' : 'cambio', anexo, variante: varianteFinal, anterior, motivo: texto, ...quien, en }),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+}
+
+/** Decisión de admisión de la comisión. Sin estado, se quita la decisión y rige el estado inicial. */
+export async function registrarAdmisionEK(p, { estado = null, motivo = '' }, usuario) {
+  const texto = String(motivo || '').trim();
+  if (estado && texto.length < 10) throw new Error('La decisión de admisión exige un motivo de al menos 10 caracteres.');
+  const quien = auditorEK(usuario);
+  const en = new Date().toISOString();
+  await setDoc(doc(db, 'eurekaParticipantes', p.id), {
+    ...basePersistenteEK(p),
+    admision: estado ? { estado, motivo: texto, ...quien, en } : null,
+    historialAdmision: arrayUnion({ accion: estado ? `admision_${estado}` : 'admision_restablecida', estado: estado || null, motivo: texto, ...quien, en }),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+}
+
+/** Incorpora estudiantes y docente asesor del reporte completo de SICE. No guarda DNI. */
+export async function importarDatosSICEEurekaEK(proyectos = [], usuario) {
+  const quien = auditorEK(usuario);
+  const en = new Date().toISOString();
+  let escritos = 0;
+  for (let i = 0; i < proyectos.length; i += MAX_BATCH) {
+    const batch = writeBatch(db);
+    proyectos.slice(i, i + MAX_BATCH).forEach(p => {
+      batch.set(doc(db, 'eurekaParticipantes', p.id), {
+        ...basePersistenteEK(p),
+        pseudonimo: p.pseudonimo || '',
+        urlTrabajo: p.urlTrabajo || '',
+        fechaRegistro: p.fechaRegistro || '',
+        institucion: {
+          nombre: p.institucion?.nombre || '',
+          codigoModular: p.institucion?.codigoModular || '',
+          ugel: EUREKA_CONFIG.ugel,
+          dre: EUREKA_CONFIG.dre
+        },
+        estudiantes: (p.estudiantes || []).map(e => ({
+          apellidoPaterno: e.apellidoPaterno || '', apellidoMaterno: e.apellidoMaterno || '', nombres: e.nombres || '',
+          sexo: e.sexo || '', grado: e.grado || '', seccion: e.seccion || ''
+        })),
+        docenteAsesor: {
+          nombres: p.docenteAsesor?.nombres || '', apellidoPaterno: p.docenteAsesor?.apellidoPaterno || '',
+          apellidoMaterno: p.docenteAsesor?.apellidoMaterno || '', nombreCompleto: p.docenteAsesor?.nombreCompleto || '',
+          especialidad: p.docenteAsesor?.especialidad || ''
+        },
+        datosSICE: { importadoPor: quien.correo, importadoEn: en, filas: p.filas || 0 },
+        origen: 'sice',
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      escritos += 1;
+    });
+    await batch.commit();
+  }
+  return escritos;
 }
 
 export async function deleteEKParticipante(id) {

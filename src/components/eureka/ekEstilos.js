@@ -201,7 +201,7 @@ export function aviso(tipo = 'info') {
     exito: { fondo: '#F0FDF4', borde: '#BBF7D0', texto: '#15803D', acento: '#22C55E' },
     alerta: { fondo: '#FFFBEB', borde: '#FDE68A', texto: '#B45309', acento: '#F59E0B' },
     error: { fondo: '#FEF2F2', borde: '#FECACA', texto: '#B91C1C', acento: '#EF4444' },
-    eureka: { fondo: '#F0FDF4', borde: '#BBF7D0', texto: '#166534', acento: '#16A34A' }
+    eureka: { fondo: '#EFF6FF', borde: '#BFDBFE', texto: '#122240', acento: '#1B3A5C' }
   };
   const c = mapa[tipo] || mapa.info;
   return {

@@ -1,435 +1,442 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Icon from '../Icon';
-import { C, CE, S, btn, btnDeshabilitado, aviso } from './ekEstilos';
+import { C, FUENTES, S, btn, btnDeshabilitado, aviso } from '../creayemprende/cyeEstilos';
 import EKRubricaMatriz from './EKRubricaMatriz';
-import EKAcreditacionChecklist from './EKAcreditacionChecklist';
+import EKAnexoAplicable, { ModalCambioAnexo } from './EKAnexoAplicable';
 import { getRubricaEureka } from '../../data/eurekaRubricas';
+import { EUREKA_CONFIG, SLOTS_JURADO, getArea, getCategoria } from '../../data/eurekaConfigUGEL03';
+import { calcularPuntajeEvaluacion, nombresEstudiantes } from '../../utils/eurekaHelpers';
+import { resolverFirmanteDeFicha } from '../../utils/eurekaFirmas';
+import { tienePuntajes, claveOpcion } from '../../utils/eurekaAnexos';
 import {
-  EUREKA_CONFIG, SLOTS_JURADO, getArea, getLinea, getCategoria
-} from '../../data/eurekaConfigUGEL03';
-import {
-  calcularPuntajeEvaluacion, sumaPenalizaciones, nombresEstudiantes, resolverVariante, resolverAnexoPorDefecto
-} from '../../utils/eurekaHelpers';
-import { resolverFirmanteDeFicha, esPreliminar } from '../../utils/eurekaFirmas';
-import { saveEKEvaluacion, evaluacionId, deleteEKEvaluacion, updateEKParticipante } from '../../firebase/dbEureka';
+  saveEKEvaluacion, evaluacionId, deleteEKEvaluacion, reabrirEKEvaluacion, actualizarParticipanteEK
+} from '../../firebase/dbEureka';
 import { generarFichaEurekaPDF } from '../../pdf/generarFichaEurekaPDF';
 import { obtenerMembreteEureka } from '../../pdf/membreteEureka';
 
 const DEBOUNCE_MS = 1500;
+const OBSERVACION_NSP = 'INCOMPARECENCIA — EL PARTICIPANTE NO SE PRESENTÓ A LA EVALUACIÓN';
+
+function formatoTiempo(segundos) {
+  const m = Math.floor(segundos / 60);
+  const s = segundos % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+/** Firestore rechaza `undefined`: la matriz deja ese valor al desmarcar un nivel. */
+function limpiarPuntajes(obj = {}) {
+  return Object.fromEntries(Object.entries(obj || {}).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+}
 
 /**
- * Ficha de evaluación individual (Anexos E11 a E18) — Diseñada para Jurados Mayores.
- *
- * Características senior-friendly:
- * - Barra superior clara con el Casillero de Jurado activo (J1, J2, J3).
- * - Cabecera con datos en tipografía grande (16-18px) y botón destacado a Google Drive.
- * - Navegación secuencial inmediata (Proyecto anterior / siguiente).
- * - Barra de progreso visual y puntaje en números grandes (28px).
- * - Indicador tranquilizador de autoguardado en la nube con hora visible.
- * - Alerta guiada si faltan criterios por responder con scroll automático.
+ * Ficha de evaluación de un proyecto para un casillero de jurado (Anexos E11 a E18).
+ * El anexo lo decide el proyecto (padrón o comisión) y es el mismo para los tres jurados.
  */
 export default function EKFichaEvaluacion({
   participante,
   evaluacionInicial,
+  evaluacionesProyecto = [],
   numeroJurado,
   onCambiarJurado,
-  categoria,
-  areaId,
+  casilleroFijo = false,
   panel,
   usuario,
+  esStaff = false,
   soloLectura = false,
   motivoBloqueo = null,
   onToast,
-  onIrAlPanel,
-  onVolver,
-  onAnterior,
-  onSiguiente
+  onIrAlPanel
 }) {
-  const anexoInicial = evaluacionInicial?.anexoEvaluacion
-    || participante?.anexoEvaluacion
-    || resolverAnexoPorDefecto(categoria || participante?.categoria, areaId || participante?.areaId);
-
-  const [anexoActivo, setAnexoActivo] = useState(anexoInicial);
-
-  useEffect(() => {
-    const a = evaluacionInicial?.anexoEvaluacion
-      || participante?.anexoEvaluacion
-      || resolverAnexoPorDefecto(categoria || participante?.categoria, areaId || participante?.areaId);
-    setAnexoActivo(a);
-  }, [evaluacionInicial?.anexoEvaluacion, participante?.anexoEvaluacion, categoria, areaId, participante?.categoria, participante?.areaId]);
-
-  const rubrica = useMemo(() => {
-    return getRubricaEureka(anexoActivo)
-      || getRubricaEureka(resolverAnexoPorDefecto(categoria || participante?.categoria, areaId || participante?.areaId));
-  }, [anexoActivo, categoria, areaId, participante?.categoria, participante?.areaId]);
+  const anexo = participante?.anexoEvaluacion;
+  const variante = participante?.varianteRubrica || 'A';
+  const rubrica = useMemo(() => getRubricaEureka(anexo), [anexo]);
 
   const [puntajes, setPuntajes] = useState({});
-  const [variante, setVariante] = useState('A');
   const [planificacion, setPlanificacion] = useState(null);
   const [observaciones, setObservaciones] = useState('');
-  const [acreditacion, setAcreditacion] = useState({});
-  const [penalizaciones, setPenalizaciones] = useState([]);
-  const [mostrarPenalizaciones, setMostrarPenalizaciones] = useState(false);
-  const [nuevaPenalizacion, setNuevaPenalizacion] = useState({ puntos: '', motivo: '' });
   const [segundos, setSegundos] = useState(0);
   const [cronometroActivo, setCronometroActivo] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [ultimoGuardado, setUltimoGuardado] = useState(null);
+  const [varianteSolicitada, setVarianteSolicitada] = useState(null);
+  const [modalNSP, setModalNSP] = useState(false);
 
-  const loadedEvalIdRef = useRef(null);
+  const idEsperado = participante ? evaluacionId(participante.id, numeroJurado) : null;
+  const cargaRef = useRef({ id: null, anexo: null, conDatos: false });
+  const sucioRef = useRef(false);
   const debounceRef = useRef(null);
   const cronometroRef = useRef(null);
 
-  const idEsperado = participante ? evaluacionId(participante.id, numeroJurado) : null;
+  const desalineada = Boolean(
+    evaluacionInicial && tienePuntajes(evaluacionInicial)
+    && evaluacionInicial.anexoEvaluacion && evaluacionInicial.anexoEvaluacion !== anexo
+  );
+  const noSePresento = Boolean(participante?.noSePresento || evaluacionInicial?.incomparecencia || evaluacionInicial?.noSePresento);
+  const registrada = evaluacionInicial?.estado === 'registrada';
+  const edicionBloqueada = soloLectura || desalineada || registrada || noSePresento;
 
-  /* ── Guardián de carga: sincroniza el estado local al cambiar de participante o jurado ── */
+  /* ── Carga del documento remoto sin pisar lo que el jurado está marcando ── */
   useEffect(() => {
-    const idActual = evaluacionInicial?.id ?? idEsperado;
-    if (loadedEvalIdRef.current !== null && loadedEvalIdRef.current === idActual) return;
+    const carga = cargaRef.current;
+    const cambioDeFicha = carga.id !== idEsperado || carga.anexo !== anexo;
+    const llegaronDatos = !carga.conDatos && Boolean(evaluacionInicial) && !sucioRef.current;
+    if (!cambioDeFicha && !llegaronDatos) return;
 
-    setPuntajes(evaluacionInicial?.puntajes || {});
-    setVariante(
-      evaluacionInicial?.varianteRubrica
-      || participante?.varianteRubrica
-      || resolverVariante({ areaId, lineaId: participante?.lineaId })
-      || 'A'
-    );
-    setPlanificacion(
-      evaluacionInicial?.planificacionCurricular != null
-        ? evaluacionInicial.planificacionCurricular
-        : null
-    );
-    setObservaciones(evaluacionInicial?.observacionesJurado || '');
-    setAcreditacion(evaluacionInicial?.acreditacion || {});
-    setPenalizaciones(evaluacionInicial?.penalizaciones || []);
-    const dur = String(evaluacionInicial?.duracionEjecutada || '00:00').split(':');
-    setSegundos((parseInt(dur[0], 10) || 0) * 60 + (parseInt(dur[1], 10) || 0));
-    loadedEvalIdRef.current = idActual;
-  }, [evaluacionInicial, idEsperado, areaId, participante]);
+    const ev = evaluacionInicial;
+    const alineada = !ev || !ev.anexoEvaluacion || ev.anexoEvaluacion === anexo;
+    setPuntajes(alineada ? limpiarPuntajes(ev?.puntajes) : {});
+    setPlanificacion(ev?.planificacionCurricular ?? null);
+    setObservaciones(ev?.observacionesJurado || '');
+    const [m, s] = String(ev?.duracionEjecutada || '00:00').split(':');
+    setSegundos((parseInt(m, 10) || 0) * 60 + (parseInt(s, 10) || 0));
+    setCronometroActivo(false);
+    setUltimoGuardado(null);
+    sucioRef.current = false;
+    cargaRef.current = { id: idEsperado, anexo, conDatos: Boolean(ev) };
+  }, [idEsperado, evaluacionInicial, anexo]);
 
   /* ── Cronómetro ── */
   useEffect(() => {
-    if (cronometroActivo) {
-      cronometroRef.current = setInterval(() => setSegundos(s => s + 1), 1000);
-    }
-    return () => { if (cronometroRef.current) clearInterval(cronometroRef.current); };
+    if (!cronometroActivo) return undefined;
+    cronometroRef.current = setInterval(() => setSegundos(s => s + 1), 1000);
+    return () => clearInterval(cronometroRef.current);
   }, [cronometroActivo]);
 
-  const duracionTexto = useMemo(() => {
-    const m = Math.floor(segundos / 60);
-    const s = segundos % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  }, [segundos]);
-
-  const excedioTiempo = segundos > EUREKA_CONFIG.tiempoExposicionMin * 60;
+  const maxMinutos = EUREKA_CONFIG.tiempoExposicionMin;
+  const excedioTiempo = segundos > maxMinutos * 60;
 
   /* ── Cálculo en vivo ── */
-  const gateNegativo = rubrica?.gate?.requerido && planificacion === false;
-
+  const gateNegativo = Boolean(rubrica?.gate?.requerido && planificacion === false);
   const calculo = useMemo(() => calcularPuntajeEvaluacion({
     rubrica,
     puntajes,
-    penalizaciones,
+    penalizaciones: evaluacionInicial?.penalizaciones || [],
     variante,
     noProsigue: gateNegativo,
-    incomparecencia: Boolean(participante?.noSePresento)
-  }), [rubrica, puntajes, penalizaciones, variante, gateNegativo, participante?.noSePresento]);
+    incomparecencia: noSePresento
+  }), [rubrica, puntajes, evaluacionInicial?.penalizaciones, variante, gateNegativo, noSePresento]);
 
-  /* ── Criterios faltantes para feedback al usuario mayor ── */
-  const itemsPendientes = useMemo(() => {
+  const pendientes = useMemo(() => {
     if (!rubrica) return [];
-    if (rubrica.tipoEscala === 'simple') {
-      return (rubrica.criterios || []).filter(c => puntajes[c.id] == null);
-    } else {
-      const items = rubrica.aspectos || [];
-      return items.filter(a => puntajes[a.id] == null || Number(puntajes[a.id]) === 0);
-    }
+    const items = rubrica.tipoEscala === 'simple' ? (rubrica.criterios || []) : (rubrica.aspectos || []);
+    return items.filter(it => !Number(puntajes[it.id]));
   }, [rubrica, puntajes]);
 
-  /* ── Construcción del documento ── */
-  const construirPayload = useCallback((estado) => ({
-    id: idEsperado,
-    eventoId: EUREKA_CONFIG.eventoId,
-    etapa: EUREKA_CONFIG.etapa,
-    participanteId: participante.id,
-    participanteSnapshot: {
-      id: participante.id,
-      codigoParticipante: participante.codigoParticipante || participante.id,
-      tituloProyecto: participante.tituloProyecto || '',
-      pseudonimo: participante.pseudonimo || '',
-      urlTrabajo: participante.urlTrabajo || '',
-      urlCuadernoCampo: participante.urlCuadernoCampo || '',
-      institucionNombre: participante.institucion?.nombre || participante.institucionNombre || '',
-      institucion: participante.institucion || {},
-      estudiantes: participante.estudiantes || [],
-      docenteAsesor: participante.docenteAsesor || {},
-      ordenPresentacion: participante.ordenPresentacion || 0,
-      noSePresento: Boolean(participante.noSePresento)
-    },
-    categoria,
-    areaId,
-    lineaId: participante.lineaId,
-    anexoEvaluacion: anexoActivo || rubrica?.id || participante.anexoEvaluacion,
-    varianteRubrica: rubrica?.tieneVariantes ? variante : null,
-    jurado: { numeroJurado },
-    planificacionCurricular: rubrica?.gate?.requerido ? planificacion : null,
-    puntajes,
-    puntajeBruto: calculo.puntajeBruto,
-    puntajePonderado: calculo.puntajePonderado,
-    puntajeTotal: calculo.puntajeTotal,
-    puntajeMaximo: calculo.puntajeMaximo,
-    penalizaciones,
-    duracionEjecutada: duracionTexto,
-    excedioTiempo,
-    observacionesJurado: observaciones,
-    acreditacion,
-    incomparecencia: Boolean(participante.noSePresento),
-    noProsigue: Boolean(gateNegativo),
-    fecha: EUREKA_CONFIG.fechaEvaluacion,
-    estado
-  }), [
-    idEsperado, participante, categoria, areaId, rubrica, anexoActivo, variante, numeroJurado,
-    planificacion, puntajes, calculo, penalizaciones, duracionTexto, excedioTiempo,
-    observaciones, acreditacion, gateNegativo
-  ]);
+  /* ── Documento ── */
+  const construirPayload = useCallback((estado) => {
+    const p = participante;
+    return {
+      participanteId: p.id,
+      participanteSnapshot: {
+        id: p.id,
+        codigoParticipante: p.codigoParticipante || p.id,
+        tituloProyecto: p.tituloProyecto || '',
+        pseudonimo: p.pseudonimo || '',
+        urlTrabajo: p.urlTrabajo || '',
+        institucionNombre: p.institucion?.nombre || p.institucionNombre || '',
+        institucion: {
+          nombre: p.institucion?.nombre || p.institucionNombre || '',
+          codigoModular: p.institucion?.codigoModular || '',
+          ugel: p.institucion?.ugel || EUREKA_CONFIG.ugel,
+          dre: p.institucion?.dre || EUREKA_CONFIG.dre
+        },
+        estudiantes: (p.estudiantes || []).map(e => ({
+          apellidoPaterno: e.apellidoPaterno || '', apellidoMaterno: e.apellidoMaterno || '', nombres: e.nombres || ''
+        })),
+        docenteAsesor: {
+          nombreCompleto: p.docenteAsesor?.nombreCompleto || '',
+          especialidad: p.docenteAsesor?.especialidad || ''
+        },
+        gradoSeccion: p.gradoSeccion || '',
+        ordenPresentacion: p.ordenPresentacion || p.numero || 0,
+        noSePresento
+      },
+      categoria: p.categoria,
+      areaId: p.areaId,
+      lineaId: p.lineaId || null,
+      anexoEvaluacion: anexo,
+      varianteRubrica: rubrica?.tieneVariantes ? variante : null,
+      jurado: { numeroJurado },
+      planificacionCurricular: rubrica?.gate?.requerido ? planificacion : null,
+      puntajes: limpiarPuntajes(puntajes),
+      puntajeBruto: calculo.puntajeBruto,
+      puntajePonderado: calculo.puntajePonderado,
+      puntajeTotal: calculo.puntajeTotal,
+      puntajeMaximo: calculo.puntajeMaximo,
+      penalizaciones: evaluacionInicial?.penalizaciones || [],
+      duracionEjecutada: formatoTiempo(segundos),
+      excedioTiempo,
+      observacionesJurado: observaciones,
+      acreditacion: evaluacionInicial?.acreditacion || {},
+      incomparecencia: noSePresento,
+      noProsigue: gateNegativo,
+      fecha: EUREKA_CONFIG.fechaEvaluacion,
+      estado
+    };
+  }, [participante, anexo, rubrica, variante, numeroJurado, planificacion, puntajes, calculo, evaluacionInicial,
+    segundos, excedioTiempo, observaciones, noSePresento, gateNegativo]);
 
   const guardar = useCallback(async (estado, esAuto) => {
-    if (!participante || soloLectura) return;
-
-    if (esAuto
-      && Object.keys(puntajes).length === 0
-      && Object.keys(evaluacionInicial?.puntajes || {}).length > 0) {
-      return;
-    }
-
+    if (!participante || soloLectura || desalineada) return false;
     try {
       if (!esAuto) setGuardando(true);
       await saveEKEvaluacion(construirPayload(estado), {
         usuario,
         accion: esAuto ? 'autoguardado' : (estado === 'registrada' ? 'registro' : 'guardado')
       });
+      sucioRef.current = false;
       setUltimoGuardado(new Date());
       if (!esAuto && onToast) {
-        onToast(
-          estado === 'registrada'
-            ? `¡Excelente! Calificación del Jurado N.° ${numeroJurado} registrada formalmente.`
-            : 'Borrador guardado en la nube.',
-          'exito'
-        );
+        onToast(estado === 'registrada' ? `Calificación del Jurado N.° ${numeroJurado} registrada.` : 'Borrador guardado.', 'success');
       }
+      return true;
     } catch (err) {
-      if (onToast) onToast(`No se pudo guardar: ${err.message}`, 'error');
+      if (!esAuto && onToast) onToast(`No se pudo guardar: ${err.message}`, 'error');
+      return false;
     } finally {
       if (!esAuto) setGuardando(false);
     }
-  }, [participante, soloLectura, puntajes, evaluacionInicial, construirPayload, usuario, numeroJurado, onToast]);
+  }, [participante, soloLectura, desalineada, construirPayload, usuario, numeroJurado, onToast]);
 
-  /* ── Autoguardado con debounce ── */
   useEffect(() => {
-    if (soloLectura || !participante) return undefined;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      guardar('borrador', true);
-    }, DEBOUNCE_MS);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [puntajes, variante, planificacion, observaciones, acreditacion, penalizaciones, duracionTexto, soloLectura, participante, guardar]);
+    if (!sucioRef.current || edicionBloqueada) return undefined;
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => { guardar('borrador', true); }, DEBOUNCE_MS);
+    return () => clearTimeout(debounceRef.current);
+  }, [puntajes, planificacion, observaciones, cronometroActivo, guardar, edicionBloqueada]);
+
+  /* ── Acciones ── */
+  const cambiarPuntajes = (nuevos) => {
+    if (edicionBloqueada) return;
+    sucioRef.current = true;
+    setPuntajes(prev => limpiarPuntajes(typeof nuevos === 'function' ? nuevos(prev) : nuevos));
+  };
+
+  const responderGate = (valor) => {
+    if (edicionBloqueada) return;
+    sucioRef.current = true;
+    setPlanificacion(valor);
+  };
+
+  const alternarCronometro = () => {
+    if (cronometroActivo) sucioRef.current = true;
+    setCronometroActivo(a => !a);
+  };
+
+  const reiniciarCronometro = () => {
+    setCronometroActivo(false);
+    setSegundos(0);
+    sucioRef.current = true;
+  };
+
+  const irACriterio = (id) => {
+    const el = document.getElementById(`criterio-${id}`) || document.getElementById(`aspecto-${id}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const registrar = async () => {
+    if (rubrica?.gate?.requerido && planificacion === null) {
+      if (onToast) onToast('Responda primero la pregunta sobre la evidencia de planificación curricular.', 'error');
+      document.getElementById('pregunta-habilitacion')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    if (!gateNegativo && !calculo.completa) {
+      if (pendientes[0]) irACriterio(pendientes[0].id);
+      if (onToast) onToast(`Faltan ${pendientes.length} criterio(s) por calificar.`, 'error');
+      return;
+    }
+    clearTimeout(debounceRef.current);
+    setCronometroActivo(false);
+    await guardar('registrada', false);
+  };
+
+  const corregir = async () => {
+    try {
+      await reabrirEKEvaluacion(idEsperado, 'Corrección solicitada desde la ficha de evaluación', usuario);
+      if (onToast) onToast('La ficha volvió a borrador para su corrección.', 'info');
+    } catch (err) {
+      if (onToast) onToast(`No se pudo reabrir la ficha: ${err.message}`, 'error');
+    }
+  };
+
+  const reiniciarEstadoLocal = () => {
+    clearTimeout(debounceRef.current);
+    sucioRef.current = false;
+    setPuntajes({});
+    setPlanificacion(null);
+    setObservaciones('');
+    setSegundos(0);
+    setCronometroActivo(false);
+    setUltimoGuardado(null);
+  };
+
+  const limpiarFicha = async () => {
+    if (soloLectura) return;
+    if (!window.confirm(`¿Limpiar la ficha del Jurado N.° ${numeroJurado}?\n\nSe eliminan los puntajes guardados y la ficha queda en blanco.`)) return;
+    try {
+      setGuardando(true);
+      reiniciarEstadoLocal();
+      if (idEsperado) await deleteEKEvaluacion(idEsperado);
+      if (participante?.noSePresento) await actualizarParticipanteEK(participante, { noSePresento: false });
+      if (onToast) onToast(`Ficha del Jurado N.° ${numeroJurado} restablecida en blanco.`, 'info');
+    } catch (err) {
+      if (onToast) onToast(`No se pudo limpiar la ficha: ${err.message}`, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const descartarCapturaDesalineada = async () => {
+    if (!window.confirm(`¿Descartar la captura hecha con el Anexo ${evaluacionInicial?.anexoEvaluacion} y calificar con el Anexo ${anexo}?`)) return;
+    try {
+      setGuardando(true);
+      reiniciarEstadoLocal();
+      await deleteEKEvaluacion(idEsperado);
+      if (onToast) onToast(`Captura descartada. Califique con el Anexo ${anexo}.`, 'info');
+    } catch (err) {
+      if (onToast) onToast(`No se pudo descartar: ${err.message}`, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const marcarNSP = async () => {
+    try {
+      setGuardando(true);
+      clearTimeout(debounceRef.current);
+      const payload = {
+        ...construirPayload('registrada'),
+        puntajes: {}, puntajeBruto: 0, puntajePonderado: 0, puntajeTotal: 0,
+        planificacionCurricular: null, noProsigue: false,
+        incomparecencia: true, noSePresento: true,
+        observacionesJurado: OBSERVACION_NSP
+      };
+      payload.participanteSnapshot = { ...payload.participanteSnapshot, noSePresento: true };
+      await saveEKEvaluacion(payload, { usuario, accion: 'incomparecencia' });
+      await actualizarParticipanteEK(participante, { noSePresento: true });
+      reiniciarEstadoLocal();
+      setObservaciones(OBSERVACION_NSP);
+      setModalNSP(false);
+      if (onToast) onToast(`Incomparecencia registrada para «${participante.institucion?.nombre || 'la I. E.'}».`, 'info');
+    } catch (err) {
+      if (onToast) onToast(`No se pudo registrar la incomparecencia: ${err.message}`, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const revertirNSP = async () => {
+    if (!window.confirm('¿Revertir la incomparecencia y habilitar la calificación de este proyecto?')) return;
+    try {
+      setGuardando(true);
+      await actualizarParticipanteEK(participante, { noSePresento: false });
+      if (idEsperado) await deleteEKEvaluacion(idEsperado);
+      reiniciarEstadoLocal();
+      if (onToast) onToast('Incomparecencia revertida. La ficha está habilitada.', 'success');
+    } catch (err) {
+      if (onToast) onToast(`No se pudo revertir: ${err.message}`, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  };
 
   const descargarPDF = async () => {
     try {
       const banner = await obtenerMembreteEureka();
-      const payload = construirPayload(evaluacionInicial?.estado || 'borrador');
-      generarFichaEurekaPDF(payload, { panel, banner });
-      if (onToast) onToast('Ficha individual descargada en PDF.', 'exito');
+      generarFichaEurekaPDF(
+        { ...construirPayload(evaluacionInicial?.estado || 'borrador'), id: idEsperado },
+        { panel, banner }
+      );
     } catch (err) {
       if (onToast) onToast(`No se pudo generar el PDF: ${err.message}`, 'error');
     }
   };
 
-  const handleLimpiarFicha = async () => {
-    if (!window.confirm(`¿Está seguro de LIMPIAR la ficha del Jurado N.° ${numeroJurado}?\n\nSe eliminarán los puntajes guardados en la nube y la ficha quedará completamente en blanco.`)) return;
-    try {
-      setGuardando(true);
-      if (idEsperado) {
-        await deleteEKEvaluacion(idEsperado);
-      }
-      if (participante?.noSePresento) {
-        await updateEKParticipante(participante.id, { noSePresento: false });
-      }
-      setPuntajes({});
-      setObservaciones('');
-      setPenalizaciones([]);
-      setAcreditacion({});
-      setSegundos(0);
-      setUltimoGuardado(new Date());
-      if (onToast) onToast(`Ficha del Jurado N.° ${numeroJurado} limpiada y restablecida en blanco.`, 'info');
-    } catch (err) {
-      if (onToast) onToast(`Error al limpiar ficha: ${err.message}`, 'error');
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  const handleMarcarNSPInterno = async () => {
-    const inst = participante?.institucion?.nombre || participante?.institucionNombre || 'la I. E.';
-    if (!window.confirm(`¿Confirmar INCOMPARECENCIA (NSP) para "${inst}"?\n\nLa ficha se registrará con 0 puntos y el participante se marcará como no presentado.`)) return;
-
-    try {
-      setGuardando(true);
-      const payload = {
-        ...construirPayload('registrada'),
-        puntajes: {},
-        puntajeBruto: 0,
-        puntajePonderado: 0,
-        puntajeTotal: 0,
-        incomparecencia: true,
-        noSePresento: true,
-        observacionesJurado: 'INCOMPARECENCIA — EL PARTICIPANTE NO SE PRESENTÓ A LA EVALUACIÓN'
-      };
-      await saveEKEvaluacion(payload, { usuario, accion: 'incomparecencia' });
-      await updateEKParticipante(participante.id, { noSePresento: true });
-      setPuntajes({});
-      setObservaciones('INCOMPARECENCIA — EL PARTICIPANTE NO SE PRESENTÓ A LA EVALUACIÓN');
-      setUltimoGuardado(new Date());
-      if (onToast) onToast(`Incomparecencia (NSP) registrada formalmente para "${inst}".`, 'alerta');
-    } catch (err) {
-      if (onToast) onToast(`Error al registrar incomparecencia: ${err.message}`, 'error');
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  const handleRevertirNSP = async () => {
-    if (!window.confirm('¿Desea revertir la incomparecencia y habilitar la calificación de este proyecto?')) return;
-    try {
-      setGuardando(true);
-      await updateEKParticipante(participante.id, { noSePresento: false });
-      if (idEsperado) {
-        await deleteEKEvaluacion(idEsperado);
-      }
-      setPuntajes({});
-      setObservaciones('');
-      setUltimoGuardado(new Date());
-      if (onToast) onToast('Incomparecencia revertida. La ficha está habilitada para calificar.', 'exito');
-    } catch (err) {
-      if (onToast) onToast(`Error al revertir incomparecencia: ${err.message}`, 'error');
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  const hacerScrollACriterio = (criterioId) => {
-    const el = document.getElementById(`criterio-${criterioId}`) || document.getElementById(`aspecto-${criterioId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  };
-
-  const cat = getCategoria(categoria);
-  const area = getArea(areaId);
-  const linea = getLinea(areaId, participante?.lineaId);
-  const firmante = resolverFirmanteDeFicha(panel, numeroJurado);
-  const registrada = evaluacionInicial?.estado === 'registrada';
-
   if (!participante) return null;
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      {/* ── 1. BARRA SUPERIOR: IDENTIDAD DEL JURADO Y NAVEGACIÓN ── */}
-      <div style={{
-        background: C.navy2,
-        color: C.blanco,
-        borderRadius: 8,
-        padding: '16px 22px',
-        boxShadow: '0 4px 14px rgba(12,25,41,0.15)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 14
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {onVolver && (
-            <button
-              type="button"
-              onClick={onVolver}
-              style={{
-                background: 'rgba(255,255,255,0.12)',
-                color: C.blanco,
-                border: '1px solid rgba(255,255,255,0.25)',
-                padding: '8px 14px',
-                borderRadius: 6,
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6
-              }}
-            >
-              <Icon name="arrowLeft" size={14} color={C.blanco} />
-              Volver a la lista
-            </button>
-          )}
+  const cat = getCategoria(participante.categoria);
+  const area = getArea(participante.areaId);
+  const firmante = resolverFirmanteDeFicha({ jurado: { numeroJurado } }, panel);
+  const estudiantes = nombresEstudiantes(participante);
+  const estadoCasillero = slot => evaluacionesProyecto.find(e => Number(e.jurado?.numeroJurado) === slot)?.estado;
 
-          <div>
-            <div style={{ fontSize: 11, color: CE.verdeHalo, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-              SESIÓN DE EVALUACIÓN OFICIAL
-            </div>
-            <div style={{ fontSize: 16, fontWeight: 800 }}>
-              Usted califica como: <span style={{ color: CE.verdeHalo }}>JURADO N.° {numeroJurado}</span>
-            </div>
+  const estiloGate = (activo, tono) => ({
+    minHeight: 52, padding: '12px 16px', borderRadius: 8, fontSize: 14, fontWeight: 800, fontFamily: FUENTES.sans,
+    cursor: edicionBloqueada ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+    background: activo ? tono : C.white, color: activo ? C.white : tono,
+    border: `2px solid ${activo ? tono : C.g300}`, boxShadow: activo ? '0 4px 10px rgba(15,23,42,0.15)' : 'none'
+  });
+
+  const cronometro = (
+    <div style={{ ...S.seccion, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', padding: '14px 18px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+        <div style={{ minWidth: 120, textAlign: 'center', border: `2px solid ${excedioTiempo ? C.red : C.navy3}`, borderRadius: 8, padding: '6px 14px', background: C.white }}>
+          <div style={{ fontFamily: FUENTES.mono, fontSize: 28, fontWeight: 800, color: excedioTiempo ? C.red : C.navy2, fontVariantNumeric: 'tabular-nums' }}>
+            {formatoTiempo(segundos)}
           </div>
         </div>
+        <div style={{ maxWidth: 420 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: C.navy2 }}>Tiempo de exposición</div>
+          <div style={{ fontSize: 12, color: excedioTiempo ? C.red : C.g500, lineHeight: 1.45 }}>
+            {excedioTiempo
+              ? `Superó los ${maxMinutos} minutos del numeral 10.1. Es un dato informativo: las bases no fijan descuento.`
+              : `Hasta ${maxMinutos} minutos, expuesto solo por los estudiantes inscritos (numeral 10.1).`}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button type="button" onClick={alternarCronometro} disabled={soloLectura || registrada} style={soloLectura || registrada ? btnDeshabilitado(btn('primario', { minHeight: 40 })) : btn(cronometroActivo ? 'peligroSuave' : 'primario', { minHeight: 40 })}>
+          <Icon name={cronometroActivo ? 'pause' : 'play'} size={14} color={cronometroActivo ? C.red : C.white} />
+          {cronometroActivo ? 'Pausar' : (segundos > 0 ? 'Reanudar' : 'Iniciar cronómetro')}
+        </button>
+        <button type="button" onClick={reiniciarCronometro} disabled={soloLectura || registrada} style={btn('secundario', { minHeight: 40 })}>
+          <Icon name="refresh" size={14} /> Reiniciar
+        </button>
+      </div>
+    </div>
+  );
 
-        {/* Segmento de cambio de casillero de jurado o casillero bloqueado */}
-        {usuario?.modulo === 'eureka' && usuario?.numeroJurado && Number(usuario.numeroJurado) <= 3 ? (
-          <div style={{
-            background: 'rgba(255,255,255,0.14)',
-            border: '1.5px solid #4ADE80',
-            color: C.blanco,
-            borderRadius: 6,
-            padding: '8px 16px',
-            fontSize: 13,
-            fontWeight: 800,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            boxShadow: '0 2px 8px rgba(74,222,128,0.2)'
-          }}>
-            <Icon name="lock" size={14} color="#4ADE80" />
-            <span>CASILLERO ASIGNADO: JURADO N.° {numeroJurado}</span>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 1040, margin: '0 auto' }}>
+      {/* ── Identidad del casillero ── */}
+      <div style={{
+        background: C.navy2, color: C.white, borderRadius: 8, padding: '14px 18px',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12,
+        borderBottom: `3px solid ${C.gold}`
+      }}>
+        <div>
+          <div style={{ fontSize: 10.5, color: C.goldLight, fontWeight: 800, letterSpacing: 0.8 }}>SESIÓN DE EVALUACIÓN</div>
+          <div style={{ fontSize: 16, fontWeight: 800 }}>
+            Usted califica como <span style={{ color: C.goldLight }}>Jurado N.° {numeroJurado}</span>
+          </div>
+          {usuario?.nombreCompleto && <div style={{ fontSize: 11.5, color: '#CBD5E1', marginTop: 2 }}>{usuario.nombreCompleto}</div>}
+        </div>
+        {casilleroFijo ? (
+          <div style={{ padding: '8px 16px', borderRadius: 6, background: 'rgba(255,255,255,0.10)', border: `1px solid ${C.gold}`, color: C.goldLight, fontSize: 12.5, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 8, letterSpacing: 0.5 }}>
+            <Icon name="lock" size={14} color={C.goldLight} /> CASILLERO ASIGNADO: J{numeroJurado}
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, color: C.blanco, opacity: 0.8, marginRight: 4 }}>Cambiar casillero:</span>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {SLOTS_JURADO.map(slot => {
-              const activo = numeroJurado === slot;
+              const activo = slot === numeroJurado;
+              const estado = estadoCasillero(slot);
               return (
                 <button
                   key={slot}
                   type="button"
-                  onClick={() => onCambiarJurado(slot)}
+                  onClick={() => onCambiarJurado && onCambiarJurado(slot)}
                   style={{
-                    minHeight: 40,
-                    padding: '8px 16px',
-                    borderRadius: 6,
-                    fontSize: 13.5,
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    background: activo ? CE.verdeEureka : 'rgba(255,255,255,0.12)',
-                    color: C.blanco,
-                    border: `2px solid ${activo ? CE.verdeHalo : 'rgba(255,255,255,0.2)'}`,
-                    boxShadow: activo ? '0 2px 8px rgba(110,158,35,0.4)' : 'none',
-                    transition: 'all 0.15s ease',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6
+                    minWidth: 68, padding: '6px 10px', borderRadius: 6, cursor: 'pointer', fontFamily: FUENTES.sans, textAlign: 'center',
+                    background: activo ? C.gold : 'rgba(255,255,255,0.10)', color: activo ? C.navy1 : C.white,
+                    border: `1px solid ${activo ? C.gold : 'rgba(255,255,255,0.25)'}`
                   }}
                 >
-                  <Icon name="user" size={14} color={C.blanco} />
-                  <span>Jurado {slot}</span>
+                  <div style={{ fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                    {estado === 'registrada' && <Icon name="check" size={12} color={activo ? C.navy1 : '#86EFAC'} />} J{slot}
+                  </div>
+                  <div style={{ fontSize: 9.5, fontWeight: 700, opacity: 0.85 }}>
+                    {estado === 'registrada' ? 'Registrada' : (estado ? 'Borrador' : 'Libre')}
+                  </div>
                 </button>
               );
             })}
@@ -437,823 +444,287 @@ export default function EKFichaEvaluacion({
         )}
       </div>
 
-      {/* ── 2. TARJETA DESTACADA DEL PROYECTO EVALUADO ── */}
-      <div style={{
-        ...S.tarjeta,
-        padding: '20px 24px',
-        border: '1px solid #D6DCE8',
-        borderLeft: '5px solid #1B3A5C',
-        background: '#FFFFFF',
-        boxShadow: '0 1px 4px rgba(15,23,42,0.06)'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 14 }}>
-          <div style={{ flex: 1, minWidth: 280 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-              <span style={{
-                background: '#1B3A5C',
-                color: C.blanco,
-                padding: '4px 10px',
-                borderRadius: 5,
-                fontSize: 12,
-                fontWeight: 800,
-                fontFamily: "'JetBrains Mono', monospace"
-              }}>
-                N.° {participante.ordenPresentacion || '—'}
-              </span>
-
-              <span style={S.chip('#EFF6FF', '#1E40AF', '#BFDBFE')}>
-                {cat?.nombre} — {cat?.nivel}
-              </span>
-
-              {participante.pseudonimo && (
-                <span style={S.chip('#FEF9C3', '#854D0E', '#FDE047')}>
-                  Pseudónimo: {participante.pseudonimo}
-                </span>
-              )}
-
-              <span style={S.chip('#F1F5F9', '#334155', '#CBD5E1')}>
-                Anexo {rubrica?.id || anexoActivo}
-              </span>
-            </div>
-
-            {/* Nombre de la Institución Educativa en grande */}
-            <div style={{ fontSize: 20, fontWeight: 900, color: '#0F172A', lineHeight: 1.3 }}>
-              {participante.institucion?.nombre || participante.institucionNombre || 'I. E. no registrada'}
-            </div>
-
-            {/* Título del proyecto */}
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#334155', marginTop: 4, lineHeight: 1.4 }}>
-              Proyecto: <span style={{ color: '#0F172A' }}>"{participante.tituloProyecto || 'Sin título registrado'}"</span>
-            </div>
-
-            {linea && (
-              <div style={{ fontSize: 13, color: '#0284C7', fontWeight: 600, marginTop: 4 }}>
-                Línea de indagación: {linea.nombre}
-              </div>
-            )}
-          </div>
-
-          {/* Navegación secuencial de proyectos */}
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            {onAnterior && (
-              <button
-                type="button"
-                onClick={onAnterior}
-                style={btn('secundario', { minHeight: 38, padding: '7px 14px', fontSize: 12.5 })}
-                title="Ir al proyecto anterior"
-              >
-                <Icon name="arrowLeft" size={14} /> Anterior
-              </button>
-            )}
-            {onSiguiente && (
-              <button
-                type="button"
-                onClick={onSiguiente}
-                style={btn('secundario', { minHeight: 38, padding: '7px 14px', fontSize: 12.5 })}
-                title="Ir al proyecto siguiente"
-              >
-                Siguiente <Icon name="arrowRight" size={14} />
-              </button>
-            )}
-          </div>
+      {/* ── Proyecto evaluado ── */}
+      <div style={{ ...S.tarjeta, padding: '16px 18px', borderLeft: `5px solid ${C.navy3}` }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+          <span style={{ ...S.chip(C.navy3, C.white), fontFamily: FUENTES.mono }}>N.° {participante.ordenPresentacion || participante.numero || '—'}</span>
+          <span style={S.chip('#EFF6FF', '#1E40AF', '#BFDBFE')}>{cat?.nombre} · {participante.gradoSeccion || cat?.grados}</span>
+          <span style={S.chip(C.g100, C.g700, C.g300)}>{area?.nombre}</span>
+          {participante.pseudonimo && <span style={S.chip('#FEF9C3', '#854D0E', '#FDE047')}>Pseudónimo: {participante.pseudonimo}</span>}
+          {esStaff && participante.estadoAdmision === 'observado' && <span style={S.chip('#FFFBEB', C.amber, '#FDE68A')}>Observado</span>}
+          {noSePresento && <span style={S.chip('#FEF2F2', C.red, '#FECACA')}>No se presentó</span>}
         </div>
-
-        {/* ── BOTÓN DESTACADO PARA ABRIR GOOGLE DRIVE ── */}
-        <div style={{
-          marginTop: 16,
-          paddingTop: 16,
-          borderTop: '1px solid #E2E8F0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 12
-        }}>
+        <div style={{ fontSize: 19, fontWeight: 900, color: C.g900, lineHeight: 1.3 }}>{participante.institucion?.nombre || participante.institucionNombre}</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.g700, marginTop: 4, lineHeight: 1.4 }}>
+          Proyecto: <span style={{ color: C.g900 }}>{participante.tituloProyecto || 'Sin título registrado'}</span>
+        </div>
+        <div style={{ fontSize: 12, color: C.g500, marginTop: 6, lineHeight: 1.55 }}>
+          {participante.docenteAsesor?.nombreCompleto && <div>Docente asesor: {participante.docenteAsesor.nombreCompleto}</div>}
+          <div>Estudiantes: {estudiantes || `${participante.numeroEstudiantes || '—'} inscrito(s) en SICE`}</div>
+        </div>
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.g200}`, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           {participante.urlTrabajo ? (
             <a
               href={participante.urlTrabajo}
               target="_blank"
               rel="noreferrer"
               style={{
-                background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
-                color: C.blanco,
-                padding: '10px 20px',
-                borderRadius: 8,
-                fontSize: 13.5,
-                fontWeight: 800,
-                textDecoration: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                boxShadow: '0 2px 8px rgba(2, 132, 199, 0.25)',
-                transition: 'all 0.15s ease'
+                background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)', color: C.white, padding: '11px 18px',
+                borderRadius: 8, fontSize: 13.5, fontWeight: 800, textDecoration: 'none',
+                display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: '0 2px 8px rgba(2,132,199,0.25)'
               }}
             >
-              <Icon name="folderOpen" size={17} color={C.blanco} />
-              <span>ABRIR INFORME Y EVIDENCIAS EN GOOGLE DRIVE</span>
-              <Icon name="externalLink" size={14} color={C.blanco} />
+              <Icon name="folderOpen" size={17} color={C.white} /> Abrir informe y evidencias
+              <Icon name="externalLink" size={14} color={C.white} />
             </a>
           ) : (
-            <div style={{ fontSize: 12.5, color: '#94A3B8', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Icon name="alert" size={15} color="#94A3B8" />
-              <span>Este proyecto no registró enlace web en el SICE (evaluación presencial física).</span>
-            </div>
+            <div style={{ fontSize: 12.5, color: C.amber, fontWeight: 700 }}>El proyecto no registró enlace web en SICE.</div>
           )}
-
           {participante.urlCuadernoCampo && (
-            <a
-              href={participante.urlCuadernoCampo}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                background: C.blanco,
-                color: C.navy2,
-                border: `1.5px solid ${C.gris300}`,
-                padding: '11px 18px',
-                borderRadius: 8,
-                fontSize: 13.5,
-                fontWeight: 700,
-                textDecoration: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8
-              }}
-            >
-              <Icon name="fileText" size={15} color={C.navy2} />
-              Cuaderno de campo ↗
+            <a href={participante.urlCuadernoCampo} target="_blank" rel="noreferrer" style={{ ...btn('secundario', { padding: '10px 16px', fontSize: 13 }), textDecoration: 'none' }}>
+              <Icon name="fileText" size={14} /> Cuaderno de campo
             </a>
           )}
-
-          {participante.noSePresento && (
-            <span style={{
-              background: '#FEF2F2',
-              color: C.error,
-              border: '1px solid #FECACA',
-              padding: '8px 14px',
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 800
-            }}>
-              NO SE PRESENTÓ (Puntaje en 0)
-            </span>
-          )}
         </div>
       </div>
 
-      {/* ── ALERTA DE INCOMPARECENCIA (NSP) ── */}
-      {(participante.noSePresento || evaluacionInicial?.incomparecencia || evaluacionInicial?.noSePresento) && (
-        <div style={{
-          background: '#FEF2F2',
-          border: '1.5px solid #F87171',
-          borderLeft: '6px solid #DC2626',
-          borderRadius: 8,
-          padding: '16px 20px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 14,
-          boxShadow: '0 2px 8px rgba(220,38,38,0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Icon name="alert" size={24} color="#DC2626" />
-            <div>
-              <div style={{ color: '#991B1B', fontSize: 14.5, fontWeight: 800 }}>
-                PARTICIPANTE REGISTRADO CON INCOMPARECENCIA (NO SE PRESENTÓ)
-              </div>
-              <div style={{ fontSize: 12.5, color: '#B91C1C', marginTop: 2 }}>
-                La calificación se encuentra fijada en 0 puntos según las bases oficiales. Si el estudiante se presentó a la exposición, puede revertir la incomparecencia para habilitar la rúbrica.
-              </div>
-            </div>
+      {/* ── Formulario que se aplica (anexo del proyecto) ── */}
+      <EKAnexoAplicable
+        participante={participante}
+        evaluacionesProyecto={evaluacionesProyecto}
+        usuario={usuario}
+        puedeCambiar={!soloLectura}
+        esStaff={esStaff}
+        onToast={onToast}
+      />
+
+      {/* ── Estado de la ficha ── */}
+      {soloLectura && motivoBloqueo && <div style={aviso('alerta')}>{motivoBloqueo}</div>}
+
+      {noSePresento && (
+        <div style={{ ...aviso('error'), display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '14px 18px' }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: '#991B1B' }}>Incomparecencia: el equipo no se presentó</div>
+            <div style={{ fontSize: 12, color: '#7F1D1D', marginTop: 3 }}>La ficha queda con 0 puntos y fuera del orden de mérito.</div>
           </div>
           {!soloLectura && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={handleRevertirNSP}
-                disabled={guardando}
-                style={{
-                  background: '#15803D',
-                  color: '#FFFFFF',
-                  border: 'none',
-                  padding: '9px 16px',
-                  borderRadius: 6,
-                  fontSize: 12.5,
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  boxShadow: '0 2px 6px rgba(21,128,61,0.25)'
-                }}
-              >
-                <Icon name="refresh" size={13} color="#FFFFFF" /> Revertir NSP (Habilitar Evaluación)
-              </button>
-              <button
-                type="button"
-                onClick={handleLimpiarFicha}
-                disabled={guardando}
-                style={{
-                  background: '#FFFFFF',
-                  color: '#DC2626',
-                  border: '1px solid #FCA5A5',
-                  padding: '9px 16px',
-                  borderRadius: 6,
-                  fontSize: 12.5,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6
-                }}
-              >
-                <Icon name="trash" size={13} color="#DC2626" /> Limpiar Ficha
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" onClick={revertirNSP} disabled={guardando} style={btn('secundario', { color: C.red, borderColor: '#FCA5A5' })}>
+                <Icon name="refresh" size={13} color={C.red} /> Revertir incomparecencia
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* ── 2.1 FORMULARIO OFICIAL DE EVALUACIÓN SEGÚN BASES MINEDU ── */}
-      {rubrica && (
-        <div style={{
-          background: C.blanco,
-          border: `2px solid ${CE.verdeEureka}`,
-          borderLeft: `8px solid ${CE.verdeEureka}`,
-          borderRadius: 8,
-          padding: '18px 22px',
-          marginBottom: 18,
-          boxShadow: '0 2px 10px rgba(0,0,0,0.04)'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 14 }}>
-            <div style={{ flex: 1, minWidth: 280 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: CE.verdeOscuro, textTransform: 'uppercase', letterSpacing: 1 }}>
-                ANEXO {rubrica.id} · FORMULARIO OFICIAL DE EVALUACIÓN (BASES MINEDU)
-              </div>
-              <h2 style={{ margin: '6px 0 8px', fontSize: 18, fontWeight: 900, color: C.navy2, lineHeight: 1.35 }}>
-                {rubrica.titulo}
-              </h2>
-              {rubrica.competencia && (
-                <div style={{ fontSize: 13.5, color: C.gris800, marginTop: 4 }}>
-                  <strong style={{ color: C.navy2 }}>Competencia MINEDU:</strong> {rubrica.competencia}
-                </div>
-              )}
-              {rubrica.notaMetodologica && (
-                <div style={{ fontSize: 12.5, color: C.gris600, marginTop: 4, fontStyle: 'italic' }}>
-                  Orientación: {rubrica.notaMetodologica}
-                </div>
-              )}
-            </div>
-
-            {/* Selector interactivo de formulario para Primaria (E11 vs E12 / E13 vs E14) */}
-            {['A', 'B', 'C'].includes(categoria || participante.categoria) && (
-              <div style={{ background: CE.verdeFondo, padding: '12px 16px', borderRadius: 8, border: `1.5px solid ${CE.verdeBorde}` }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: CE.verdeOscuro, marginBottom: 8, textTransform: 'uppercase' }}>
-                  Formulario a aplicar:
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {(areaId || participante.areaId) === 'ind_ciencia_tecnologia' ? (
-                    <>
-                      <button
-                        type="button"
-                        disabled={soloLectura}
-                        onClick={() => setAnexoActivo('E11')}
-                        style={{
-                          padding: '8px 14px', fontSize: 13, fontWeight: 800,
-                          borderRadius: 6, cursor: soloLectura ? 'default' : 'pointer', fontFamily: 'inherit',
-                          border: `2px solid ${anexoActivo === 'E11' ? CE.verdeEureka : C.gris300}`,
-                          background: anexoActivo === 'E11' ? CE.verdeEureka : C.blanco,
-                          color: anexoActivo === 'E11' ? C.blanco : C.gris700,
-                          boxShadow: anexoActivo === 'E11' ? '0 2px 8px rgba(16,122,68,0.25)' : 'none'
-                        }}
-                      >
-                        Anexo E11 (Indagación Científica)
-                      </button>
-                      <button
-                        type="button"
-                        disabled={soloLectura}
-                        onClick={() => setAnexoActivo('E12')}
-                        style={{
-                          padding: '8px 14px', fontSize: 13, fontWeight: 800,
-                          borderRadius: 6, cursor: soloLectura ? 'default' : 'pointer', fontFamily: 'inherit',
-                          border: `2px solid ${anexoActivo === 'E12' ? CE.verdeEureka : C.gris300}`,
-                          background: anexoActivo === 'E12' ? CE.verdeEureka : C.blanco,
-                          color: anexoActivo === 'E12' ? C.blanco : C.gris700,
-                          boxShadow: anexoActivo === 'E12' ? '0 2px 8px rgba(16,122,68,0.25)' : 'none'
-                        }}
-                      >
-                        Anexo E12 (Solución Tecnológica)
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        disabled={soloLectura}
-                        onClick={() => setAnexoActivo('E13')}
-                        style={{
-                          padding: '8px 14px', fontSize: 13, fontWeight: 800,
-                          borderRadius: 6, cursor: soloLectura ? 'default' : 'pointer', fontFamily: 'inherit',
-                          border: `2px solid ${anexoActivo === 'E13' ? CE.verdeEureka : C.gris300}`,
-                          background: anexoActivo === 'E13' ? CE.verdeEureka : C.blanco,
-                          color: anexoActivo === 'E13' ? C.blanco : C.gris700,
-                          boxShadow: anexoActivo === 'E13' ? '0 2px 8px rgba(16,122,68,0.25)' : 'none'
-                        }}
-                      >
-                        Anexo E13 (Historia)
-                      </button>
-                      <button
-                        type="button"
-                        disabled={soloLectura}
-                        onClick={() => setAnexoActivo('E14')}
-                        style={{
-                          padding: '8px 14px', fontSize: 13, fontWeight: 800,
-                          borderRadius: 6, cursor: soloLectura ? 'default' : 'pointer', fontFamily: 'inherit',
-                          border: `2px solid ${anexoActivo === 'E14' ? CE.verdeEureka : C.gris300}`,
-                          background: anexoActivo === 'E14' ? CE.verdeEureka : C.blanco,
-                          color: anexoActivo === 'E14' ? C.blanco : C.gris700,
-                          boxShadow: anexoActivo === 'E14' ? '0 2px 8px rgba(16,122,68,0.25)' : 'none'
-                        }}
-                      >
-                        Anexo E14 (Ambiental/Territorial)
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+      {desalineada && (
+        <div style={{ ...aviso('alerta'), display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span>
+            Esta ficha se calificó con el <strong>Anexo {evaluacionInicial.anexoEvaluacion}</strong>, pero el anexo vigente del proyecto es el
+            <strong> {anexo}</strong>. Esa captura no cuenta en el consolidado.
+          </span>
+          {!soloLectura && (
+            <button type="button" onClick={descartarCapturaDesalineada} disabled={guardando} style={btn('primario')}>
+              <Icon name="refresh" size={13} color={C.white} /> Descartar y calificar con {anexo}
+            </button>
+          )}
         </div>
       )}
 
-      {soloLectura && motivoBloqueo && (
-        <div style={{ ...aviso('alerta'), fontSize: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <Icon name="lock" size={18} color={C.alerta} />
-            <span>{motivoBloqueo}</span>
-          </div>
+      {registrada && !noSePresento && !desalineada && (
+        <div style={{ ...aviso('exito'), display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span>
+            Calificación registrada{evaluacionInicial?.registradaEn ? ` el ${new Date(evaluacionInicial.registradaEn).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}.
+          </span>
+          {!soloLectura && (
+            <button type="button" onClick={corregir} style={btn('contorno', { background: 'transparent' })}>
+              <Icon name="refresh" size={13} /> Corregir calificación
+            </button>
+          )}
         </div>
       )}
 
-      {/* ── 3. GATE DE PLANIFICACIÓN CURRICULAR (PRIMARIA) ── */}
-      {rubrica?.gate?.requerido && (
-        <div style={{
-          ...S.seccion,
-          border: `2px solid ${gateNegativo ? C.error : CE.verdeEureka}`,
-          background: gateNegativo ? '#FEF2F2' : '#F9FDF5'
-        }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: CE.verdeOscuro, textTransform: 'uppercase', marginBottom: 6 }}>
-            1.- PREGUNTA DE HABILITACIÓN NORMATIVA (MINEDU)
+      {/* ── Pregunta 1 del anexo y, debajo, el cronómetro ── */}
+      {rubrica?.gate?.requerido && !noSePresento && (
+        <div id="pregunta-habilitacion" style={{ ...S.seccion, borderLeft: `5px solid ${gateNegativo ? C.red : (planificacion === true ? C.green : C.navy3)}` }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: C.gold, letterSpacing: 0.6 }}>PREGUNTA PREVIA DEL ANEXO {rubrica.id}</div>
+          <div style={{ fontSize: 15.5, fontWeight: 800, color: C.navy2, marginTop: 4, lineHeight: 1.45 }}>
+            1.- {rubrica.gate.pregunta}
           </div>
-          <div style={{ fontSize: 14.5, color: C.gris900, lineHeight: 1.6, marginBottom: 16 }}>
-            <strong>{rubrica.gate.pregunta}</strong>
+          <div style={{ fontSize: 12.5, color: C.g500, marginTop: 4 }}>
+            Si la respuesta es «SÍ», prosigue con la evaluación. Si es «NO», concluye su participación.
           </div>
-
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              disabled={soloLectura}
-              onClick={() => setPlanificacion(true)}
-              style={{
-                minHeight: 48,
-                padding: '10px 24px',
-                borderRadius: 8,
-                fontSize: 14.5,
-                fontWeight: 800,
-                cursor: soloLectura ? 'default' : 'pointer',
-                fontFamily: 'inherit',
-                background: planificacion === true ? CE.verdeEureka : C.blanco,
-                color: planificacion === true ? C.blanco : C.gris900,
-                border: `2px solid ${planificacion === true ? CE.verdeOscuro : C.gris300}`,
-                boxShadow: planificacion === true ? '0 4px 10px rgba(110,158,35,0.3)' : 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8
-              }}
-            >
-              <Icon name="check" size={18} color={planificacion === true ? C.blanco : C.exito} />
-              SÍ — Presenta evidencia ({rubrica.gate.textoPositivo})
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 10, marginTop: 14 }}>
+            <button type="button" onClick={() => responderGate(true)} disabled={edicionBloqueada} style={estiloGate(planificacion === true, C.green)}>
+              <Icon name="check" size={18} color={planificacion === true ? C.white : C.green} /> Sí, presenta la evidencia
             </button>
-
-            <button
-              type="button"
-              disabled={soloLectura}
-              onClick={() => setPlanificacion(false)}
-              style={{
-                minHeight: 48,
-                padding: '10px 24px',
-                borderRadius: 8,
-                fontSize: 14.5,
-                fontWeight: 800,
-                cursor: soloLectura ? 'default' : 'pointer',
-                fontFamily: 'inherit',
-                background: planificacion === false ? C.error : C.blanco,
-                color: planificacion === false ? C.blanco : C.error,
-                border: `2px solid ${planificacion === false ? C.error : C.gris300}`,
-                boxShadow: planificacion === false ? '0 4px 10px rgba(185,28,28,0.3)' : 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8
-              }}
-            >
-              <Icon name="x" size={18} color={planificacion === false ? C.blanco : C.error} />
-              NO — No presenta ({rubrica.gate.textoNegativo})
+            <button type="button" onClick={() => responderGate(false)} disabled={edicionBloqueada} style={estiloGate(planificacion === false, C.red)}>
+              <Icon name="x" size={18} color={planificacion === false ? C.white : C.red} /> No la presenta
             </button>
           </div>
-
           {gateNegativo && (
-            <div style={{ ...aviso('error'), marginTop: 14, fontSize: 13.5 }}>
-              Conforme a las bases MINEDU, el participante concluye su participación sin calificar el formulario (puntaje en 0).
+            <div style={{ ...aviso('error'), marginTop: 12, fontSize: 13 }}>
+              El proyecto concluye su participación: la ficha se registra con 0 puntos y no se califica la rúbrica.
             </div>
           )}
         </div>
       )}
 
-      {/* ── 4. FORMULARIO OFICIAL DE EVALUACIÓN (BASES MINEDU) ── */}
-      {!gateNegativo && !participante.noSePresento && (
-        <EKRubricaMatriz
-          rubrica={rubrica}
-          puntajes={puntajes}
-          onChange={setPuntajes}
-          variante={variante}
-          onCambiarVariante={setVariante}
-          soloLectura={soloLectura}
-        />
+      {!noSePresento && cronometro}
+
+      {/* ── Rúbrica oficial ── */}
+      {!noSePresento && !gateNegativo && rubrica && (
+        <div style={desalineada ? { opacity: 0.55, pointerEvents: 'none' } : undefined}>
+          <EKRubricaMatriz
+            rubrica={rubrica}
+            puntajes={puntajes}
+            onChange={cambiarPuntajes}
+            variante={variante}
+            onCambiarVariante={rubrica.tieneVariantes && !soloLectura ? (v => { if (v && v !== variante) setVarianteSolicitada(v); }) : undefined}
+            soloLectura={edicionBloqueada}
+          />
+        </div>
       )}
 
-      {/* ── 5. CRONÓMETRO DE EXPOSICIÓN (MÁXIMO 8 MINUTOS) ── */}
-      <div style={{
-        ...S.seccion,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 16,
-        flexWrap: 'wrap',
-        background: '#FAFBFD'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{
-            background: C.blanco,
-            border: `2px solid ${excedioTiempo ? C.error : CE.verdeEureka}`,
-            borderRadius: 8,
-            padding: '10px 18px',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: 11, color: C.gris500, textTransform: 'uppercase', fontWeight: 800 }}>
-              TIEMPO DE EXPOSICIÓN
-            </div>
-            <div style={{
-              fontSize: 30,
-              fontWeight: 900,
-              color: excedioTiempo ? C.error : C.navy2,
-              fontVariantNumeric: 'tabular-nums'
-            }}>
-              {duracionTexto}
-            </div>
-          </div>
-
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.navy2 }}>
-              Control de tiempo de exposición
-            </div>
-            <div style={{ fontSize: 12, color: C.gris700, marginTop: 2 }}>
-              Tiempo máximo normativo: {EUREKA_CONFIG.tiempoExposicionMin} minutos.
-            </div>
-          </div>
+      {!noSePresento && (
+        <div style={S.seccion}>
+          <label style={S.etiqueta}>Observaciones del jurado (opcional)</label>
+          <textarea
+            value={observaciones}
+            readOnly={edicionBloqueada}
+            maxLength={900}
+            onChange={e => { sucioRef.current = true; setObservaciones(e.target.value); }}
+            style={{ ...S.textarea, background: edicionBloqueada ? C.g50 : C.white }}
+            placeholder="Precisiones técnicas o recomendaciones sobre la sustentación del proyecto."
+          />
         </div>
+      )}
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <button
-            type="button"
-            disabled={soloLectura}
-            onClick={() => setCronometroActivo(a => !a)}
-            style={btn(cronometroActivo ? 'peligro' : 'primario', { minHeight: 44, padding: '10px 20px' })}
-          >
-            <Icon name={cronometroActivo ? 'pause' : 'play'} size={15} />
-            {cronometroActivo ? 'Pausar cronómetro' : 'Iniciar cronómetro'}
-          </button>
-          <button
-            type="button"
-            disabled={soloLectura}
-            onClick={() => { setCronometroActivo(false); setSegundos(0); }}
-            style={btn('secundario', { minHeight: 44, padding: '10px 16px' })}
-          >
-            <Icon name="refresh" size={14} /> Reiniciar
-          </button>
-        </div>
-      </div>
-
-      {/* ── 6. OBSERVACIONES DEL JURADO ── */}
-      <div style={{ ...S.seccion }}>
-        <label style={{ ...S.etiqueta, fontSize: 14 }}>Observaciones del jurado</label>
-        <textarea
-          value={observaciones}
-          readOnly={soloLectura}
-          onChange={e => setObservaciones(e.target.value)}
-          style={{ ...S.textarea, fontSize: 14, minHeight: 90 }}
-          placeholder="Escriba aquí cualquier observación técnica, recomendación o precisión sobre la sustentación del proyecto..."
-        />
-      </div>
-
-      {/* ── 7. BLOQUE INFORMATIVO DE FIRMA ── */}
-      <div style={{
-        ...S.seccion,
-        borderLeft: `5px solid ${firmante ? CE.verdeEureka : C.alerta}`,
-        background: firmante ? '#F0FDF4' : '#FFFBEB'
-      }}>
-        <div style={S.tituloSeccion}>Suscripción oficial de la ficha</div>
-        {firmante ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-            <div style={{
-              border: `1.5px solid ${C.gris300}`,
-              borderRadius: 6,
-              padding: 6,
-              background: C.blanco,
-              width: 150,
-              height: 64,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              {firmante.firmaDataUrl ? (
-                <img
-                  src={firmante.firmaDataUrl}
-                  alt="Firma oficial"
-                  style={{ maxHeight: 52, maxWidth: '100%', objectFit: 'contain' }}
-                />
-              ) : (
-                <span style={{ fontSize: 11, color: C.gris500 }}>Sin trazo</span>
+      {/* ── Suscripción ── */}
+      {(firmante || esStaff) && (
+        <div style={{ ...S.seccion, borderLeft: `5px solid ${firmante ? C.green : C.gold}` }}>
+          {firmante ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+              <div style={{ width: 140, height: 56, border: `1px solid ${C.g300}`, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.white }}>
+                {firmante.firmaDataUrl
+                  ? <img src={firmante.firmaDataUrl} alt="Firma del jurado" style={{ maxHeight: 46, maxWidth: '100%', objectFit: 'contain' }} />
+                  : <span style={{ fontSize: 11, color: C.g500 }}>Sin trazo</span>}
+              </div>
+              <div style={{ fontSize: 13, color: C.g800, lineHeight: 1.5 }}>
+                Ficha suscrita por <strong style={{ color: C.navy2 }}>{firmante.nombreCompleto}</strong>, DNI {firmante.dni} — Jurado N.° {numeroJurado}
+                {firmante.presidente ? ' (preside el jurado)' : ''}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 13, color: C.g700 }}>
+                La firma del Jurado N.° {numeroJurado} se incorpora desde el Panel de Firmas Oficial cuando se sella.
+              </div>
+              {onIrAlPanel && (
+                <button type="button" onClick={onIrAlPanel} style={btn('primario')}>
+                  <Icon name="shield" size={13} color={C.white} /> Panel de Firmas
+                </button>
               )}
             </div>
-            <div style={{ fontSize: 13.5, color: C.gris900, lineHeight: 1.6 }}>
-              Ficha suscrita por:{' '}
-              <strong style={{ color: C.navy2 }}>{firmante.nombreCompleto}</strong>, DNI {firmante.dni}
-              {' '}— Jurado N.° {firmante.numeroJurado}
-              {firmante.presidente ? ' (Presidente del Jurado)' : ''}
-              {firmante.institucion && (
-                <div style={{ fontSize: 12, color: C.gris700 }}>{firmante.institucion}</div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
-            <div style={{ fontSize: 13.5, color: C.gris900, lineHeight: 1.6, maxWidth: 640 }}>
-              Pendiente de suscripción centralizada. Los 3 jurados oficiales firman en el Panel de Firmas Oficial
-              (en la pestaña Consolidado E19), y la firma se propaga automáticamente a todas las fichas.
-            </div>
-            {onIrAlPanel && (
-              <button type="button" onClick={onIrAlPanel} style={btn('primario', { minHeight: 44 })}>
-                <Icon name="shield" size={15} /> Ir al Panel de Firmas
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
-      {/* ── ALERTA SI FALTAN CRITERIOS (CON SCROLL AUTOMÁTICO) ── */}
-      {!calculo.completa && !gateNegativo && !participante.noSePresento && itemsPendientes.length > 0 && (
-        <div style={{
-          background: '#FFFBEB',
-          border: '1.5px solid #FCD34D',
-          borderRadius: 8,
-          padding: '14px 18px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 12
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Icon name="alert" size={20} color="#92400E" />
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: '#92400E' }}>
-              Atención: Faltan calificar {itemsPendientes.length} criterio(s) en esta ficha.
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => hacerScrollACriterio(itemsPendientes[0]?.id)}
-            style={{
-              background: '#92400E',
-              color: C.blanco,
-              border: 'none',
-              padding: '8px 16px',
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 800,
-              cursor: 'pointer',
-              fontFamily: 'inherit'
-            }}
-          >
-            Ir al primer criterio pendiente ↓
+      {!calculo.completa && !gateNegativo && !noSePresento && !desalineada && pendientes.length > 0 && (
+        <div style={{ ...aviso('alerta'), display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 700 }}>Faltan calificar {pendientes.length} criterio(s) en esta ficha.</span>
+          <button type="button" onClick={() => irACriterio(pendientes[0].id)} style={btn('contorno', { background: 'transparent' })}>
+            Ir al primer criterio pendiente
           </button>
         </div>
       )}
 
-      {/* ── 8. BARRA STICKY INFERIOR DE ACCIONES (ESTILO JUEGOS FLORALES - IMAGEN 2) ── */}
+      {/* ── Barra fija inferior ── */}
       <div style={{
-        position: 'sticky',
-        bottom: 0,
-        background: '#FFFFFF',
-        borderTop: '2px solid #D6DCE8',
-        padding: '12px 20px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-        zIndex: 40,
-        boxShadow: '0 -4px 20px rgba(15,23,42,0.12)'
+        position: 'sticky', bottom: 0, background: C.white, borderTop: `2px solid ${C.border}`,
+        padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8, zIndex: 30,
+        boxShadow: '0 -4px 16px rgba(15,23,42,0.10)', borderRadius: '8px 8px 0 0'
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11.5, color: '#64748B' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: ultimoGuardado ? '#16A34A' : '#EAB308',
-              display: 'inline-block'
-            }} />
-            <span>{ultimoGuardado ? `Guardado a las ${ultimoGuardado.toLocaleTimeString('es-PE')}` : 'Cambios sin guardar'}</span>
-          </div>
-          <div style={{ fontWeight: 800, color: '#1B3A5C', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>Anexo {rubrica?.id || anexoActivo}</span>
-            <span>·</span>
-            <span>Jurado N.° {numeroJurado}</span>
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: C.g500, gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: ultimoGuardado || registrada ? C.green : '#EAB308', display: 'inline-block' }} />
+            {registrada ? 'Registrada' : (ultimoGuardado ? `Guardado a las ${ultimoGuardado.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}` : 'Se guarda automáticamente')}
+          </span>
+          <span style={{ fontWeight: 800, color: C.navy3 }}>{claveOpcion(anexo, variante)} — Jurado N.° {numeroJurado}</span>
         </div>
 
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 12
-        }}>
-          {/* Métricas de puntaje */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-            {onVolver && (
-              <button
-                type="button"
-                onClick={onVolver}
-                style={{
-                  padding: '9px 16px',
-                  borderRadius: 6,
-                  border: '1px solid #D6DCE8',
-                  background: '#FFFFFF',
-                  color: '#1E293B',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6
-                }}
-              >
-                <Icon name="arrowLeft" size={14} /> Volver
-              </button>
-            )}
-
-            <div style={{ borderLeft: onVolver ? '1px solid #D6DCE8' : 'none', paddingLeft: onVolver ? 14 : 0 }}>
-              <span style={{ fontSize: 11, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', display: 'block' }}>Puntaje Total</span>
-              <span style={{ fontSize: 20, fontWeight: 900, color: '#0F172A', fontFamily: "'JetBrains Mono', monospace" }}>
-                {calculo.puntajeTotal}{' '}
-                <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600 }}>/ {calculo.puntajeMaximo} pts</span>
-              </span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.g500 }}>PUNTAJE TOTAL</div>
+              <div style={{ fontFamily: FUENTES.mono, fontSize: 20, fontWeight: 800, color: C.g900 }}>
+                {calculo.puntajeTotal}<span style={{ fontSize: 12, color: C.g500 }}> / {calculo.puntajeMaximo}</span>
+              </div>
             </div>
-
-            <div style={{ borderLeft: '1px solid #D6DCE8', paddingLeft: 14 }}>
-              <span style={{ fontSize: 11, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', display: 'block' }}>Completitud</span>
-              <span style={{ fontSize: 13, fontWeight: 800, color: calculo.completa ? '#16A34A' : '#D97706', display: 'flex', alignItems: 'center', gap: 4 }}>
-                {calculo.completa && <Icon name="check" size={13} color="#16A34A" />}
-                {calculo.completa ? '100% Calificada' : `${calculo.itemsCalificados} de ${calculo.itemsTotales}`}
-              </span>
+            <div style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: 14 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.g500 }}>CRITERIOS</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: calculo.completa || gateNegativo ? C.green : C.amber }}>
+                {gateNegativo ? 'No prosigue' : `${calculo.itemsCalificados} de ${calculo.itemsTotales}`}
+              </div>
             </div>
           </div>
 
-          {/* Botones de acción */}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {!soloLectura && (
-              <button
-                type="button"
-                onClick={handleLimpiarFicha}
-                disabled={guardando}
-                style={{
-                  padding: '9px 14px',
-                  borderRadius: 6,
-                  border: '1px solid #FECDD3',
-                  background: '#FFF1F2',
-                  color: '#B91C1C',
-                  fontSize: 12.5,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6
-                }}
-                title="Eliminar la evaluación registrada y dejar la ficha en blanco"
-              >
-                <Icon name="trash" size={13} color="#B91C1C" /> Limpiar Ficha
+              <button type="button" onClick={limpiarFicha} disabled={guardando} style={btn('peligroSuave')} title="Eliminar la captura de este casillero y dejar la ficha en blanco">
+                <Icon name="trash" size={13} color={C.red} /> Limpiar ficha
               </button>
             )}
-
-            {!soloLectura && !participante.noSePresento && !calculo.incomparecencia && (
-              <button
-                type="button"
-                onClick={handleMarcarNSPInterno}
-                disabled={guardando}
-                style={{
-                  padding: '9px 14px',
-                  borderRadius: 6,
-                  border: '1px solid #FCA5A5',
-                  background: '#FEF2F2',
-                  color: '#DC2626',
-                  fontSize: 12.5,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6
-                }}
-                title="Marcar que el participante no se presentó a la evaluación (NSP)"
-              >
-                <Icon name="x" size={13} color="#DC2626" /> Incomparecencia (NSP)
+            {!soloLectura && !noSePresento && !registrada && (
+              <button type="button" onClick={() => setModalNSP(true)} disabled={guardando} style={btn('contorno', { color: '#DC2626', borderColor: '#FCA5A5', background: '#FEF2F2' })}>
+                <Icon name="x" size={13} color="#DC2626" /> Incomparecencia
               </button>
             )}
-
-            {!soloLectura && (
-              <button
-                type="button"
-                onClick={() => guardar('borrador', false)}
-                disabled={guardando}
-                style={{
-                  padding: '9px 16px',
-                  borderRadius: 6,
-                  border: '1.5px solid #1B3A5C',
-                  background: '#FFFFFF',
-                  color: '#1B3A5C',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6
-                }}
-              >
-                <Icon name="save" size={14} color="#1B3A5C" /> Guardar Borrador
+            {!edicionBloqueada && (
+              <button type="button" onClick={() => guardar('borrador', false)} disabled={guardando} style={btn('contorno')}>
+                <Icon name="save" size={13} /> Guardar borrador
               </button>
             )}
-
-            {!soloLectura && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!gateNegativo && !participante.noSePresento && !calculo.completa) {
-                    if (!window.confirm('Aún faltan criterios por calificar en esta ficha. ¿Desea registrar la calificación de todos modos?')) return;
-                  }
-                  guardar('registrada', false);
-                }}
-                disabled={guardando}
-                style={{
-                  padding: '9px 20px',
-                  borderRadius: 6,
-                  border: 'none',
-                  background: '#15803D',
-                  color: '#FFFFFF',
-                  fontSize: 13.5,
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  boxShadow: '0 2px 6px rgba(21,128,61,0.25)'
-                }}
-              >
-                <Icon name="check" size={15} color="#FFFFFF" />
-                REGISTRAR CALIFICACIÓN OFICIAL
+            {!edicionBloqueada && (
+              <button type="button" onClick={registrar} disabled={guardando} style={btn('exito', { padding: '9px 16px', fontSize: 13 })}>
+                <Icon name="check" size={14} color={C.white} /> Registrar calificación
               </button>
             )}
-
-            <button
-              type="button"
-              onClick={descargarPDF}
-              style={{
-                padding: '9px 16px',
-                borderRadius: 6,
-                border: 'none',
-                background: 'linear-gradient(135deg, #CA8A04 0%, #A16207 100%)',
-                color: '#FFFFFF',
-                fontSize: 13,
-                fontWeight: 800,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                boxShadow: '0 2px 6px rgba(202,138,4,0.25)'
-              }}
-            >
-              <Icon name="download" size={14} color="#FFFFFF" /> Descargar PDF
+            <button type="button" onClick={descargarPDF} style={btn('dorado')}>
+              <Icon name="download" size={13} /> PDF
             </button>
           </div>
         </div>
       </div>
+
+      {varianteSolicitada && (
+        <ModalCambioAnexo
+          participante={participante}
+          evaluacionesProyecto={evaluacionesProyecto}
+          usuario={usuario}
+          onToast={onToast}
+          claveInicial={claveOpcion('E15', varianteSolicitada)}
+          onCerrar={() => setVarianteSolicitada(null)}
+        />
+      )}
+
+      {modalNSP && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16 }}>
+          <div role="dialog" aria-modal="true" style={{ background: C.white, borderRadius: 12, padding: 24, maxWidth: 440, width: '100%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)', border: '1px solid #FECDD3' }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#991B1B', marginBottom: 10 }}>¿Registrar incomparecencia?</div>
+            <p style={{ fontSize: 13, color: C.g700, lineHeight: 1.5, margin: '0 0 18px' }}>
+              Se registrará que el equipo de <strong>{participante.institucion?.nombre}</strong> no se presentó a la evaluación.
+              La ficha queda con 0 puntos y el proyecto sale del orden de mérito.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button type="button" onClick={() => setModalNSP(false)} disabled={guardando} style={btn('contorno')}>Cancelar</button>
+              <button type="button" onClick={marcarNSP} disabled={guardando} style={btn('critico')}>
+                {guardando ? 'Guardando...' : 'Registrar incomparecencia'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

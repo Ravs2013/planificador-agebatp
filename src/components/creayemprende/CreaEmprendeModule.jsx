@@ -12,7 +12,7 @@ import { descomponerCredencialCYE, getJuradoCYEPorCorreo } from '../../data/crea
 import {
   construirParticipantesCYE, esEvaluable, filtrarEvaluacionesValidasCYE, construirD13, construirD14,
   construirResultadosD15, casilleroPlanificado, descansaEnRotacion, acuerdosParaCategoria,
-  ordenarEvaluacionesParaCompilacion
+  ordenarEvaluacionesParaCompilacion, resumenGradoSeccion
 } from '../../utils/creaEmprendeHelpers';
 import { resolverPanelFirmasCYE, esPreliminarCYE } from '../../utils/creaEmprendeFirmas';
 import {
@@ -36,7 +36,7 @@ import CYEPanelFirmasOficial from './CYEPanelFirmasOficial';
 
 const SUB_PESTANAS = [
   { id: 'fichas', label: 'Fichas de evaluación', icon: 'clipboard' },
-  { id: 'calibracion', label: 'Calibración', icon: 'users' },
+  { id: 'calibracion', label: 'Calibración', icon: 'users', soloComision: true },
   { id: 'd13', label: 'Anexo D13 — Por jurado', icon: 'list', soloComision: true },
   { id: 'd14', label: 'Anexo D14 — Consolidado', icon: 'fileText', soloComision: true },
   { id: 'd15', label: 'Anexo D15 — Acta', icon: 'check', soloComision: true },
@@ -500,7 +500,7 @@ export default function CreaEmprendeModule() {
         )}
 
         {/* ───── CALIBRACIÓN ───── */}
-        {subTab === 'calibracion' && (
+        {subTab === 'calibracion' && esStaff && (
           <CYECalibracion
             participantes={participantes}
             fichas={calFichas}
