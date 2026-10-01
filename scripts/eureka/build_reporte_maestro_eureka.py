@@ -41,7 +41,7 @@ ANIO = 2026
 ETAPA = "UGEL"
 DRE = "DRE LIMA METROPOLITANA"
 UGEL = "UGEL 03"
-NUM_JURADOS = 3
+NUM_JURADOS = 4
 CRITERIO_ORDEN = "promedio"   # 'promedio' | 'suma'
 
 CATEGORIAS = {
@@ -317,7 +317,7 @@ def construir_libro(filas, evaluaciones, participantes, paneles, salida):
 
     # ── Hoja 3: Escrutinio Total ──
     encabezados3 = [
-        "Puesto", "Promedio", "Suma", "Jurado 1", "Jurado 2", "Jurado 3",
+        "Puesto", "Promedio", "Suma", "Jurado 1", "Jurado 2", "Jurado 3", "Jurado 4",
         "I. E.", "Codigo Modular", "Codigo SICE", "Proyecto", "Categoria",
         "Area de participacion", "Linea", "Anexo", "Estudiantes",
         "Docente asesor", "DNI docente", "Especialidad", "Telefono", "Correo",
@@ -335,7 +335,7 @@ def construir_libro(filas, evaluaciones, participantes, paneles, salida):
         valores = [
             ("%d." % f["puesto"]) if f["puesto"] else "-",
             f["promedio"], f["suma"],
-            f["notas"][0], f["notas"][1], f["notas"][2],
+            f["notas"][0], f["notas"][1], f["notas"][2], f["notas"][3],
             f["institucion"], f["codigo_modular"], f["codigo"], f["proyecto"],
             CATEGORIAS.get(f["categoria"], {}).get("nombre", f["categoria"]),
             nombre_area(f["area_id"]), f["linea_id"], f["anexo"], f["estudiantes"],
@@ -383,7 +383,7 @@ def construir_libro(filas, evaluaciones, participantes, paneles, salida):
         "Casillero de jurado", "Estado", "Puntaje total",
         "Evaluador operativo", "Correo del evaluador", "Registrada el",
         "Ediciones posteriores", "Ultima edicion",
-        "Panel que gobierna", "Estado del panel", "Firmante 1", "Firmante 2", "Firmante 3"
+        "Panel que gobierna", "Estado del panel", "Firmante 1", "Firmante 2", "Firmante 3", "Firmante 4"
     ])
 
     por_id = {p.get("id"): p for p in participantes}
@@ -420,6 +420,7 @@ def construir_libro(filas, evaluaciones, participantes, paneles, salida):
             texto((firmantes[0] or {}).get("nombreCompleto")),
             texto((firmantes[1] or {}).get("nombreCompleto")),
             texto((firmantes[2] or {}).get("nombreCompleto")),
+            texto((firmantes[3] or {}).get("nombreCompleto")),
         ]
         for col, v in enumerate(valores, start=1):
             c = ws5.cell(row=fila, column=col, value=v)

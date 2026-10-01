@@ -25,7 +25,7 @@ export function ChipsAnexo({ participante, conConfianza = true }) {
   );
 }
 
-/** Ventana para cambiar el anexo del proyecto. El cambio rige para los tres casilleros de jurado. */
+/** Ventana para cambiar el anexo del proyecto. El cambio rige para los cuatro casilleros de jurado. */
 export function ModalCambioAnexo({ participante, evaluacionesProyecto = [], usuario, onCerrar, onToast, claveInicial = null }) {
   const opciones = useMemo(() => opcionesAnexo(participante), [participante]);
   const recomendada = claveRecomendada(participante);
@@ -49,7 +49,7 @@ export function ModalCambioAnexo({ participante, evaluacionesProyecto = [], usua
       await aplicarAnexoProyectoEK(participante, {
         anexo: elegida.anexo, variante: elegida.variante, motivo, restablecer: elegida.clave === recomendada
       }, usuario);
-      if (onToast) onToast(`El proyecto se calificará con ${elegida.etiqueta}. El cambio rige para los tres jurados.`, 'success');
+      if (onToast) onToast(`El proyecto se calificará con ${elegida.etiqueta}. El cambio rige para los cuatro jurados.`, 'success');
       onCerrar();
     } catch (err) {
       if (onToast) onToast(`No se pudo cambiar el anexo: ${err.message}`, 'error');
@@ -128,13 +128,13 @@ export function ModalCambioAnexo({ participante, evaluacionesProyecto = [], usua
           placeholder="Ejemplo: el informe plantea una pregunta investigable e hipótesis y no construye un producto."
         />
         <div style={{ fontSize: 11.5, color: C.g500, marginTop: 6 }}>
-          Se registra su usuario, la fecha y la hora. El anexo elegido rige para los tres casilleros de jurado.
+          Se registra su usuario, la fecha y la hora. El anexo elegido rige para los cuatro casilleros de jurado.
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
           <button type="button" onClick={onCerrar} style={btn('secundario')}>Cancelar</button>
           <button type="button" onClick={aplicar} disabled={!valido || guardando} style={valido && !guardando ? btn('primario') : btnDeshabilitado(btn('primario'))}>
-            <Icon name="check" size={13} color={C.white} /> {guardando ? 'Guardando...' : 'Aplicar a los tres jurados'}
+            <Icon name="check" size={13} color={C.white} /> {guardando ? 'Guardando...' : 'Aplicar a los cuatro jurados'}
           </button>
         </div>
       </div>

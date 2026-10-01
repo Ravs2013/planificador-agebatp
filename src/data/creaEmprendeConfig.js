@@ -31,7 +31,7 @@ export const CYE_CONFIG = {
   // Cada jurado ve por defecto los proyectos de su grupo.
   filtrarProyectosPorGrupo: true,
 
-  alcanceFirmaPorDefecto: 'GLOBAL',
+  alcanceFirmaPorDefecto: 'CATEGORIA',
   dominioCredenciales: '@ugel03.gob.pe',
 
   // Aprobado por la comisión: el equipo que no se presenta a la Expoferia queda fuera del orden de mérito.
@@ -85,10 +85,11 @@ export const CATEGORIAS_CYE = [
  * categoría B, el Grupo 3 tiene cuatro integrantes y rota para que cada uno califique 16 o 17.
  */
 export const GRUPOS_BASE_CYE = [
-  { grupo: 1, categorias: ['A', 'C'], miembros: 3, cuota: { A: 13, C: 2 } },
-  { grupo: 2, categorias: ['A'], miembros: 3, cuota: { A: 15 } },
-  { grupo: 3, categorias: ['B'], miembros: 4, cuota: { B: 22 } },
-  { grupo: 4, categorias: ['B'], miembros: 3, cuota: { B: 21 } }
+  { id: 'A-1', grupo: 1, categoria: 'A', categorias: ['A'], miembros: 3, cuota: { A: 16 } },
+  { id: 'A-2', grupo: 2, categoria: 'A', categorias: ['A'], miembros: 3, cuota: { A: 16 } },
+  { id: 'B-1', grupo: 1, categoria: 'B', categorias: ['B'], miembros: 3, cuota: { B: 23 } },
+  { id: 'B-2', grupo: 2, categoria: 'B', categorias: ['B'], miembros: 3, cuota: { B: 23 } },
+  { id: 'C-1', grupo: 1, categoria: 'C', categorias: ['C'], miembros: 3, cuota: { C: 3 } }
 ];
 
 export const ESTADOS_ADMISION = {
@@ -152,11 +153,15 @@ export function consolidadoIdCYE(categoria) {
   return `${CYE_CONFIG.eventoId}__${CYE_CONFIG.etapa}__${categoria}`;
 }
 
-export function categoriasDeGrupo(grupo) {
+export function categoriasDeGrupo(grupo, cat = null) {
+  if (cat) return [cat];
   const g = GRUPOS_BASE_CYE.find(x => Number(x.grupo) === Number(grupo));
-  return g ? g.categorias : [];
+  return g ? g.categorias : ['A'];
 }
 
 export function gruposDeCategoria(categoria) {
-  return GRUPOS_BASE_CYE.filter(g => g.categorias.includes(categoria)).map(g => g.grupo);
+  if (categoria === 'A') return [1, 2];
+  if (categoria === 'B') return [1, 2];
+  if (categoria === 'C') return [1];
+  return [1, 2];
 }

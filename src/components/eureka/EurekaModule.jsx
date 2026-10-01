@@ -48,7 +48,7 @@ const DISPOSICIONES_BASES_EK = [
   'Exposición presencial de hasta 8 minutos, a cargo de los estudiantes inscritos (máximo dos), sin participación del docente asesor (numeral 10.1).',
   'En A, B y C la etapa UGEL es la última y se reconoce a los tres primeros puestos; en D y E el informe con mayor puntaje de cada área es seleccionado como ganador (numeral 4).',
   'No se consideran empates entre los tres primeros lugares: el jurado calificador los resuelve y su fallo es inapelable (numeral 11).',
-  'El jurado de la etapa UGEL lo integran cuatro miembros (numerales 6 y 11); los formatos E19 y E20 traen tres casilleros de firma y el sistema sigue los formatos.',
+  'El jurado de la etapa UGEL lo integran cuatro miembros (numerales 6 y 11); conforme a la decisión del comité organizador y la especialista asignada, se habilitan 4 casilleros de evaluación y 4 firmas oficiales para los anexos, consolidados y actas.',
   'Prohibiciones (numeral 8): experimentos con animales fuera de la Ley N.° 30407, microorganismos potencialmente peligrosos fuera de una institución regulada, sustancias peligrosas o inflamables, y administrar o aplicar sustancias o alimentos en seres humanos.',
   'Inscripción en SICE para la etapa UGEL: del 24 de agosto al 4 de setiembre, hasta las 11:59 p. m. (numeral 16). Reclamos con el Anexo E21 hasta 24 horas después de publicados los resultados.'
 ];
@@ -71,13 +71,13 @@ export default function EurekaModule() {
   const esStaff = esAdministrador || isRole('jefatura') || isRole('personal');
   const esJuradoEureka = !esStaff && Boolean(user?.modulo === 'eureka' || isRole('jurado'));
   const categoriaSesion = esJuradoEureka ? (user?.categoria || null) : null;
-  const casilleroSesion = esJuradoEureka && Number(user?.numeroJurado) >= 1 && Number(user?.numeroJurado) <= 3
+  const casilleroSesion = esJuradoEureka && Number(user?.numeroJurado) >= 1 && Number(user?.numeroJurado) <= EUREKA_CONFIG.numeroJuradosPorFicha
     ? Number(user.numeroJurado) : null;
 
   const [subTab, setSubTab] = useState('fichas');
   const [mostrarBases, setMostrarBases] = useState(false);
-  const [categoria, setCategoria] = useState(categoriaSesion || 'A');
-  const [areaId, setAreaId] = useState(() => getAreasDeCategoria(categoriaSesion || 'A')[0]?.id || '');
+  const [categoria, setCategoria] = useState(categoriaSesion || 'D');
+  const [areaId, setAreaId] = useState(() => getAreasDeCategoria(categoriaSesion || 'D')[0]?.id || 'indagacion_cientifica');
   const [numeroJurado, setNumeroJurado] = useState(casilleroSesion || 1);
   const [seleccionadoId, setSeleccionadoId] = useState(null);
 

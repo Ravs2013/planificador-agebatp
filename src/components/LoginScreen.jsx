@@ -106,7 +106,7 @@ export default function LoginScreen() {
                                 <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>
                                     <Icon name="mail" size={18} color={C.g400} />
                                 </div>
-                                <input type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && submitLogin()} placeholder="correo@ugel03.gob.pe" style={inp()} onFocus={e => e.target.style.borderColor = C.navy4} onBlur={e => e.target.style.borderColor = C.g300} />
+                                <input type="text" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && submitLogin()} placeholder="correo@ugel03.gob.pe o usuario" style={inp()} onFocus={e => e.target.style.borderColor = C.navy4} onBlur={e => e.target.style.borderColor = C.g300} />
                             </div>
                         </div>
                         <div style={{ marginBottom: 22 }}>

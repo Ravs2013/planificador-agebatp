@@ -217,7 +217,7 @@ export function asegurarEspacio(doc, { y, alto, orientacion = 'portrait', encabe
 
 const ALTO_FILA_FIRMA = 26;
 
-export function alturaFirmasJurado(cantidad = 3, { conInstitucion = false } = {}) {
+export function alturaFirmasJurado(cantidad = 4, { conInstitucion = false } = {}) {
   const fila = ALTO_FILA_FIRMA + (conInstitucion ? 3.4 : 0);
   return 7 + (cantidad > 2 ? fila * 2 + 5 : fila);
 }
@@ -270,7 +270,12 @@ function bloqueJurado(doc, { cx, y, ancho, bloque = {}, conInstitucion }) {
   }
 }
 
-/** «Firmas del jurado calificador»: dos arriba y la tercera centrada, como en los Anexos A10 y A11. */
+/** «Firmas del jurado calificador»:
+ * - 1 jurado: centrado.
+ * - 2 jurados: dos en una sola fila (izq y der).
+ * - 3 jurados: dos arriba y el tercero centrado abajo.
+ * - 4 jurados: dos arriba (J1, J2) y dos abajo (J3, J4) alineados simétricamente.
+ */
 export function dibujarFirmasJurado(doc, { y, bloques = [], orientacion = 'portrait', conInstitucion = false, titulo = 'FIRMAS DEL JURADO CALIFICADOR' }) {
   const d = dims(orientacion);
   const W = anchoUtil(orientacion);
@@ -287,9 +292,13 @@ export function dibujarFirmasJurado(doc, { y, bloques = [], orientacion = 'portr
     return cursor + fila;
   }
   bloques.slice(0, 2).forEach((b, i) => bloqueJurado(doc, { cx: centros[i], y: cursor, ancho, bloque: b, conInstitucion }));
-  if (bloques.length > 2) {
+  if (bloques.length === 3) {
     cursor += fila + 5;
     bloqueJurado(doc, { cx: d.ancho / 2, y: cursor, ancho, bloque: bloques[2], conInstitucion });
+  } else if (bloques.length >= 4) {
+    cursor += fila + 5;
+    bloqueJurado(doc, { cx: centros[0], y: cursor, ancho, bloque: bloques[2], conInstitucion });
+    bloqueJurado(doc, { cx: centros[1], y: cursor, ancho, bloque: bloques[3], conInstitucion });
   }
   return cursor + fila;
 }

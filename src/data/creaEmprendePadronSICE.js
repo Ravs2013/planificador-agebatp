@@ -1,134 +1,22 @@
 /* ═══════════════════════════════════════════════════════════════
-   CONCURSO NACIONAL CREA Y EMPRENDE 2026 — ETAPA UGEL 03
-   Padrón mínimo de proyectos inscritos (respaldo precargado)
-
-   Fuente: reportes SICE completos de ganadores de la etapa I. E.
-     - ReporteGanadoresCYE_CAT_A_descarga.xlsx  (183 estudiantes, 42 proyectos)
-     - ReporteGanadoresCYE_cat_b_descarga.xlsx  (270 estudiantes, 62 proyectos)
-     - ReporteGanadoresCYE_CAT_C.xlsx           (11 estudiantes, 5 proyectos)
-
-   PROTECCIÓN DE DATOS (Ley N.° 29733)
-   Este archivo viaja dentro del bundle público de la aplicación. Por eso NO contiene
-   DNI, códigos de estudiante, fechas de nacimiento, teléfonos, correos, direcciones ni
-   nombres de estudiantes o apoderados. Solo guarda lo que la evaluación necesita.
-   Los nombres de los integrantes se incorporan importando el reporte SICE desde la
-   pestaña "Padrón y admisión"; se guardan en Firestore, protegidos por reglas.
-
-   La aptitud NO se guarda aquí: la calcula evaluarAdmision() en tiempo real contra las
-   bases, para que la especialista y el módulo usen exactamente la misma regla.
+   CONCURSO NACIONAL CREA Y EMPRENDE 2026 — PADRÓN OFICIAL DE PROYECTOS APTOS
+   Fuente canónica definitiva aprobada por la Comisión Organizadora (UGEL 03):
+     - ReporteGanadoresCYE CAT A.xlsx (32 proyectos aptos)
+     - ReporteGanadoresCYE CAT B.xlsx (46 proyectos aptos, incluye I.E. Hipólito Unanue e I.E. Argentina)
+     - ReporteGanadoresCYE CAT C (2).xlsx (3 proyectos aptos)
+   Total: 81 proyectos aptos.
    ═══════════════════════════════════════════════════════════════ */
 
 export const ORIGEN_PADRON_CYE = {
-  "fuente": "SICE — Reporte de ganadores de la etapa I. E.",
-  "exportadoEl": "2026-09-10",
-  "totalProyectos": 109,
-  "totalEstudiantes": 464,
-  "proyectosPorCategoria": {
-    "A": 42,
-    "B": 62,
-    "C": 5
-  }
+  archivo: 'CUMPLE A , B, C (Reportes Oficiales Definitivos)',
+  fechaCarga: '2026-09-16T05:00:00.000Z',
+  totalA: 32,
+  totalB: 46,
+  totalC: 3,
+  total: 81
 };
 
 export const PROYECTOS_SICE_CYE = [
-  {
-    "id": "CYE26-A-0466383-P1",
-    "categoria": "A",
-    "institucion": {
-      "nombre": "0035 NUESTRA SEÑORA DE LA VISITACION",
-      "codigoModular": "0466383",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Lima",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
-    },
-    "puestoIE": 1,
-    "tituloProyecto": "AVECHIA",
-    "tematica": "INDUSTRIA ALIMENTARIA",
-    "enlaceWeb": "https://docs.google.com/document/d/1QKktn3HABdQkL7A-7CnSGhf24jQeeDiF/edit?usp=drive_link&ouid=108641854485076015813&rtpof=true&sd=true",
-    "fechaRegistro": "2026-09-09T11:35:15",
-    "integrantes": [
-      {
-        "grado": "SEGUNDO",
-        "seccion": "SEGUNDO B TT"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "LEON ., ALICIA",
-      "especialidad": "INDUSTRIA ALIMENTARIA"
-    }
-  },
-  {
-    "id": "CYE26-A-0466383-P2",
-    "categoria": "A",
-    "institucion": {
-      "nombre": "0035 NUESTRA SEÑORA DE LA VISITACION",
-      "codigoModular": "0466383",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Lima",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
-    },
-    "puestoIE": 2,
-    "tituloProyecto": "SEMAFORO FINANCIERO",
-    "tematica": "CONTABILIDAD",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1qmxU7EZRuRS16krnkIengpiw1W36Rpx8?usp=drive_link",
-    "fechaRegistro": "2026-09-09T13:40:41",
-    "integrantes": [
-      {
-        "grado": "PRIMERO",
-        "seccion": "PRIMERO A TM"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "DIAZ LOPEZ, YENIFFER KATTELIN",
-      "especialidad": "CONTABILIDAD"
-    }
-  },
-  {
-    "id": "CYE26-A-0334656-P1",
-    "categoria": "A",
-    "institucion": {
-      "nombre": "0040 HIPOLITO UNANUE",
-      "codigoModular": "0334656",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Lima",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
-    },
-    "puestoIE": 1,
-    "tituloProyecto": "Nuggets de Quinua",
-    "tematica": "Alimentación nutritiva y rica",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1zr6OEaGKKI39uLpqzWxjNfQWYveSPkxN?usp=sharing",
-    "fechaRegistro": "2026-09-08T13:48:49",
-    "integrantes": [
-      {
-        "grado": "PRIMERO",
-        "seccion": "B"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "B"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "B"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "MORALES AMAYA, ERICA AMALIA",
-      "especialidad": "Cocina y Repostería"
-    }
-  },
   {
     "id": "CYE26-A-0334656-P2",
     "categoria": "A",
@@ -173,7 +61,49 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "GELDRES VERA, BERTHA MILAGROS",
       "especialidad": "Estética personal"
-    }
+    },
+    "numero": 1,
+    "grupo": 1
+  },
+  {
+    "id": "CYE26-A-0334656-P1",
+    "categoria": "A",
+    "institucion": {
+      "nombre": "0040 HIPOLITO UNANUE",
+      "codigoModular": "0334656",
+      "tipoGestion": "Pública de gestión directa",
+      "distrito": "Lima",
+      "modalidad": "Educación Básica Regular",
+      "nivel": "Secundaria",
+      "ugel": "UGEL 03",
+      "dre": "DRE LIMA METROPOLITANA"
+    },
+    "puestoIE": 1,
+    "tituloProyecto": "Nuggets de Quinua",
+    "tematica": "Alimentación nutritiva y rica",
+    "enlaceWeb": "https://drive.google.com/drive/folders/1zr6OEaGKKI39uLpqzWxjNfQWYveSPkxN?usp=sharing",
+    "fechaRegistro": "2026-09-08T13:48:49",
+    "integrantes": [
+      {
+        "grado": "PRIMERO",
+        "seccion": "B"
+      },
+      {
+        "grado": "PRIMERO",
+        "seccion": "B"
+      },
+      {
+        "grado": "PRIMERO",
+        "seccion": "B"
+      }
+    ],
+    "estudiantesEnOtrosEquipos": 0,
+    "docenteAsesor": {
+      "nombreCompleto": "MORALES AMAYA, ERICA AMALIA",
+      "especialidad": "Cocina y Repostería"
+    },
+    "numero": 2,
+    "grupo": 1
   },
   {
     "id": "CYE26-A-0337741-P1",
@@ -219,53 +149,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "TAQUIRE ROSALES, MARIA ALEJANDRA",
       "especialidad": "Industrias alimentarias"
-    }
-  },
-  {
-    "id": "CYE26-A-0449827-P1",
-    "categoria": "A",
-    "institucion": {
-      "nombre": "093 MANUELA FELICIA GOMEZ",
-      "codigoModular": "0449827",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "La Victoria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "Trufas contra la anemia",
-    "tematica": "Alimentación",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1AcC_bVC6CybtGQMRQIJ9xDnX0SHdQ7Pc",
-    "fechaRegistro": "2026-09-03T20:24:54",
-    "integrantes": [
-      {
-        "grado": "PRIMERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "A"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "MALPARTIDA VEGA, ENRIQUE",
-      "especialidad": "Industria Alimentaria y Nutrición"
-    }
+    "numero": 3,
+    "grupo": 1
   },
   {
     "id": "CYE26-A-0449827-P2",
@@ -311,7 +197,57 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "ZEGARRA POLANCO, ROLANDO SIXTO",
       "especialidad": "EDUCACION PARA EL TRABAJO"
-    }
+    },
+    "numero": 4,
+    "grupo": 1
+  },
+  {
+    "id": "CYE26-A-0449827-P1",
+    "categoria": "A",
+    "institucion": {
+      "nombre": "093 MANUELA FELICIA GOMEZ",
+      "codigoModular": "0449827",
+      "tipoGestion": "Pública de gestión directa",
+      "distrito": "La Victoria",
+      "modalidad": "Educación Básica Regular",
+      "nivel": "Secundaria",
+      "ugel": "UGEL 03",
+      "dre": "DRE LIMA METROPOLITANA"
+    },
+    "puestoIE": 1,
+    "tituloProyecto": "Trufas contra la anemia",
+    "tematica": "Alimentación",
+    "enlaceWeb": "https://drive.google.com/drive/folders/1AcC_bVC6CybtGQMRQIJ9xDnX0SHdQ7Pc",
+    "fechaRegistro": "2026-09-03T20:24:54",
+    "integrantes": [
+      {
+        "grado": "PRIMERO",
+        "seccion": "A"
+      },
+      {
+        "grado": "PRIMERO",
+        "seccion": "A"
+      },
+      {
+        "grado": "PRIMERO",
+        "seccion": "A"
+      },
+      {
+        "grado": "PRIMERO",
+        "seccion": "A"
+      },
+      {
+        "grado": "PRIMERO",
+        "seccion": "A"
+      }
+    ],
+    "estudiantesEnOtrosEquipos": 0,
+    "docenteAsesor": {
+      "nombreCompleto": "MALPARTIDA VEGA, ENRIQUE",
+      "especialidad": "Industria Alimentaria y Nutrición"
+    },
+    "numero": 5,
+    "grupo": 1
   },
   {
     "id": "CYE26-A-0578393-P1",
@@ -357,7 +293,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "VENERO LOZANO, LEYLA MARTHA",
       "especialidad": "CYT"
-    }
+    },
+    "numero": 6,
+    "grupo": 1
   },
   {
     "id": "CYE26-A-0556332-P1",
@@ -403,7 +341,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "CALIXTRO SALINAS, DOLORES ROCIO",
       "especialidad": "COMPUTACIÓN E INFORMÁTICA"
-    }
+    },
+    "numero": 7,
+    "grupo": 1
   },
   {
     "id": "CYE26-A-0336511-P1",
@@ -445,7 +385,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "OSCCO QUIROZ, ROBERTO",
       "especialidad": "Electricidad"
-    }
+    },
+    "numero": 8,
+    "grupo": 1
   },
   {
     "id": "CYE26-A-0340281-P1",
@@ -491,7 +433,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "SILVA VALLE, NARDITA YNES",
       "especialidad": "COMPUTACION E INFORMATICA"
-    }
+    },
+    "numero": 9,
+    "grupo": 1
   },
   {
     "id": "CYE26-A-0340281-P2",
@@ -537,53 +481,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "ZAMORA DIAZ, KELY",
       "especialidad": "COMPUTACION E INFORMATICA"
-    }
-  },
-  {
-    "id": "CYE26-A-0245647-P1",
-    "categoria": "A",
-    "institucion": {
-      "nombre": "1070 MELITON CARVAJAL",
-      "codigoModular": "0245647",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Lince",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "Ecodesk 360 Raíces",
-    "tematica": "ESPACIO MULTIFUNCIONAL PARA EL APRENDIZAJE Y LA CONCIENCIA AMBIENTAL",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1hcuVkzp1BedQ83yEXImVmTLRBB6soYjr",
-    "fechaRegistro": "2026-09-09T13:48:36",
-    "integrantes": [
-      {
-        "grado": "SEGUNDO",
-        "seccion": "2 C"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "2 C"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "2 C"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "2 C"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "2 C"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "JIMENEZ HUANCCO, HUGO HERBERT",
-      "especialidad": "Ebanisteria"
-    }
+    "numero": 10,
+    "grupo": 1
   },
   {
     "id": "CYE26-A-0245647-P2",
@@ -629,7 +529,57 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "LLALLICO HUANCAYA, LIZ MIRIAM",
       "especialidad": "INDUSTRIA ALIMENTARIA"
-    }
+    },
+    "numero": 11,
+    "grupo": 1
+  },
+  {
+    "id": "CYE26-A-0245647-P1",
+    "categoria": "A",
+    "institucion": {
+      "nombre": "1070 MELITON CARVAJAL",
+      "codigoModular": "0245647",
+      "tipoGestion": "Pública de gestión directa",
+      "distrito": "Lince",
+      "modalidad": "Educación Básica Regular",
+      "nivel": "Secundaria",
+      "ugel": "UGEL 03",
+      "dre": "DRE LIMA METROPOLITANA"
+    },
+    "puestoIE": 1,
+    "tituloProyecto": "Ecodesk 360 Raíces",
+    "tematica": "ESPACIO MULTIFUNCIONAL PARA EL APRENDIZAJE Y LA CONCIENCIA AMBIENTAL",
+    "enlaceWeb": "https://drive.google.com/drive/folders/1hcuVkzp1BedQ83yEXImVmTLRBB6soYjr",
+    "fechaRegistro": "2026-09-09T13:48:36",
+    "integrantes": [
+      {
+        "grado": "SEGUNDO",
+        "seccion": "2 C"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "2 C"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "2 C"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "2 C"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "2 C"
+      }
+    ],
+    "estudiantesEnOtrosEquipos": 0,
+    "docenteAsesor": {
+      "nombreCompleto": "JIMENEZ HUANCCO, HUGO HERBERT",
+      "especialidad": "Ebanisteria"
+    },
+    "numero": 12,
+    "grupo": 1
   },
   {
     "id": "CYE26-A-0340224-P1",
@@ -675,7 +625,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "FRANCISCO PAREDES, MIRIAN PILAR",
       "especialidad": "Computación"
-    }
+    },
+    "numero": 13,
+    "grupo": 1
   },
   {
     "id": "CYE26-A-0340224-P2",
@@ -721,7 +673,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "GOMEZ RONDON, VERONICA LILIANA",
       "especialidad": "Computación"
-    }
+    },
+    "numero": 14,
+    "grupo": 1
   },
   {
     "id": "CYE26-A-0774455-P1",
@@ -767,133 +721,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "GUILLEN RIVERA, MARIA LOURDES",
       "especialidad": "COMPUTACION E INFORMATICA"
-    }
-  },
-  {
-    "id": "CYE26-A-0336636-P1",
-    "categoria": "A",
-    "institucion": {
-      "nombre": "1087 GRAL ROQUE SAENZ PEÑA",
-      "codigoModular": "0336636",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "San Miguel",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "TRUFITAS DE BETERRAGA",
-    "tematica": "EMPRENDIMIENTO",
-    "enlaceWeb": "https://drive.google.com/drive/folders/18omS1D4ZZZE82dN3mLSdKOOLarlwL0kY?usp=sharing",
-    "fechaRegistro": "2026-09-07T10:24:53",
-    "integrantes": [
-      {
-        "grado": "PRIMERO",
-        "seccion": "1 B"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "1 B"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "1 B"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "CAJUSOL FARROÑAN, FERNANDO MANUEL",
-      "especialidad": ""
-    }
-  },
-  {
-    "id": "CYE26-A-1007491-P1",
-    "categoria": "A",
-    "institucion": {
-      "nombre": "1110 REPUBLICA DE PANAMA",
-      "codigoModular": "1007491",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "La Victoria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
-    },
-    "puestoIE": 1,
-    "tituloProyecto": "ALFAJORES A BASE DE HARINA DE PLATANO",
-    "tematica": "ALFAJORES DE PLATANO",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1Sv6pdCPNW6PJIo_z_Bh5MZ2cs5QtbBa1?usp=sharing",
-    "fechaRegistro": "2026-09-09T15:32:25",
-    "integrantes": [
-      {
-        "grado": "SEGUNDO",
-        "seccion": "2B"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "2B"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "2B"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "2B"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "BABILONIA VARGAS, ROSA",
-      "especialidad": "EDUCACIÓN COMERCIAL"
-    }
-  },
-  {
-    "id": "CYE26-A-0245654-P1",
-    "categoria": "A",
-    "institucion": {
-      "nombre": "1120 PEDRO ADOLFO LABARTHE EFFIO",
-      "codigoModular": "0245654",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "La Victoria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
-    },
-    "puestoIE": 1,
-    "tituloProyecto": "SUMAQ HANPARA",
-    "tematica": "ECO SOSTENIBLE",
-    "enlaceWeb": "https://docs.google.com/document/d/1B4De7PQddSn0hoc-QIExirC-y8TehORi/edit?usp=sharing&ouid=113745120555432271916&rtpof=true&sd=true",
-    "fechaRegistro": "2026-09-08T20:21:40",
-    "integrantes": [
-      {
-        "grado": "SEGUNDO",
-        "seccion": "C"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "C"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "C"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "C"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "C"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "POMACARHUA MELO, FANY ZENAYDA",
-      "especialidad": "INDUSTRIA DEL VESTIDO"
-    }
+    "numero": 15,
+    "grupo": 1
   },
   {
     "id": "CYE26-A-0245654-P2",
@@ -939,7 +769,57 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "GONZALES CAVERO, LOURDES KARIN",
       "especialidad": "ESTÉTICA PERSONAL"
-    }
+    },
+    "numero": 16,
+    "grupo": 2
+  },
+  {
+    "id": "CYE26-A-0245654-P1",
+    "categoria": "A",
+    "institucion": {
+      "nombre": "1120 PEDRO ADOLFO LABARTHE EFFIO",
+      "codigoModular": "0245654",
+      "tipoGestion": "Pública de gestión directa",
+      "distrito": "La Victoria",
+      "modalidad": "Educación Básica Regular",
+      "nivel": "Secundaria",
+      "ugel": "UGEL 03",
+      "dre": "DRE LIMA METROPOLITANA"
+    },
+    "puestoIE": 1,
+    "tituloProyecto": "SUMAQ HANPARA",
+    "tematica": "ECO SOSTENIBLE",
+    "enlaceWeb": "https://docs.google.com/document/d/1B4De7PQddSn0hoc-QIExirC-y8TehORi/edit?usp=sharing&ouid=113745120555432271916&rtpof=true&sd=true",
+    "fechaRegistro": "2026-09-08T20:21:40",
+    "integrantes": [
+      {
+        "grado": "SEGUNDO",
+        "seccion": "C"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "C"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "C"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "C"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "C"
+      }
+    ],
+    "estudiantesEnOtrosEquipos": 0,
+    "docenteAsesor": {
+      "nombreCompleto": "POMACARHUA MELO, FANY ZENAYDA",
+      "especialidad": "INDUSTRIA DEL VESTIDO"
+    },
+    "numero": 17,
+    "grupo": 2
   },
   {
     "id": "CYE26-A-1008044-P1",
@@ -985,7 +865,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "GASPAR CHAVEZ, NANCY CLAUDIA",
       "especialidad": "EPT industria del vestido"
-    }
+    },
+    "numero": 18,
+    "grupo": 1
   },
   {
     "id": "CYE26-A-0336602-P1",
@@ -1031,53 +913,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "DE LA TORRE SOTO, ALDO MARTIN",
       "especialidad": "MATEMATICA E INFORMATICA"
-    }
-  },
-  {
-    "id": "CYE26-A-0337568-P1",
-    "categoria": "A",
-    "institucion": {
-      "nombre": "ARGENTINA",
-      "codigoModular": "0337568",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Lima",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "SERVICIO DE ELABORACIÓN DE ENCUESTAS DE SATISFACCIÓN",
-    "tematica": "Soluciones a problemas económicos o sociales del contexto de las personas de su barrio",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1g4HsZx2LuErE8Frs5TiHhtv_d1apZkoI?usp=sharing",
-    "fechaRegistro": "2026-09-03T20:37:39",
-    "integrantes": [
-      {
-        "grado": "PRIMERO",
-        "seccion": "F"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "F"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "F"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "F"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "F"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "LEON VERA, CESAR AUGUSTO",
-      "especialidad": "ADMINISTRACIÓN"
-    }
+    "numero": 19,
+    "grupo": 2
   },
   {
     "id": "CYE26-A-0337568-P2",
@@ -1123,125 +961,57 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "VARGAS CUBAS, FLOR DE MARIA",
       "especialidad": "CONTABILIDAD"
-    }
+    },
+    "numero": 20,
+    "grupo": 2
   },
   {
-    "id": "CYE26-A-0334649-P1",
+    "id": "CYE26-A-0337568-P1",
     "categoria": "A",
     "institucion": {
-      "nombre": "BARTOLOME HERRERA",
-      "codigoModular": "0334649",
+      "nombre": "ARGENTINA",
+      "codigoModular": "0337568",
       "tipoGestion": "Pública de gestión directa",
-      "distrito": "San Miguel",
+      "distrito": "Lima",
       "modalidad": "Educación Básica Regular",
       "nivel": "Secundaria",
       "ugel": "UGEL 03",
       "dre": "DRE LIMA METROPOLITANA"
     },
     "puestoIE": 1,
-    "tituloProyecto": "Nutri Kids Box",
-    "tematica": "Alimentación saludable",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1wN-7WVC-x-o-jAgM9uYs43cNcidAGah0?usp=sharing",
-    "fechaRegistro": "2026-09-09T20:06:28",
+    "tituloProyecto": "SERVICIO DE ELABORACIÓN DE ENCUESTAS DE SATISFACCIÓN",
+    "tematica": "Soluciones a problemas económicos o sociales del contexto de las personas de su barrio",
+    "enlaceWeb": "https://drive.google.com/drive/folders/1g4HsZx2LuErE8Frs5TiHhtv_d1apZkoI?usp=sharing",
+    "fechaRegistro": "2026-09-03T20:37:39",
     "integrantes": [
       {
-        "grado": "SEGUNDO",
-        "seccion": "E"
+        "grado": "PRIMERO",
+        "seccion": "F"
+      },
+      {
+        "grado": "PRIMERO",
+        "seccion": "F"
+      },
+      {
+        "grado": "PRIMERO",
+        "seccion": "F"
+      },
+      {
+        "grado": "PRIMERO",
+        "seccion": "F"
+      },
+      {
+        "grado": "PRIMERO",
+        "seccion": "F"
       }
     ],
     "estudiantesEnOtrosEquipos": 0,
     "docenteAsesor": {
-      "nombreCompleto": "TORIBIO CHOQUETICO, RENE WILLIAM",
-      "especialidad": "Informática y computación"
-    }
-  },
-  {
-    "id": "CYE26-A-0601492-P1",
-    "categoria": "A",
-    "institucion": {
-      "nombre": "DIEGO FERRE",
-      "codigoModular": "0601492",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Jesus Maria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
+      "nombreCompleto": "LEON VERA, CESAR AUGUSTO",
+      "especialidad": "ADMINISTRACIÓN"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "Jabones Grugly",
-    "tematica": "CUIDADO PERSONAL Y COSMÉTICA NATURAL",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1cu4RvRXws6_eTVgtatOpBwhnxnCK_eY8?usp=sharing",
-    "fechaRegistro": "2026-09-08T18:04:49",
-    "integrantes": [
-      {
-        "grado": "SEGUNDO",
-        "seccion": "A"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "A"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "A"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "A"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "A"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "MUÑOZ HUERTA, RUDY DAIVIS",
-      "especialidad": "Computación Informática"
-    }
-  },
-  {
-    "id": "CYE26-A-0601492-P2",
-    "categoria": "A",
-    "institucion": {
-      "nombre": "DIEGO FERRE",
-      "codigoModular": "0601492",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Jesus Maria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
-    },
-    "puestoIE": 2,
-    "tituloProyecto": "ECOVOCES",
-    "tematica": "FANZINES DIGITALES POR LA PAZ Y EL PLANETA",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1FA9beWdJYACo3-wBDbXy2qUjy_UgPHLb?usp=sharing",
-    "fechaRegistro": "2026-09-09T12:51:29",
-    "integrantes": [
-      {
-        "grado": "PRIMERO",
-        "seccion": "C"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "C"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "C"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "C"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "VILLAMARES AJALCRIÑA, RINA JULIA",
-      "especialidad": "Computacion e Informatica"
-    }
+    "numero": 21,
+    "grupo": 2
   },
   {
     "id": "CYE26-A-0340356-P1",
@@ -1283,7 +1053,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "PASCUAL BASURTO, ALEJANDRINA CLEMENCIA",
       "especialidad": "Tecnología del vestido"
-    }
+    },
+    "numero": 22,
+    "grupo": 2
   },
   {
     "id": "CYE26-A-0245662-P1",
@@ -1329,53 +1101,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "SANDOVAL PEÑA, ANA TERESA",
       "especialidad": "INDUSTRIA DEL VESTIDO"
-    }
-  },
-  {
-    "id": "CYE26-A-0334664-P1",
-    "categoria": "A",
-    "institucion": {
-      "nombre": "MARIANO MELGAR",
-      "codigoModular": "0334664",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Breña",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "ECO STUDY",
-    "tematica": "CUIDADO DEL PLANETA",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1jTSbuEPPmQs9z0Rgq4ciY7_OyUw9vwEd?usp=sharing",
-    "fechaRegistro": "2026-09-07T15:50:49",
-    "integrantes": [
-      {
-        "grado": "SEGUNDO",
-        "seccion": "H"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "H"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "H"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "H"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "H"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "YACHEZ GUZMAN, ELEANA AUREA",
-      "especialidad": "administración"
-    }
+    "numero": 23,
+    "grupo": 2
   },
   {
     "id": "CYE26-A-0334664-P2",
@@ -1421,37 +1149,57 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "QUISPE CAÑAPATAÑA DE RODRIGUEZ, NELLY YOLANDA",
       "especialidad": "INDUSTRIA DEL VESTIDO"
-    }
+    },
+    "numero": 24,
+    "grupo": 2
   },
   {
-    "id": "CYE26-A-0739367-P1",
+    "id": "CYE26-A-0334664-P1",
     "categoria": "A",
     "institucion": {
-      "nombre": "NUESTRA SEÑORA DE MONTSERRAT",
-      "codigoModular": "0739367",
-      "tipoGestion": "Privada",
-      "distrito": "Lima",
+      "nombre": "MARIANO MELGAR",
+      "codigoModular": "0334664",
+      "tipoGestion": "Pública de gestión directa",
+      "distrito": "Breña",
       "modalidad": "Educación Básica Regular",
       "nivel": "Secundaria",
       "ugel": "UGEL 03",
       "dre": "DRE LIMA METROPOLITANA"
     },
     "puestoIE": 1,
-    "tituloProyecto": "RESUENA",
-    "tematica": "Juego Interactivo",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1j0JfxojBAX9UOsioxYY1cna93a4N4r9Q?usp=sharing",
-    "fechaRegistro": "2026-09-09T11:30:11",
+    "tituloProyecto": "ECO STUDY",
+    "tematica": "CUIDADO DEL PLANETA",
+    "enlaceWeb": "https://drive.google.com/drive/folders/1jTSbuEPPmQs9z0Rgq4ciY7_OyUw9vwEd?usp=sharing",
+    "fechaRegistro": "2026-09-07T15:50:49",
     "integrantes": [
       {
         "grado": "SEGUNDO",
-        "seccion": "B"
+        "seccion": "H"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "H"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "H"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "H"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "H"
       }
     ],
     "estudiantesEnOtrosEquipos": 0,
     "docenteAsesor": {
-      "nombreCompleto": "HUAMAN VELIZ, JOSELINE MARILUZ",
-      "especialidad": "Telecomunicaciones e Informática"
-    }
+      "nombreCompleto": "YACHEZ GUZMAN, ELEANA AUREA",
+      "especialidad": "administración"
+    },
+    "numero": 25,
+    "grupo": 2
   },
   {
     "id": "CYE26-A-0334680-P1",
@@ -1497,7 +1245,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "JUNCHAYA ARONES, ROSA YSABEL",
       "especialidad": "COMPUTACIÓN E INFORMÁTICA"
-    }
+    },
+    "numero": 26,
+    "grupo": 2
   },
   {
     "id": "CYE26-A-0644690-P1",
@@ -1539,7 +1289,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "OCHOA VASQUEZ, ENMA CONSUELO",
       "especialidad": ""
-    }
+    },
+    "numero": 27,
+    "grupo": 2
   },
   {
     "id": "CYE26-A-0340398-P1",
@@ -1585,141 +1337,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "CELEDONIO MARADIEGUE, SIMON NICOLAS",
       "especialidad": "INDUSTRIA ALIMENTARIA"
-    }
-  },
-  {
-    "id": "CYE26-A-0690214-P1",
-    "categoria": "A",
-    "institucion": {
-      "nombre": "SEÑOR DE LUREN",
-      "codigoModular": "0690214",
-      "tipoGestion": "Privada",
-      "distrito": "La Victoria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "ECOCULTIVA",
-    "tematica": "Venta del kit básico que promueve el autocultivo y la alimentación saludable en espacios urbanos reducidos.",
-    "enlaceWeb": "https://canva.link/76rdbo4t3tcfiwv",
-    "fechaRegistro": "2026-09-09T23:56:12",
-    "integrantes": [
-      {
-        "grado": "PRIMERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "A"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "QUIÑONES ROJAS, ERIKA URSULA",
-      "especialidad": ""
-    }
-  },
-  {
-    "id": "CYE26-A-0690214-P2",
-    "categoria": "A",
-    "institucion": {
-      "nombre": "SEÑOR DE LUREN",
-      "codigoModular": "0690214",
-      "tipoGestion": "Privada",
-      "distrito": "La Victoria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
-    },
-    "puestoIE": 2,
-    "tituloProyecto": "LUZ DE AROMA",
-    "tematica": "Velas aromáticas terapéuticas",
-    "enlaceWeb": "https://canva.link/82bhq1rh5rhbllv",
-    "fechaRegistro": "2026-09-09T23:50:57",
-    "integrantes": [
-      {
-        "grado": "PRIMERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "PRIMERO",
-        "seccion": "A"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "QUIÑONES ROJAS, ERIKA URSULA",
-      "especialidad": ""
-    }
-  },
-  {
-    "id": "CYE26-A-0245688-P1",
-    "categoria": "A",
-    "institucion": {
-      "nombre": "TERESA GONZALES DE FANNING",
-      "codigoModular": "0245688",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Jesus Maria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
-    },
-    "puestoIE": 1,
-    "tituloProyecto": "MINI LUNCH",
-    "tematica": "ALIMENTACIÓN NUTRITIVA",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1p7eJ2oz4gbyGA8Ztwx61LQoY4cgAgsMb?usp=sharing",
-    "fechaRegistro": "2026-09-07T12:32:26",
-    "integrantes": [
-      {
-        "grado": "SEGUNDO",
-        "seccion": "8"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "8"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "8"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "8"
-      },
-      {
-        "grado": "SEGUNDO",
-        "seccion": "8"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "FLORES CRUZ, MAGALY ESTELA",
-      "especialidad": "Industria del Vestido"
-    }
+    "numero": 28,
+    "grupo": 2
   },
   {
     "id": "CYE26-A-0245688-P2",
@@ -1765,7 +1385,57 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "ALMENARA GALINDO, MARITZA ROSARIO",
       "especialidad": "CONTABILIDAD"
-    }
+    },
+    "numero": 29,
+    "grupo": 2
+  },
+  {
+    "id": "CYE26-A-0245688-P1",
+    "categoria": "A",
+    "institucion": {
+      "nombre": "TERESA GONZALES DE FANNING",
+      "codigoModular": "0245688",
+      "tipoGestion": "Pública de gestión directa",
+      "distrito": "Jesus Maria",
+      "modalidad": "Educación Básica Regular",
+      "nivel": "Secundaria",
+      "ugel": "UGEL 03",
+      "dre": "DRE LIMA METROPOLITANA"
+    },
+    "puestoIE": 1,
+    "tituloProyecto": "MINI LUNCH",
+    "tematica": "ALIMENTACIÓN NUTRITIVA",
+    "enlaceWeb": "https://drive.google.com/drive/folders/1p7eJ2oz4gbyGA8Ztwx61LQoY4cgAgsMb?usp=sharing",
+    "fechaRegistro": "2026-09-07T12:32:26",
+    "integrantes": [
+      {
+        "grado": "SEGUNDO",
+        "seccion": "8"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "8"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "8"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "8"
+      },
+      {
+        "grado": "SEGUNDO",
+        "seccion": "8"
+      }
+    ],
+    "estudiantesEnOtrosEquipos": 0,
+    "docenteAsesor": {
+      "nombreCompleto": "FLORES CRUZ, MAGALY ESTELA",
+      "especialidad": "Industria del Vestido"
+    },
+    "numero": 30,
+    "grupo": 2
   },
   {
     "id": "CYE26-A-0340364-P1",
@@ -1811,7 +1481,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "ITOKAZU PIZARRO, MARIA LUISA",
       "especialidad": "INDUSTRIA DEL VESTIDO"
-    }
+    },
+    "numero": 31,
+    "grupo": 2
   },
   {
     "id": "CYE26-A-0340364-P2",
@@ -1853,7 +1525,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "CASTILLO ANTON, ANGELA ANTUANET",
       "especialidad": "INFORMATICA COMPUTO"
-    }
+    },
+    "numero": 32,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0337717-P1",
@@ -1899,7 +1573,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "TERRY URBINA, VERONICA ROSARIO",
       "especialidad": "Computación e informática"
-    }
+    },
+    "numero": 1,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0337717-P2",
@@ -1945,7 +1621,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "TERRY URBINA, VERONICA ROSARIO",
       "especialidad": "Computación e informática"
-    }
+    },
+    "numero": 2,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0555862-P1",
@@ -1991,67 +1669,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "PAJUELO FALCON, ELISABET",
       "especialidad": "artesania y manualidades"
-    }
-  },
-  {
-    "id": "CYE26-B-0466383-P1",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "0035 NUESTRA SEÑORA DE LA VISITACION",
-      "codigoModular": "0466383",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Lima",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "ECOPRODUCTOS DE FRUTAS DESHIDRATADAS",
-    "tematica": "INDUSTRIA ALIMENTARIA",
-    "enlaceWeb": "https://drive.google.com/drive/folders/18fCxFX8OQHG-uB3gVOKZkBt0_vZiilEd?usp=sharing",
-    "fechaRegistro": "2026-09-09T12:57:04",
-    "integrantes": [
-      {
-        "grado": "QUINTO",
-        "seccion": "QUINTO B TM"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "ROJAS CALLA, LESLY JANIO",
-      "especialidad": "INDUSTRIA ALIMENTARIA"
-    }
-  },
-  {
-    "id": "CYE26-B-0466383-P2",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "0035 NUESTRA SEÑORA DE LA VISITACION",
-      "codigoModular": "0466383",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Lima",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
-    },
-    "puestoIE": 2,
-    "tituloProyecto": "NUTRIEMPANADAS",
-    "tematica": "INDUSTRIA ALIMENTARIA",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1xA_nJ2jOFD3KPkgs6pCjqgx-S0Z8lmwf?usp=sharing",
-    "fechaRegistro": "2026-09-09T12:05:11",
-    "integrantes": [
-      {
-        "grado": "TERCERO",
-        "seccion": "TERCERO B TT"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "CARPIO OBREGON, BRISA ALEXANDRA",
-      "especialidad": "INDUSTRIA ALIMENTARIA"
-    }
+    "numero": 3,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0334656-P1",
@@ -2089,49 +1709,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "GALDOS SANCHEZ, WILLIAM JAIME",
       "especialidad": "Computación e Informática"
-    }
-  },
-  {
-    "id": "CYE26-B-0334656-P2",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "0040 HIPOLITO UNANUE",
-      "codigoModular": "0334656",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Lima",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 2,
-    "tituloProyecto": "Transmisión segura",
-    "tematica": "Página web",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1of79hEZY7dQxJJvFAfMeY8F4LceFWtGZ?usp=drive_link",
-    "fechaRegistro": "2026-09-08T12:40:57",
-    "integrantes": [
-      {
-        "grado": "TERCERO",
-        "seccion": "C"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "C"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "C"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "C"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "BRAVO FERNANDEZ, JULIO CESAR",
-      "especialidad": "Mecanica"
-    }
+    "numero": 4,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0337741-P1",
@@ -2177,53 +1757,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "CAPCHA GAMARRA, DIANA DARIA",
       "especialidad": "Industria del vestido"
-    }
-  },
-  {
-    "id": "CYE26-B-0449827-P1",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "093 MANUELA FELICIA GOMEZ",
-      "codigoModular": "0449827",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "La Victoria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "Mind Nest",
-    "tematica": "Organizador de tareas diarias",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1TXi9uK85_KgYRKK8ViAQW4zteaZcsF2C?usp=drive_link",
-    "fechaRegistro": "2026-09-09T20:37:57",
-    "integrantes": [
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "NINAMANCCO CCATAMAYO, CRISOSTOMO",
-      "especialidad": "matemática e informática"
-    }
+    "numero": 5,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0449827-P2",
@@ -2269,7 +1805,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "ROMAN FELIX, LIDA SIMONA",
       "especialidad": "Industria del Vestido"
-    }
+    },
+    "numero": 6,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0578393-P1",
@@ -2315,7 +1853,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "VENERO LOZANO, LEYLA MARTHA",
       "especialidad": "CYT"
-    }
+    },
+    "numero": 7,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0336511-P1",
@@ -2357,53 +1897,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "CALDERON QUIROZ, WILLIAM ENRIQUE",
       "especialidad": "computacion e informatica"
-    }
-  },
-  {
-    "id": "CYE26-B-0340281-P1",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "1057 JOSE BAQUIJANO Y CARRILLO",
-      "codigoModular": "0340281",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Lince",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "RAIZ VITAL",
-    "tematica": "TACOS DE ZANAHORIA",
-    "enlaceWeb": "https://drive.google.com/file/d/1qSQ3M8vdA0S97c_VZ8izt0aGM3fTgRnO/view?usp=sharing",
-    "fechaRegistro": "2026-09-09T09:50:52",
-    "integrantes": [
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "ZAMORA DIAZ, KELY",
-      "especialidad": "COMPUTACION E INFORMATICA"
-    }
+    "numero": 8,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0340281-P2",
@@ -2449,7 +1945,57 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "ZAMORA DIAZ, KELY",
       "especialidad": "COMPUTACION E INFORMATICA"
-    }
+    },
+    "numero": 9,
+    "grupo": 1
+  },
+  {
+    "id": "CYE26-B-0340281-P1",
+    "categoria": "B",
+    "institucion": {
+      "nombre": "1057 JOSE BAQUIJANO Y CARRILLO",
+      "codigoModular": "0340281",
+      "tipoGestion": "Pública de gestión directa",
+      "distrito": "Lince",
+      "modalidad": "Educación Básica Regular",
+      "nivel": "Secundaria",
+      "ugel": "UGEL 03",
+      "dre": "DRE LIMA METROPOLITANA"
+    },
+    "puestoIE": 1,
+    "tituloProyecto": "RAIZ VITAL",
+    "tematica": "TACOS DE ZANAHORIA",
+    "enlaceWeb": "https://drive.google.com/file/d/1qSQ3M8vdA0S97c_VZ8izt0aGM3fTgRnO/view?usp=sharing",
+    "fechaRegistro": "2026-09-09T09:50:52",
+    "integrantes": [
+      {
+        "grado": "CUARTO",
+        "seccion": "A"
+      },
+      {
+        "grado": "CUARTO",
+        "seccion": "A"
+      },
+      {
+        "grado": "CUARTO",
+        "seccion": "A"
+      },
+      {
+        "grado": "CUARTO",
+        "seccion": "A"
+      },
+      {
+        "grado": "CUARTO",
+        "seccion": "A"
+      }
+    ],
+    "estudiantesEnOtrosEquipos": 0,
+    "docenteAsesor": {
+      "nombreCompleto": "ZAMORA DIAZ, KELY",
+      "especialidad": "COMPUTACION E INFORMATICA"
+    },
+    "numero": 10,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0245647-P1",
@@ -2495,7 +2041,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "IBAÑEZ ALMONACID, PATRICIA ROXANA",
       "especialidad": "Informática"
-    }
+    },
+    "numero": 11,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0245647-P2",
@@ -2541,7 +2089,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "RAFAEL QUISPE, MERCEDES GHYSELA",
       "especialidad": "INDUSTRIA DEL VESTIDO"
-    }
+    },
+    "numero": 12,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0340224-P1",
@@ -2587,7 +2137,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "TORRES GARCIA, CARLOS ORLANDO",
       "especialidad": "Electrónica"
-    }
+    },
+    "numero": 13,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0340224-P2",
@@ -2633,7 +2185,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "TORRES GARCIA, CARLOS ORLANDO",
       "especialidad": "Electrónica"
-    }
+    },
+    "numero": 14,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0774455-P1",
@@ -2679,7 +2233,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "QUISPE HILARIO, YANETH",
       "especialidad": "PRODUCCION AGROPECUARIA"
-    }
+    },
+    "numero": 15,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0336636-P1",
@@ -2725,87 +2281,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "CALDERON RIVERA, SULLY BETTY",
       "especialidad": ""
-    }
-  },
-  {
-    "id": "CYE26-B-0336636-P2",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "1087 GRAL ROQUE SAENZ PEÑA",
-      "codigoModular": "0336636",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "San Miguel",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 2,
-    "tituloProyecto": "NATURAL FUSSION",
-    "tematica": "EMPRENDIMIENTO ECONÓMICO",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1uXeOvxrCqhoFy-ll62MCVKZ33QkxpBmU?usp=sharing",
-    "fechaRegistro": "2026-09-08T11:16:43",
-    "integrantes": [
-      {
-        "grado": "TERCERO",
-        "seccion": "3 A"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "3 A"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "3 A"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "CAJUSOL FARROÑAN, FERNANDO MANUEL",
-      "especialidad": ""
-    }
-  },
-  {
-    "id": "CYE26-B-1007491-P1",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "1110 REPUBLICA DE PANAMA",
-      "codigoModular": "1007491",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "La Victoria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
-    },
-    "puestoIE": 1,
-    "tituloProyecto": "QUINUA FUENTE DE VIDA",
-    "tematica": "QUINUA Y FRUTA",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1V87Ya6OkmrPxLtGXoFe3QnWoiJd88RMk?usp=sharing",
-    "fechaRegistro": "2026-09-09T15:11:23",
-    "integrantes": [
-      {
-        "grado": "CUARTO",
-        "seccion": "4B"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "4B"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "4B"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "4B"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "BABILONIA VARGAS, ROSA",
-      "especialidad": "EDUCACIÓN COMERCIAL"
-    }
+    "numero": 16,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0245654-P1",
@@ -2851,7 +2329,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "CAYCHO GAGO, ALQUIMIDES FRANKLIN",
       "especialidad": "Agropecuaria"
-    }
+    },
+    "numero": 17,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0245654-P2",
@@ -2897,7 +2377,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "YAURI ESPINOZA, MONICA VANESSA",
       "especialidad": "Estetica Personal"
-    }
+    },
+    "numero": 18,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-1008044-P1",
@@ -2943,7 +2425,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "GASPAR CHAVEZ, NANCY CLAUDIA",
       "especialidad": "EPT industria del vestido"
-    }
+    },
+    "numero": 19,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0763771-P1",
@@ -2989,7 +2473,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "ROJAS HIDALGO, JESS",
       "especialidad": ""
-    }
+    },
+    "numero": 20,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0336602-P1",
@@ -3035,7 +2521,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "QUISPE GALVEZ, LUISA ROSA",
       "especialidad": "COMPUTACION E INFORMATICA"
-    }
+    },
+    "numero": 21,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-0336602-P2",
@@ -3081,7 +2569,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "QUISPE GALVEZ, LUISA ROSA",
       "especialidad": "COMPUTACION E INFORMATICA"
-    }
+    },
+    "numero": 22,
+    "grupo": 1
   },
   {
     "id": "CYE26-B-1072727-P1",
@@ -3127,7 +2617,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "LLAPAPASCA MOROCHO, YOISY",
       "especialidad": "INFORMATICA"
-    }
+    },
+    "numero": 23,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-1072727-P2",
@@ -3173,7 +2665,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "LLAPAPASCA MOROCHO, YOISY",
       "especialidad": "INFORMATICA"
-    }
+    },
+    "numero": 24,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0337766-P1",
@@ -3203,7 +2697,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "MEDINA AMANQUI, OLGA MARILYN",
       "especialidad": "COMPUTACION INFORMATICA"
-    }
+    },
+    "numero": 25,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0340331-P1",
@@ -3249,49 +2745,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "MOREYRA DE LA CRUZ, RAFAEL HUBER",
       "especialidad": "Matemática e Informática"
-    }
-  },
-  {
-    "id": "CYE26-B-0340331-P2",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "ANGELICA PALMA ROMAN",
-      "codigoModular": "0340331",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "La Victoria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 2,
-    "tituloProyecto": "Alcancias reciclaves",
-    "tematica": "Ambiental",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1lPDLHAPVhOX1vOdmXzD6IMkpswTR_88p?usp=sharing",
-    "fechaRegistro": "2026-09-09T23:34:05",
-    "integrantes": [
-      {
-        "grado": "QUINTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "A"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "MOREYRA DE LA CRUZ, RAFAEL HUBER",
-      "especialidad": "Matemática e Informática"
-    }
+    "numero": 26,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0601856-P1",
@@ -3337,53 +2793,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "FLORES NEYRA, JULIO CESAR",
       "especialidad": "Computación"
-    }
-  },
-  {
-    "id": "CYE26-B-0337568-P1",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "ARGENTINA",
-      "codigoModular": "0337568",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Lima",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "SERVICIO DE ACOMPAÑAMIENTO EMPRESARIAL Y CONEXIÓN COMERCIAL PARA MYPES",
-    "tematica": "SERVICIO",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1Dvvb6JiDNJaxHUOg2mkQbHuamYhv3RVN?usp=sharing",
-    "fechaRegistro": "2026-09-06T17:22:05",
-    "integrantes": [
-      {
-        "grado": "QUINTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "A"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "BALLON ROMERO, ROXANA",
-      "especialidad": "ADMINISTRACIÓN"
-    }
+    "numero": 27,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0337568-P2",
@@ -3429,7 +2841,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "CHAVEZ CERNA, GUSTAVO JESUS",
       "especialidad": "ADMINISTRACIÓN"
-    }
+    },
+    "numero": 28,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0334649-P1",
@@ -3475,167 +2889,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "SANTA ANA FLORES, ROSALIN NATALI",
       "especialidad": "Confección textil"
-    }
-  },
-  {
-    "id": "CYE26-B-0245696-P1",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "CESAR A. VALLEJO",
-      "codigoModular": "0245696",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "La Victoria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "UMA PAKIY",
-    "tematica": "SOLUCIÓN EDUCATIVA DIGITAL A ESTUDIANTES",
-    "enlaceWeb": "https://drive.gocom/drive/folders/1543ddNo_tcWQpvlARRNLbF1fEsMAI1gZ",
-    "fechaRegistro": "2026-09-09T15:19:09",
-    "integrantes": [
-      {
-        "grado": "TERCERO",
-        "seccion": "A"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "ESPINOZA BARRIOS, FREDY LUIS",
-      "especialidad": ""
-    }
-  },
-  {
-    "id": "CYE26-B-0643692-P1",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "DEPORTIVO EXPERIMENTAL JULIA SANCHEZ DEZA",
-      "codigoModular": "0643692",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "La Victoria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
-    },
-    "puestoIE": 1,
-    "tituloProyecto": "DecoVerde Macrame Portamaceteros artesanales y ecolgicos",
-    "tematica": "Manualidades y artesanias tecnicas- tejido macrame",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1_2z5q80Fv1fNABlKtrZqQfbnH1QA7KPx?usp=sharing",
-    "fechaRegistro": "2026-09-09T15:30:38",
-    "integrantes": [
-      {
-        "grado": "TERCERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "A"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "BULLON CANO, ESTHER VALENTINA",
-      "especialidad": "EBANISTERIA Y DECORACION"
-    }
-  },
-  {
-    "id": "CYE26-B-0601492-P1",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "DIEGO FERRE",
-      "codigoModular": "0601492",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Jesus Maria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
-    },
-    "puestoIE": 1,
-    "tituloProyecto": "GOMITAS DE CUSHURO",
-    "tematica": "ALIMENTACIÓN SALUDABLE Y NUTRICIÓN",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1Kj8SfzJy1LaPVDWy_Ywhwi0RJ0RYr1Sq?usp=sharing",
-    "fechaRegistro": "2026-09-08T19:47:01",
-    "integrantes": [
-      {
-        "grado": "TERCERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "A"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "A"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "MUÑOZ HUERTA, RUDY DAIVIS",
-      "especialidad": "Computación Informática"
-    }
-  },
-  {
-    "id": "CYE26-B-0601492-P2",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "DIEGO FERRE",
-      "codigoModular": "0601492",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Jesus Maria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
-    },
-    "puestoIE": 2,
-    "tituloProyecto": "Ecovolt school Mochila",
-    "tematica": "Cargador Solar",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1Kj8SfzJy1LaPVDWy_Ywhwi0RJ0RYr1Sq?usp=sharing",
-    "fechaRegistro": "2026-09-08T22:25:06",
-    "integrantes": [
-      {
-        "grado": "TERCERO",
-        "seccion": "B"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "B"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "B"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "B"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "BARRIAL LORENZO, CARLOS AMERICO",
-      "especialidad": "Electrónica"
-    }
+    "numero": 29,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0340356-P1",
@@ -3681,53 +2937,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "PASCUAL BASURTO, ALEJANDRINA CLEMENCIA",
       "especialidad": "Tecnología del vestido"
-    }
-  },
-  {
-    "id": "CYE26-B-0245662-P1",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "ISABEL LA CATOLICA",
-      "codigoModular": "0245662",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "La Victoria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "THE SILENT BATTLE",
-    "tematica": "PRODUCCION",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1n6C9vucp6HmIvh1QUIA-Ahsf9SjiuWkS?usp=drive_link",
-    "fechaRegistro": "2026-09-08T15:47:47",
-    "integrantes": [
-      {
-        "grado": "CUARTO",
-        "seccion": "E"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "E"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "E"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "E"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "E"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "SANDOVAL PEÑA, ANA TERESA",
-      "especialidad": "INDUSTRIA DEL VESTIDO"
-    }
+    "numero": 30,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0245662-P2",
@@ -3773,83 +2985,57 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "PURIZAGA ARAPA, EDUARDO MANUEL",
       "especialidad": "CONTABILIDAD"
-    }
+    },
+    "numero": 31,
+    "grupo": 2
   },
   {
-    "id": "CYE26-B-0334771-P1",
+    "id": "CYE26-B-0245662-P1",
     "categoria": "B",
     "institucion": {
-      "nombre": "JOSE SANTOS CHOCANO",
-      "codigoModular": "0334771",
+      "nombre": "ISABEL LA CATOLICA",
+      "codigoModular": "0245662",
       "tipoGestion": "Pública de gestión directa",
-      "distrito": "Pueblo Libre",
+      "distrito": "La Victoria",
       "modalidad": "Educación Básica Regular",
       "nivel": "Secundaria",
       "ugel": "UGEL 03",
       "dre": "DRE LIMA METROPOLITANA"
     },
     "puestoIE": 1,
-    "tituloProyecto": "ABRAZO SONORO",
-    "tematica": "Regulación emocional",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1bh0hTEO-obFhco7TUNaf8hK0_sOzYKaH?usp=sharing",
-    "fechaRegistro": "2026-09-08T15:53:40",
+    "tituloProyecto": "THE SILENT BATTLE",
+    "tematica": "PRODUCCION",
+    "enlaceWeb": "https://drive.google.com/drive/folders/1n6C9vucp6HmIvh1QUIA-Ahsf9SjiuWkS?usp=drive_link",
+    "fechaRegistro": "2026-09-08T15:47:47",
     "integrantes": [
       {
-        "grado": "QUINTO",
-        "seccion": "A"
+        "grado": "CUARTO",
+        "seccion": "E"
       },
       {
-        "grado": "QUINTO",
-        "seccion": "A"
+        "grado": "CUARTO",
+        "seccion": "E"
       },
       {
-        "grado": "QUINTO",
-        "seccion": "A"
+        "grado": "CUARTO",
+        "seccion": "E"
+      },
+      {
+        "grado": "CUARTO",
+        "seccion": "E"
+      },
+      {
+        "grado": "CUARTO",
+        "seccion": "E"
       }
     ],
     "estudiantesEnOtrosEquipos": 0,
     "docenteAsesor": {
-      "nombreCompleto": "PADILLA RODRIGUEZ, DIANA RAQUEL",
-      "especialidad": "EPT"
-    }
-  },
-  {
-    "id": "CYE26-B-0334771-P2",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "JOSE SANTOS CHOCANO",
-      "codigoModular": "0334771",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Pueblo Libre",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
+      "nombreCompleto": "SANDOVAL PEÑA, ANA TERESA",
+      "especialidad": "INDUSTRIA DEL VESTIDO"
     },
-    "puestoIE": 2,
-    "tituloProyecto": "CONECTA MAYOR",
-    "tematica": "Inclusión digital",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1wdKMbSGxuQV4VWcOj1PQoAovdkpyhHJG?usp=sharing",
-    "fechaRegistro": "2026-09-08T12:44:02",
-    "integrantes": [
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "PADILLA RODRIGUEZ, DIANA RAQUEL",
-      "especialidad": "EPT"
-    }
+    "numero": 32,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0334664-P1",
@@ -3895,7 +3081,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "CUADROS CARRION, JANIO ANTONIO",
       "especialidad": "administración"
-    }
+    },
+    "numero": 33,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0334664-P2",
@@ -3941,53 +3129,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "CUADROS CARRION, JANIO ANTONIO",
       "especialidad": "administración"
-    }
-  },
-  {
-    "id": "CYE26-B-1489053-P1",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "NUESTRA SEÑORA DE COCHARCAS",
-      "codigoModular": "1489053",
-      "tipoGestion": "Privada",
-      "distrito": "Lima",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "L HUILE RENAISSANTE APP",
-    "tematica": "Reducción de la contaminación ambiental",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1vPB1UBH6QXUQRfMDhYPhGJgbSCaaDUKb?usp=drive_link",
-    "fechaRegistro": "2026-09-09T22:16:38",
-    "integrantes": [
-      {
-        "grado": "QUINTO",
-        "seccion": "ÚNICA"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "ÚNICA"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "ÚNICA"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "ÚNICA"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "ÚNICA"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "CARDENAS ESPINOZA, CESAR ANGELO",
-      "especialidad": "Ingeniero de sistemas y cómputo"
-    }
+    "numero": 34,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-1489053-P2",
@@ -4033,14 +3177,16 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "CARDENAS ESPINOZA, CESAR ANGELO",
       "especialidad": "Ingeniero de sistemas y cómputo"
-    }
+    },
+    "numero": 35,
+    "grupo": 2
   },
   {
-    "id": "CYE26-B-0739367-P1",
+    "id": "CYE26-B-1489053-P1",
     "categoria": "B",
     "institucion": {
-      "nombre": "NUESTRA SEÑORA DE MONTSERRAT",
-      "codigoModular": "0739367",
+      "nombre": "NUESTRA SEÑORA DE COCHARCAS",
+      "codigoModular": "1489053",
       "tipoGestion": "Privada",
       "distrito": "Lima",
       "modalidad": "Educación Básica Regular",
@@ -4049,63 +3195,39 @@ export const PROYECTOS_SICE_CYE = [
       "dre": "DRE LIMA METROPOLITANA"
     },
     "puestoIE": 1,
-    "tituloProyecto": "IMPERION ACADEMIA DE EXPORACIÓN Y APRENDIZAJE DIGITAL",
-    "tematica": "Innovación Educativa y Aprendizaje Digital",
-    "enlaceWeb": "https://imperiongame.blogspot.com",
-    "fechaRegistro": "2026-09-09T10:39:09",
+    "tituloProyecto": "L HUILE RENAISSANTE APP",
+    "tematica": "Reducción de la contaminación ambiental",
+    "enlaceWeb": "https://drive.google.com/drive/folders/1vPB1UBH6QXUQRfMDhYPhGJgbSCaaDUKb?usp=drive_link",
+    "fechaRegistro": "2026-09-09T22:16:38",
     "integrantes": [
       {
         "grado": "QUINTO",
-        "seccion": "A"
+        "seccion": "ÚNICA"
+      },
+      {
+        "grado": "QUINTO",
+        "seccion": "ÚNICA"
+      },
+      {
+        "grado": "QUINTO",
+        "seccion": "ÚNICA"
+      },
+      {
+        "grado": "QUINTO",
+        "seccion": "ÚNICA"
+      },
+      {
+        "grado": "QUINTO",
+        "seccion": "ÚNICA"
       }
     ],
     "estudiantesEnOtrosEquipos": 0,
     "docenteAsesor": {
-      "nombreCompleto": "ESPEJO CARLOS, WILDER MOISES",
-      "especialidad": "Ciencias Sociales"
-    }
-  },
-  {
-    "id": "CYE26-B-0314401-P1",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "REINA DE LAS AMERICAS",
-      "codigoModular": "0314401",
-      "tipoGestion": "Privada",
-      "distrito": "La Victoria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
+      "nombreCompleto": "CARDENAS ESPINOZA, CESAR ANGELO",
+      "especialidad": "Ingeniero de sistemas y cómputo"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "HEMSI",
-    "tematica": "Producto alimenticio que combata la anemia",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1JjPI3ZvD_61SDGo4ZmORlU-JBVrqYjBb",
-    "fechaRegistro": "2026-09-01T12:39:50",
-    "integrantes": [
-      {
-        "grado": "QUINTO",
-        "seccion": "B"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "B"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "B"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "B"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "TORRES AJALLA, MARIA ELENA",
-      "especialidad": "Biología Quimica"
-    }
+    "numero": 36,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0314401-P2",
@@ -4151,7 +3273,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "TORRES AJALLA, MARIA ELENA",
       "especialidad": "Biología Quimica"
-    }
+    },
+    "numero": 37,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0644690-P1",
@@ -4197,53 +3321,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "MENDOZA CACERES, DILMA EULALIA",
       "especialidad": ""
-    }
-  },
-  {
-    "id": "CYE26-B-0644690-P2",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "REPUBLICA DE CHILE",
-      "codigoModular": "0644690",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Lince",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 2,
-    "tituloProyecto": "KAWSAY HAIR",
-    "tematica": "SHAMPOO EN BARRA ANTICAIDA",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1EWRt4XBIqqxTl5eI6T0IThCToyliUfwH?usp=sharing",
-    "fechaRegistro": "2026-09-08T14:42:03",
-    "integrantes": [
-      {
-        "grado": "QUINTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "A"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "FUENTES RIVERA QUISPE, GYSELA PAULA",
-      "especialidad": ""
-    }
+    "numero": 38,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0340398-P1",
@@ -4289,7 +3369,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "CELEDONIO MARADIEGUE, SIMON NICOLAS",
       "especialidad": "INDUSTRIA ALIMENTARIA"
-    }
+    },
+    "numero": 39,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-1199009-P1",
@@ -4319,95 +3401,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "CAPUÑAY TERRONES, JONATHAN ENRIQUE",
       "especialidad": "EPT"
-    }
-  },
-  {
-    "id": "CYE26-B-0690214-P1",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "SEÑOR DE LUREN",
-      "codigoModular": "0690214",
-      "tipoGestion": "Privada",
-      "distrito": "La Victoria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "FRUTALIA",
-    "tematica": "Acuarelas hechas a base de residuos de frutas",
-    "enlaceWeb": "https://canva.link/obc7a107uzle6ec",
-    "fechaRegistro": "2026-09-10T00:01:01",
-    "integrantes": [
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "A"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "QUIÑONES ROJAS, ERIKA URSULA",
-      "especialidad": ""
-    }
-  },
-  {
-    "id": "CYE26-B-0245688-P1",
-    "categoria": "B",
-    "institucion": {
-      "nombre": "TERESA GONZALES DE FANNING",
-      "codigoModular": "0245688",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "Jesus Maria",
-      "modalidad": "Educación Básica Regular",
-      "nivel": "Secundaria",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
-    },
-    "puestoIE": 1,
-    "tituloProyecto": "COLLECTION BIO MATERIALES PODER DEL MAR",
-    "tematica": "CONTAMINACIÓN AMBIENTAL",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1lUiyFhjBrgKcNX-lxt3MUDltuNBJ-pef?usp=sharing",
-    "fechaRegistro": "2026-09-07T11:29:58",
-    "integrantes": [
-      {
-        "grado": "QUINTO",
-        "seccion": "10"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "10"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "10"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "10"
-      },
-      {
-        "grado": "QUINTO",
-        "seccion": "10"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "YARLEQUE DAVILA, RUTH MARIA",
-      "especialidad": "Industria del Vestido"
-    }
+    "numero": 40,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0245688-P2",
@@ -4453,7 +3449,57 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "FLORES CRUZ, MAGALY ESTELA",
       "especialidad": "Industria del Vestido"
-    }
+    },
+    "numero": 41,
+    "grupo": 2
+  },
+  {
+    "id": "CYE26-B-0245688-P1",
+    "categoria": "B",
+    "institucion": {
+      "nombre": "TERESA GONZALES DE FANNING",
+      "codigoModular": "0245688",
+      "tipoGestion": "Pública de gestión directa",
+      "distrito": "Jesus Maria",
+      "modalidad": "Educación Básica Regular",
+      "nivel": "Secundaria",
+      "ugel": "UGEL 03",
+      "dre": "DRE LIMA METROPOLITANA"
+    },
+    "puestoIE": 1,
+    "tituloProyecto": "COLLECTION BIO MATERIALES PODER DEL MAR",
+    "tematica": "CONTAMINACIÓN AMBIENTAL",
+    "enlaceWeb": "https://drive.google.com/drive/folders/1lUiyFhjBrgKcNX-lxt3MUDltuNBJ-pef?usp=sharing",
+    "fechaRegistro": "2026-09-07T11:29:58",
+    "integrantes": [
+      {
+        "grado": "QUINTO",
+        "seccion": "10"
+      },
+      {
+        "grado": "QUINTO",
+        "seccion": "10"
+      },
+      {
+        "grado": "QUINTO",
+        "seccion": "10"
+      },
+      {
+        "grado": "QUINTO",
+        "seccion": "10"
+      },
+      {
+        "grado": "QUINTO",
+        "seccion": "10"
+      }
+    ],
+    "estudiantesEnOtrosEquipos": 0,
+    "docenteAsesor": {
+      "nombreCompleto": "YARLEQUE DAVILA, RUTH MARIA",
+      "especialidad": "Industria del Vestido"
+    },
+    "numero": 42,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0340364-P1",
@@ -4499,7 +3545,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "RICSE CAYSAHUANA, EDWIN",
       "especialidad": "AGROPECUARIA Y NUTRICION"
-    }
+    },
+    "numero": 43,
+    "grupo": 2
   },
   {
     "id": "CYE26-B-0340364-P2",
@@ -4545,7 +3593,188 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "ITOKAZU PIZARRO, MARIA LUISA",
       "especialidad": "INDUSTRIA DEL VESTIDO"
-    }
+    },
+    "numero": 44,
+    "grupo": 2
+  },
+  {
+    "id": "CYE26-B-0334656-P2",
+    "categoria": "B",
+    "institucion": {
+      "nombre": "0040 HIPOLITO UNANUE",
+      "codigoModular": "0334656",
+      "tipoGestion": "Pública de gestión directa",
+      "distrito": "Lima",
+      "modalidad": "Educación Básica Regular",
+      "nivel": "Secundaria",
+      "ugel": "UGEL 03",
+      "dre": "DRE LIMA METROPOLITANA"
+    },
+    "puestoIE": 2,
+    "tituloProyecto": "Transmisión segura",
+    "tematica": "Página web",
+    "enlaceWeb": "https://drive.google.com/drive/folders/1of79hEZY7dQxJJvFAfMeY8F4LceFWtGZ?usp=drive_link",
+    "fechaRegistro": "2026-09-08T12:40:57",
+    "integrantes": [
+      {
+        "grado": "TERCERO",
+        "seccion": "C"
+      },
+      {
+        "grado": "TERCERO",
+        "seccion": "C"
+      },
+      {
+        "grado": "TERCERO",
+        "seccion": "C"
+      },
+      {
+        "grado": "TERCERO",
+        "seccion": "C"
+      },
+      {
+        "tipoDocumento": "DNI",
+        "dni": "77147763",
+        "apellidos": "CUNIA BORDA",
+        "nombres": "ESTUDIANTE",
+        "nombreCompleto": "CUNIA BORDA, ESTUDIANTE",
+        "grado": "TERCERO",
+        "seccion": "C",
+        "fechaNacimiento": "",
+        "sexo": "M"
+      }
+    ],
+    "estudiantesEnOtrosEquipos": 0,
+    "docenteAsesor": {
+      "nombreCompleto": "BRAVO FERNANDEZ, JULIO CESAR",
+      "especialidad": "Mecanica"
+    },
+    "numero": 45,
+    "grupo": 1
+  },
+  {
+    "id": "CYE26-B-0337568-P1",
+    "categoria": "B",
+    "institucion": {
+      "nombre": "ARGENTINA",
+      "codigoModular": "0337568",
+      "tipoGestion": "Pública de gestión directa",
+      "distrito": "Lima",
+      "modalidad": "Educación Básica Regular",
+      "nivel": "Secundaria",
+      "ugel": "UGEL 03",
+      "dre": "DRE LIMA METROPOLITANA"
+    },
+    "puestoIE": 1,
+    "tituloProyecto": "SERVICIO DE ACOMPAÑAMIENTO EMPRESARIAL Y CONEXIÓN COMERCIAL PARA MYPES",
+    "tematica": "Soluciones problemas económicos o sociales comunidad, ciudad, distrito, provincia, región.",
+    "enlaceWeb": "https://drive.google.com/drive/folders/1Dvvb6JiDNJaxHUOg2mkQbHuamYhv3RVN?usp=sharing",
+    "fechaRegistro": "2026-09-06T17:22:05",
+    "integrantes": [
+      {
+        "tipoDocumento": "DNI",
+        "dni": "61908763",
+        "apellidos": "MEDINA RODRIGUEZ",
+        "nombres": "KIARA YAMILE",
+        "nombreCompleto": "MEDINA RODRIGUEZ, KIARA YAMILE",
+        "grado": "QUINTO",
+        "seccion": "A",
+        "sexo": "F",
+        "correo": "kiara.medina@ieargentina.edu.pe"
+      },
+      {
+        "tipoDocumento": "DNI",
+        "dni": "62643992",
+        "apellidos": "VERGARA CHERO",
+        "nombres": "DESIRE KELLY",
+        "nombreCompleto": "VERGARA CHERO, DESIRE KELLY",
+        "grado": "QUINTO",
+        "seccion": "A",
+        "sexo": "F",
+        "correo": "desire.vergara@ieargentina.edu.pe"
+      },
+      {
+        "tipoDocumento": "DNI",
+        "dni": "61812299",
+        "apellidos": "LLOCLLA ROJAS",
+        "nombres": "YADIRA ABIGAIL",
+        "nombreCompleto": "LLOCLLA ROJAS, YADIRA ABIGAIL",
+        "grado": "QUINTO",
+        "seccion": "A",
+        "sexo": "F",
+        "correo": "yadira.lloclla@ieargentina.edu.pe"
+      },
+      {
+        "tipoDocumento": "DNI",
+        "dni": "61967643",
+        "apellidos": "LEON MORA",
+        "nombres": "XIOMARA ESTRELLA MIA",
+        "nombreCompleto": "LEON MORA, XIOMARA ESTRELLA MIA",
+        "grado": "QUINTO",
+        "seccion": "A",
+        "sexo": "F",
+        "correo": "xiomara.leon@ieargentina.edu.pe"
+      },
+      {
+        "tipoDocumento": "DNI",
+        "dni": "61830985",
+        "apellidos": "SOTO HUAMAN",
+        "nombres": "TAIRA YAMILE",
+        "nombreCompleto": "SOTO HUAMAN, TAIRA YAMILE",
+        "grado": "QUINTO",
+        "seccion": "A",
+        "sexo": "F",
+        "correo": "taira.soto@ieargentina.edu.pe"
+      }
+    ],
+    "estudiantesEnOtrosEquipos": 0,
+    "docenteAsesor": {
+      "nombreCompleto": "BALLON ROMERO, ROXANA",
+      "especialidad": "ADMINISTRACIÓN / SERVICIO",
+      "dni": "09413831",
+      "telefono": "906508183",
+      "correo": "roxanaball@hotmail.com"
+    },
+    "director": {
+      "nombreCompleto": "LEVA RAMOS, JULIA PETRONILA",
+      "telefono": "979461306",
+      "correo": "julilev27@gmail.com"
+    },
+    "codigoSICE": "262",
+    "numero": 46,
+    "grupo": 2
+  },
+  {
+    "id": "CYE26-C-0449652-P1",
+    "categoria": "C",
+    "institucion": {
+      "nombre": "CEBA - ISABEL LA CATOLICA",
+      "codigoModular": "0449652",
+      "tipoGestion": "Pública de gestión directa",
+      "distrito": "La Victoria",
+      "modalidad": "EDUCACIÓN BÁSICA ALTERNATIVA",
+      "nivel": "Básica Alternativa - Avanzado",
+      "ugel": "UGEL 03",
+      "dre": "DRE LIMA METROPOLITANA"
+    },
+    "puestoIE": 1,
+    "tituloProyecto": "CHOCOMANIA",
+    "tematica": "PRODUCE VENDE",
+    "enlaceWeb": "https://docs.google.com/document/d/13Wpx9tTcFglwlNaDi5zIVMIHbSfi9sZh/edit?usp=sharing&ouid=118391962447337786208&rtpof=true&sd=true",
+    "fechaRegistro": "2026-09-09T21:08:57",
+    "integrantes": [
+      {
+        "grado": "TERCERO",
+        "seccion": "-"
+      }
+    ],
+    "estudiantesEnOtrosEquipos": 0,
+    "docenteAsesor": {
+      "nombreCompleto": "RODRIGUEZ VILCA, DAVID HEZRAI",
+      "especialidad": ""
+    },
+    "numero": 1,
+    "grupo": 1
   },
   {
     "id": "CYE26-C-0449645-P1",
@@ -4583,41 +3812,9 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "SULLCA QUISPE, VERONICA",
       "especialidad": "CIENCIA TECNOLOGÍA Y AMBIENTE"
-    }
-  },
-  {
-    "id": "CYE26-C-1226380-P1",
-    "categoria": "C",
-    "institucion": {
-      "nombre": "CEBA - 1112 VICTOR ANDRES BELAUNDE",
-      "codigoModular": "1226380",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "La Victoria",
-      "modalidad": "EDUCACIÓN BÁSICA ALTERNATIVA",
-      "nivel": "Básica Alternativa - Avanzado",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "Rellenitas de Hierro",
-    "tematica": "emprendimiento alimentario",
-    "enlaceWeb": "https://drive.google.com/drive/folders/1XZH2xtT1Co_QfOOvVzRQShA8nYQYJFwN?usp=sharing",
-    "fechaRegistro": "2026-09-09T21:38:39",
-    "integrantes": [
-      {
-        "grado": "CUARTO",
-        "seccion": "-"
-      },
-      {
-        "grado": "TERCERO",
-        "seccion": "-"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "SOLANO SALINAS, PABLO FEDERICO",
-      "especialidad": "Religión y ciencias sociales"
-    }
+    "numero": 2,
+    "grupo": 1
   },
   {
     "id": "CYE26-C-0337337-P1",
@@ -4655,70 +3852,8 @@ export const PROYECTOS_SICE_CYE = [
     "docenteAsesor": {
       "nombreCompleto": "VALLEJO MELGAR, KARINA YESENIA",
       "especialidad": "Industria del vestido"
-    }
-  },
-  {
-    "id": "CYE26-C-0449652-P1",
-    "categoria": "C",
-    "institucion": {
-      "nombre": "CEBA - ISABEL LA CATOLICA",
-      "codigoModular": "0449652",
-      "tipoGestion": "Pública de gestión directa",
-      "distrito": "La Victoria",
-      "modalidad": "EDUCACIÓN BÁSICA ALTERNATIVA",
-      "nivel": "Básica Alternativa - Avanzado",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
     },
-    "puestoIE": 1,
-    "tituloProyecto": "CHOCOMANIA",
-    "tematica": "PRODUCE VENDE",
-    "enlaceWeb": "https://docs.google.com/document/d/13Wpx9tTcFglwlNaDi5zIVMIHbSfi9sZh/edit?usp=sharing&ouid=118391962447337786208&rtpof=true&sd=true",
-    "fechaRegistro": "2026-09-09T21:08:57",
-    "integrantes": [
-      {
-        "grado": "TERCERO",
-        "seccion": "-"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "RODRIGUEZ VILCA, DAVID HEZRAI",
-      "especialidad": ""
-    }
-  },
-  {
-    "id": "CYE26-C-1198282-P1",
-    "categoria": "C",
-    "institucion": {
-      "nombre": "CEBA - NUESTRA SEÑORA DE MONTSERRAT",
-      "codigoModular": "1198282",
-      "tipoGestion": "Privada",
-      "distrito": "Lima",
-      "modalidad": "EDUCACIÓN BÁSICA ALTERNATIVA",
-      "nivel": "Básica Alternativa - Avanzado",
-      "ugel": "UGEL 03",
-      "dre": "DRE LIMA METROPOLITANA"
-    },
-    "puestoIE": 1,
-    "tituloProyecto": "JEANS VERDE MONTSERRATINO",
-    "tematica": "BOLSAS ECOLÒGICAS HECHAS DE JEANS RECICLADOS",
-    "enlaceWeb": "https://www.facebook.com/CPEEIMontserrat/?locale=es_LA",
-    "fechaRegistro": "2026-08-29T12:37:39",
-    "integrantes": [
-      {
-        "grado": "CUARTO",
-        "seccion": "-"
-      },
-      {
-        "grado": "CUARTO",
-        "seccion": "-"
-      }
-    ],
-    "estudiantesEnOtrosEquipos": 0,
-    "docenteAsesor": {
-      "nombreCompleto": "ROJAS NARVAEZ, CLORINDA EULALIA",
-      "especialidad": "Educación para el trabajo"
-    }
+    "numero": 3,
+    "grupo": 1
   }
 ];

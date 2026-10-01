@@ -668,7 +668,7 @@ export default function EKPadronTab({
 
           <div style={{ ...aviso(anexoResuelto ? 'eureka' : 'alerta'), marginTop: 12 }}>
             {anexoResuelto
-              ? <>Anexo de evaluación resuelto: <strong>{anexoResuelto}</strong>. Se persiste con el participante y determina la rúbrica de sus tres fichas.</>
+              ? <>Anexo de evaluación resuelto: <strong>{anexoResuelto}</strong>. Se persiste con el participante y determina la rúbrica de sus cuatro fichas.</>
               : 'Seleccione área y línea para resolver el anexo de evaluación aplicable.'}
           </div>
 

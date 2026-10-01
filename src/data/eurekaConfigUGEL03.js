@@ -12,18 +12,6 @@
  */
 export const CATEGORIAS = [
   {
-    id: 'A', nombre: 'Categoría A', grados: 'Primer y segundo grado de Educación Primaria',
-    nivel: 'Primaria', gradosNum: [1, 2], finalizaEnUGEL: true
-  },
-  {
-    id: 'B', nombre: 'Categoría B', grados: 'Tercer y cuarto grado de Educación Primaria',
-    nivel: 'Primaria', gradosNum: [3, 4], finalizaEnUGEL: true
-  },
-  {
-    id: 'C', nombre: 'Categoría C', grados: 'Quinto y sexto grado de Educación Primaria',
-    nivel: 'Primaria', gradosNum: [5, 6], finalizaEnUGEL: true
-  },
-  {
     id: 'D', nombre: 'Categoría D', grados: 'Primer y segundo grado de Educación Secundaria',
     nivel: 'Secundaria', gradosNum: [1, 2], finalizaEnUGEL: false
   },
@@ -110,19 +98,20 @@ export const EUREKA_CONFIG = {
   fechaEvaluacion: '2026-09-11',
   horaActa: '17:00',
 
-  // Los formatos oficiales E19 y E20 tienen exactamente tres casilleros de firma.
-  // Toda tabla de UI y de PDF debe generar sus columnas iterando sobre esta constante.
-  numeroJuradosPorFicha: 3,
+  // Conforme a las bases (numeral 11) y decisión del comité organizador junto con la especialista de UGEL 03,
+  // se establecen 4 jurados evaluadores por categoría/área, con 4 casilleros de evaluación y 4 firmas oficiales.
+  // Toda tabla de UI y de PDF genera sus columnas e iteraciones sobre esta constante.
+  numeroJuradosPorFicha: 4,
   tiempoExposicionMin: 8,
   // Las bases no establecen descuento por exceso de tiempo. No se penaliza de forma automática.
   penalizacionAutomatica: false,
   criterioOrdenMerito: 'promedio', // 'promedio' | 'suma'
   decimalesPromedio: 2,
-  alcanceFirmaPorDefecto: 'GLOBAL',
+  alcanceFirmaPorDefecto: 'CATEGORIA_AREA',
   imprimirEvaluadorOperativo: false
 };
 
-/** Casilleros de jurado habilitados, derivados de numeroJuradosPorFicha. */
+/** Casilleros de jurado habilitados, derivados de numeroJuradosPorFicha [1, 2, 3, 4]. */
 export const SLOTS_JURADO = Array.from(
   { length: EUREKA_CONFIG.numeroJuradosPorFicha },
   (_, i) => i + 1

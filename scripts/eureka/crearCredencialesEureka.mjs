@@ -148,6 +148,98 @@ const JURADOS = [
     categoria: 'C',
     grados: '5 y 6 grado',
     numeroJurado: 4
+  },
+
+  /* ── Categoría D (Secundaria: 1.° y 2.° Grado) ── */
+  {
+    correo: 'eurekacategoriadjurado1@ugel03.gob.pe',
+    nombreCompleto: 'JURADO 1 — CATEGORÍA D (1.° y 2.° Sec.)',
+    dni: '',
+    telefono: '',
+    correoPersonal: '',
+    grupo: 'D',
+    categoria: 'D',
+    grados: '1 y 2 grado de secundaria',
+    numeroJurado: 1
+  },
+  {
+    correo: 'eurekacategoriadjurado2@ugel03.gob.pe',
+    nombreCompleto: 'JURADO 2 — CATEGORÍA D (1.° y 2.° Sec.)',
+    dni: '',
+    telefono: '',
+    correoPersonal: '',
+    grupo: 'D',
+    categoria: 'D',
+    grados: '1 y 2 grado de secundaria',
+    numeroJurado: 2
+  },
+  {
+    correo: 'eurekacategoriadjurado3@ugel03.gob.pe',
+    nombreCompleto: 'JURADO 3 — CATEGORÍA D (1.° y 2.° Sec.)',
+    dni: '',
+    telefono: '',
+    correoPersonal: '',
+    grupo: 'D',
+    categoria: 'D',
+    grados: '1 y 2 grado de secundaria',
+    numeroJurado: 3
+  },
+  {
+    correo: 'eurekacategoriadjurado4@ugel03.gob.pe',
+    nombreCompleto: 'JURADO 4 — CATEGORÍA D (1.° y 2.° Sec.)',
+    dni: '',
+    telefono: '',
+    correoPersonal: '',
+    grupo: 'D',
+    categoria: 'D',
+    grados: '1 y 2 grado de secundaria',
+    numeroJurado: 4
+  },
+
+  /* ── Categoría E (Secundaria: 3.°, 4.° y 5.° Grado) ── */
+  {
+    correo: 'eurekacategoriaejurado1@ugel03.gob.pe',
+    nombreCompleto: 'JURADO 1 — CATEGORÍA E (3.°, 4.° y 5.° Sec.)',
+    dni: '',
+    telefono: '',
+    correoPersonal: '',
+    grupo: 'E',
+    categoria: 'E',
+    grados: '3, 4 y 5 grado de secundaria',
+    numeroJurado: 1
+  },
+  {
+    correo: 'eurekacategoriaejurado2@ugel03.gob.pe',
+    nombreCompleto: 'JURADO 2 — CATEGORÍA E (3.°, 4.° y 5.° Sec.)',
+    dni: '',
+    telefono: '',
+    correoPersonal: '',
+    grupo: 'E',
+    categoria: 'E',
+    grados: '3, 4 y 5 grado de secundaria',
+    numeroJurado: 2
+  },
+  {
+    correo: 'eurekacategoriaejurado3@ugel03.gob.pe',
+    nombreCompleto: 'JURADO 3 — CATEGORÍA E (3.°, 4.° y 5.° Sec.)',
+    dni: '',
+    telefono: '',
+    correoPersonal: '',
+    grupo: 'E',
+    categoria: 'E',
+    grados: '3, 4 y 5 grado de secundaria',
+    numeroJurado: 3
+  },
+  {
+    correo: 'eurekacategoriaejurado4@ugel03.gob.pe',
+    nombreCompleto: 'JURADO 4 — CATEGORÍA E (3.°, 4.° y 5.° Sec.)',
+    dni: '',
+    telefono: '',
+    correoPersonal: '',
+    grupo: 'E',
+    categoria: 'E',
+    grados: '3, 4 y 5 grado de secundaria',
+    numeroJurado: 4
   }
 ];
 

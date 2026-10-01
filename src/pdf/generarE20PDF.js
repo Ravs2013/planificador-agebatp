@@ -10,7 +10,7 @@ import autoTable from 'jspdf-autotable';
 import { A4, anchoContenido, drawChromeEureka, medirChromeEureka, aplicarPiePaginasEureka, aplicarFuentesArial, cederHilo } from './membreteEureka';
 import { AZUL, MARGEN, asegurarEspacio, tablaConCierre, dibujarFirmasJurado, alturaFirmasJurado } from './pdfDiseno';
 import { TEXTOS_LEGALES } from '../data/eurekaCatalogos';
-import { EUREKA_CONFIG, getArea, getCategoria } from '../data/eurekaConfigUGEL03';
+import { EUREKA_CONFIG, SLOTS_JURADO, getArea, getCategoria } from '../data/eurekaConfigUGEL03';
 import { bloquesFirmaDePanel, firmantesOrdenados, esPreliminar, resolverPanelFirmas } from '../utils/eurekaFirmas';
 import { formatearFechaLarga, sanitizarNombreArchivo, ordenArea } from '../utils/eurekaHelpers';
 
@@ -87,7 +87,7 @@ export function dibujarUnicaActaE20(doc, { acta, panel = null, banner = null, nu
   doc.setFont('Arial', 'normal');
   doc.setFontSize(9.2);
   const clasificacion = doc.splitTextToSize(construirParrafoClasificacion(acta), W);
-  const altoCierre = 6 + clasificacion.length * 9.2 * 1.35 * PT + 10 + alturaFirmasJurado(3);
+  const altoCierre = 6 + clasificacion.length * 9.2 * 1.35 * PT + 10 + alturaFirmasJurado(SLOTS_JURADO.length);
   const top = medirChromeEureka(doc, chrome);
   const opcionesTabla = {
     startY: y,

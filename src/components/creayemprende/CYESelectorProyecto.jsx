@@ -130,6 +130,7 @@ export default function CYESelectorProyecto({
                   {nsp && <span style={S.chip('#FEE2E2', C.red, '#FCA5A5')}>INCOMPARECENCIA (NSP)</span>}
                   {!nsp && registrada && <span style={S.chip('#F0FDF4', C.green, '#BBF7D0')}>EVALUADA / CERRADA ({puntos} pts)</span>}
                   {!nsp && borrador && <span style={S.chip('#EFF6FF', C.navy3, '#BFDBFE')}>EN BORRADOR ({puntos} pts)</span>}
+                  {!nsp && mia?.puntajes?.D12?.nsp && <span style={S.chip('#FEF3C7', '#B45309', '#FCD34D')}>D12: NSP (0 pts)</span>}
                   {!nsp && !mia && <span style={S.chip(C.g50, C.g500, C.g200)}>PENDIENTE</span>}
                   {esStaff && p.estadoAdmision === 'observado' && <span style={S.chip('#FFFBEB', C.amber, '#FDE68A')}>OBSERVADO</span>}
                 </div>

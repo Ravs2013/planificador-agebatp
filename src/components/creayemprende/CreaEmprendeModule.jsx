@@ -52,7 +52,7 @@ const CLASE_TOAST = { success: 'success', error: 'error', info: 'info' };
  */
 export default function CreaEmprendeModule() {
   const { user, isRole } = useAuth();
-  const esAdmin = isRole('admin');
+  const esAdmin = isRole('admin') || user?.rol === 'admin_cye' || user?.rol === 'admin';
   const esStaff = esAdmin || isRole('jefatura') || isRole('personal');
 
   const [subTab, setSubTab] = useState('fichas');
@@ -329,13 +329,28 @@ export default function CreaEmprendeModule() {
               Etapa UGEL 03 · Evaluación: 16 de setiembre · Bases Específicas 2026, Anexo D
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setMostrarBases(v => !v)}
-            style={{ background: 'transparent', border: `1px solid ${C.gold}`, color: C.gold, borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: FUENTES.sans, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-          >
-            Disposiciones de las bases <Icon name={mostrarBases ? 'chevronUp' : 'chevronDown'} size={14} color={C.gold} />
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {esStaff && (
+              <button
+                type="button"
+                onClick={() => setPanelAbierto(true)}
+                style={{
+                  background: C.gold, border: `1px solid ${C.gold}`, color: C.navy1,
+                  borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 700,
+                  cursor: 'pointer', fontFamily: FUENTES.sans, display: 'inline-flex', alignItems: 'center', gap: 6
+                }}
+              >
+                <Icon name="shield" size={14} color={C.navy1} /> Panel de Firmas
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setMostrarBases(v => !v)}
+              style={{ background: 'transparent', border: `1px solid ${C.gold}`, color: C.gold, borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: FUENTES.sans, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              Disposiciones de las bases <Icon name={mostrarBases ? 'chevronUp' : 'chevronDown'} size={14} color={C.gold} />
+            </button>
+          </div>
         </div>
         {mostrarBases && (
           <div style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: 14, marginTop: 14, fontSize: 12, color: '#E2E8F0', lineHeight: 1.6 }}>

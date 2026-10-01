@@ -28,25 +28,54 @@ export function scopeIdCYE({ alcance, categoria }) {
   throw new Error(`Alcance de panel no reconocido: "${alcance}".`);
 }
 
-export function candidatosScopeCYE({ categoria }) {
-  return categoria ? [`CAT_${categoria}`, 'GLOBAL'] : ['GLOBAL'];
+export function candidatosScopeCYE({ categoria } = {}) {
+  if (!categoria) return ['GLOBAL'];
+  const cat = String(categoria).toUpperCase();
+  if (cat === 'A') return ['CAT_A', 'A', 'GLOBAL'];
+  if (cat === 'B') return ['CAT_B', 'B'];
+  if (cat === 'C') return ['CAT_C', 'C'];
+  return [`CAT_${cat}`, cat];
 }
 
-/** Primer panel SELLADO aplicable a una categoría. Un borrador no gobierna documentos. */
+/**
+ * Resuelve el panel de firmas aplicable a una categoría.
+ * Prioriza panel sellado con firmas, luego panel sellado, y finalmente panel en borrador que tenga firmas registradas.
+ */
 export function resolverPanelFirmasCYE(panelesMap = {}, { categoria } = {}) {
-  for (const id of candidatosScopeCYE({ categoria })) {
+  const candidatos = candidatosScopeCYE({ categoria });
+  // 1. Primer panel sellado que contenga firmas
+  for (const id of candidatos) {
+    const p = panelesMap[id];
+    if (p && p.estado === 'sellado' && Array.isArray(p.firmantes) && p.firmantes.some(f => f?.firmaDataUrl)) {
+      return p;
+    }
+  }
+  // 2. Cualquier panel sellado
+  for (const id of candidatos) {
     const p = panelesMap[id];
     if (p && p.estado === 'sellado') return p;
+  }
+  // 3. Panel en borrador que tenga al menos una firma registrada
+  for (const id of candidatos) {
+    const p = panelesMap[id];
+    if (p && Array.isArray(p.firmantes) && p.firmantes.some(f => f?.firmaDataUrl)) {
+      return p;
+    }
+  }
+  // 4. Panel existente aunque esté en borrador inicial
+  for (const id of candidatos) {
+    const p = panelesMap[id];
+    if (p && Array.isArray(p.firmantes) && p.firmantes.length > 0) return p;
   }
   return null;
 }
 
-/** Firmante del casillero indicado (1, 2 o 3) de un panel sellado. */
+/** Firmante del casillero indicado (1, 2 o 3) del panel resuelto. */
 export function firmanteDelCasillero(panel, numeroJurado) {
-  if (!panel || panel.estado !== 'sellado') return null;
+  if (!panel) return null;
   const slot = Number(numeroJurado);
   if (!SLOTS_JURADO.includes(slot)) return null;
-  return (panel.firmantes || []).find(f => Number(f.numeroJurado) === slot) || null;
+  return (panel.firmantes || []).find(f => Number(f.numeroJurado || f.slot) === slot) || null;
 }
 
 export function firmantesOrdenadosCYE(panel) {
@@ -54,7 +83,12 @@ export function firmantesOrdenadosCYE(panel) {
 }
 
 export function esPreliminarCYE(panel) {
-  return !panel || panel.estado !== 'sellado';
+  if (!panel) return true;
+  if (panel.estado === 'sellado') return false;
+  const firmantes = panel.firmantes || [];
+  const conFirma = firmantes.filter(f => f && f.firmaDataUrl && String(f.firmaDataUrl).startsWith('data:image'));
+  if (conFirma.length >= SLOTS_JURADO.length) return false;
+  return true;
 }
 
 export function etiquetaGobernanzaCYE(panel) {

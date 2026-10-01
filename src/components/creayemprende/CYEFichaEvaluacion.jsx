@@ -12,13 +12,14 @@ import {
   saveCYEEvaluacion, reabrirCYEEvaluacion, deleteCYEEvaluacion,
   actualizarEstadoProyectoCYE, CasilleroOcupadoError
 } from '../../firebase/dbCreaEmprende';
-import { generarFichaCYEPDF } from '../../pdf/generarFichaCYEPDF';
+import { generarFichaCYEPDF, generarAnexoIndividualCYEPDF } from '../../pdf/generarFichaCYEPDF';
 import { obtenerMembreteCYE } from '../../pdf/membreteCreaEmprende';
 
 const DEBOUNCE_MS = 1200;
 const VACIO = { D10: {}, D11: {}, D12: {} };
 
 function completoAnexo(rubrica, puntajesAnexo = {}) {
+  if (puntajesAnexo?.nsp === true) return true;
   return rubrica.criterios.every(c => Number(puntajesAnexo[c.id]) >= 1);
 }
 
@@ -126,6 +127,7 @@ export default function CYEFichaEvaluacion({
       puntajeMaximo: calc.maximoTotal,
       anexosCompletos: calc.anexosCompletos,
       completa: calc.completa,
+      d12Nsp: Boolean(puntajes.D12?.nsp),
       observacionesJurado: observaciones,
       fecha: CYE_CONFIG.fechaEvaluacion,
       estado
@@ -256,6 +258,26 @@ export default function CYEFichaEvaluacion({
     }
   };
 
+  const marcarNSPD12 = () => {
+    if (soloLectura) return;
+    sucioRef.current = true;
+    setPuntajes(prev => ({
+      ...prev,
+      D12: { nsp: true }
+    }));
+    if (onToast) onToast('Anexo D12 marcado como No Se Presentó (Expoferia: 0 pts). Notas D10 y D11 conservadas.', 'info');
+  };
+
+  const desmarcarNSPD12 = () => {
+    if (soloLectura) return;
+    sucioRef.current = true;
+    setPuntajes(prev => ({
+      ...prev,
+      D12: {}
+    }));
+    if (onToast) onToast('Anexo D12 habilitado para calificar los 5 criterios.', 'info');
+  };
+
   const handleMarcarNSP = async () => {
     if (bloqueadoPorSellado) return;
     try {
@@ -346,6 +368,19 @@ export default function CYEFichaEvaluacion({
       );
     } catch (err) {
       if (onToast) onToast(`No se pudo generar el PDF: ${err.message}`, 'error');
+    }
+  };
+
+  const descargarAnexoPDF = async (anexoId) => {
+    try {
+      const banner = await obtenerMembreteCYE();
+      generarAnexoIndividualCYEPDF(
+        { ...construirPayload(evaluacionInicial?.estado || 'borrador'), id: idEvaluacion, evaluadorOperativo: evaluador },
+        anexoId,
+        { participante, panel, banner }
+      );
+    } catch (err) {
+      if (onToast) onToast(`No se pudo generar el PDF del Anexo ${anexoId}: ${err.message}`, 'error');
     }
   };
 
@@ -577,6 +612,10 @@ export default function CYEFichaEvaluacion({
           onCalificar={(criterioId, valor) => calificar(r.anexo, criterioId, valor)}
           soloLectura={soloLectura}
           acuerdos={acuerdos}
+          onMarcarNSP={r.anexo === 'D12' ? marcarNSPD12 : null}
+          onDesmarcarNSP={r.anexo === 'D12' ? desmarcarNSPD12 : null}
+          firmante={firmante}
+          numeroJurado={numeroJurado}
         />
       ))}
 
@@ -594,34 +633,40 @@ export default function CYEFichaEvaluacion({
         </div>
       )}
 
-      {/* ── Suscripción: visible cuando el panel está sellado, o para la comisión ── */}
-      {(firmante || esStaff) && (
-        <div style={{ ...S.seccion, borderLeft: `5px solid ${firmante ? C.green : C.gold}` }}>
-          {firmante ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-              <div style={{ width: 140, height: 56, border: `1px solid ${C.g300}`, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.white }}>
-                {firmante.firmaDataUrl
-                  ? <img src={firmante.firmaDataUrl} alt="Firma" style={{ maxHeight: 46, maxWidth: '100%', objectFit: 'contain' }} />
-                  : <span style={{ fontSize: 11, color: C.g500 }}>Sin trazo</span>}
-              </div>
-              <div style={{ fontSize: 13, color: C.g800, lineHeight: 1.5 }}>
-                Ficha suscrita por <strong style={{ color: C.navy2 }}>{firmante.nombreCompleto}</strong>, DNI {firmante.dni} — Jurado N.° {numeroJurado}
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 13, color: C.g700 }}>
-                La firma del Jurado N.° {numeroJurado} se incorpora desde el Panel de Firmas Oficial cuando se sella.
-              </div>
-              {onIrAlPanel && (
-                <button type="button" onClick={onIrAlPanel} style={btn('primario')}>
-                  <Icon name="penTool" size={13} color={C.white} /> Panel de Firmas
-                </button>
+      {/* ── Suscripción Oficial de la Ficha (Anexos D10, D11 y D12) ── */}
+      <div style={{ ...S.tarjeta, padding: '16px 20px', borderLeft: `5px solid ${firmante?.firmaDataUrl ? C.green : C.gold}` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <div style={{
+              width: 140, height: 60, border: `1px solid ${C.g300}`, borderRadius: 6,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.white
+            }}>
+              {firmante?.firmaDataUrl ? (
+                <img src={firmante.firmaDataUrl} alt={`Firma Jurado ${numeroJurado}`} style={{ maxHeight: 52, maxWidth: '92%', objectFit: 'contain' }} />
+              ) : (
+                <span style={{ fontSize: 11, color: C.g400, fontStyle: 'italic' }}>Sin firma registrada</span>
               )}
             </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: C.gold, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                Firma Oficial — Anexos D10, D11 y D12
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.navy2 }}>
+                {firmante?.nombreCompleto || `Jurado Calificador N.° ${numeroJurado}`}
+              </div>
+              <div style={{ fontSize: 12, color: C.g600, marginTop: 2 }}>
+                DNI: <strong>{firmante?.dni || '—'}</strong> · Jurado N.° {numeroJurado} de la Categoría {categoria}
+                {firmante?.presidente && <span style={{ ...S.chip('#FEF9C3', '#854D0E', '#FDE68A'), marginLeft: 8 }}>Preside</span>}
+              </div>
+            </div>
+          </div>
+          {onIrAlPanel && esStaff && (
+            <button type="button" onClick={onIrAlPanel} style={btn('secundario')}>
+              <Icon name="penTool" size={13} color={C.navy2} /> Modificar en Panel
+            </button>
           )}
         </div>
-      )}
+      </div>
 
       {/* ── Barra fija inferior ── */}
       <div style={{
@@ -681,10 +726,43 @@ export default function CYEFichaEvaluacion({
                   color: '#DC2626',
                   background: '#FEF2F2'
                 }}
-                title="Marcar si el participante no se presentó a la evaluación (Puntaje 0)"
+                title="Marcar si el participante no se presentó a la evaluación completa (Puntaje 0)"
               >
                 <Icon name="x" size={13} color="#DC2626" /> Incomparecencia (NSP)
               </button>
+            )}
+            {!noSePresento && !bloqueadoPorSellado && !ocupadoPorOtro && (
+              puntajes.D12?.nsp ? (
+                <button
+                  type="button"
+                  onClick={desmarcarNSPD12}
+                  disabled={guardando}
+                  style={{
+                    ...btn('contorno'),
+                    borderColor: '#FCD34D',
+                    color: '#B45309',
+                    background: '#FEF3C7'
+                  }}
+                  title="Habilitar los 5 criterios del Anexo D12 para calificación normal"
+                >
+                  <Icon name="refresh" size={13} color="#B45309" /> Desmarcar NSP D12
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={marcarNSPD12}
+                  disabled={guardando}
+                  style={{
+                    ...btn('contorno'),
+                    borderColor: '#FCD34D',
+                    color: '#B45309',
+                    background: '#FFFBEB'
+                  }}
+                  title="Marcar NSP únicamente para el Anexo D12 (Expoferia: 0 pts)"
+                >
+                  <Icon name="userX" size={13} color="#B45309" /> NSP Expoferia (D12)
+                </button>
+              )
             )}
             {noSePresento && !bloqueadoPorSellado && (
               <button
@@ -723,8 +801,17 @@ export default function CYEFichaEvaluacion({
                 {calculo.completa ? 'Registrar calificación' : `Faltan ${faltan} criterio${faltan === 1 ? '' : 's'}`}
               </button>
             )}
-            <button type="button" onClick={descargarPDF} style={btn('dorado')}>
-              <Icon name="download" size={13} /> PDF
+            <button type="button" onClick={descargarPDF} style={btn('dorado')} title="Descargar Ficha Completa con Anexos D10, D11 y D12 (PDF)">
+              <Icon name="download" size={13} /> Ficha (PDF)
+            </button>
+            <button type="button" onClick={() => descargarAnexoPDF('D10')} style={btn('secundario')} title="Descargar Anexo D10 - Proyecto (PDF)">
+              <Icon name="fileText" size={12} /> D10
+            </button>
+            <button type="button" onClick={() => descargarAnexoPDF('D11')} style={btn('secundario')} title="Descargar Anexo D11 - Portafolio (PDF)">
+              <Icon name="fileText" size={12} /> D11
+            </button>
+            <button type="button" onClick={() => descargarAnexoPDF('D12')} style={btn('secundario')} title="Descargar Anexo D12 - Expoferia (PDF)">
+              <Icon name="fileText" size={12} /> D12
             </button>
           </div>
         </div>

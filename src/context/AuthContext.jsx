@@ -15,11 +15,31 @@ import { construirBloqueJurado } from '../data/juegosFloralesCredenciales';
 import { descomponerCredencialCYE, getJuradoCYEPorCorreo } from '../data/creaEmprendeJurados';
 import { categoriasDeGrupo } from '../data/creaEmprendeConfig';
 import { descomponerCredencialEureka } from '../data/eurekaCredenciales';
+import { descomponerCredencialCOPAE, esCorreoJuradoCOPAE } from '../data/copaeJurados';
 
 const AuthContext = createContext(null);
 
 function enrichUserWithJuradoInfo(baseUser) {
     if (!baseUser || !baseUser.email) return baseUser;
+
+    // Jurados de COPAE: jurado1copae@ugel03.gob.pe o jurado2copae@ugel03.gob.pe o modulo copae
+    const credencialCOPAE = descomponerCredencialCOPAE(baseUser.email);
+    if (credencialCOPAE || baseUser.modulo === 'copae') {
+        const num = Number(baseUser.numeroJurado || credencialCOPAE?.numeroJurado) || 1;
+        const nombre = credencialCOPAE?.nombreCompleto || baseUser.nombreCompleto || baseUser.nombre || `Jurado Evaluador N.° ${num}`;
+        return {
+            ...baseUser,
+            rol: 'jurado',
+            modulo: 'copae',
+            numeroJurado: num,
+            nombre,
+            nombreCompleto: nombre,
+            dni: credencialCOPAE?.dni || baseUser.dni || '',
+            cargo: baseUser.cargo || `Jurado evaluador ${num} — Precongreso COPAE UGEL 03`,
+            permisos: ['copae'],
+            debeCambiarPassword: false
+        };
+    }
 
     // Jurados de Eureka: credencial eurekagrado{1y2|3y4|5y6}jurado{1..4}@ugel03.gob.pe o modulo eureka
     const credencialEureka = descomponerCredencialEureka(baseUser.email);
@@ -43,23 +63,37 @@ function enrichUserWithJuradoInfo(baseUser) {
         };
     }
 
-    // Jurados de Crea y Emprende: credencial grupo{G}jurado{N}@ugel03.gob.pe o perfil creado desde el módulo.
+    // Administrador específico de Crea y Emprende: rol admin_cye o admin con soloModulo/modulo creayemprende
+    if (baseUser.rol === 'admin_cye' || (baseUser.rol === 'admin' && (baseUser.soloModulo === 'creayemprende' || baseUser.modulo === 'creayemprende'))) {
+        return {
+            ...baseUser,
+            rol: 'admin_cye',
+            modulo: 'creayemprende',
+            soloModulo: 'creayemprende',
+            permisos: ['creayemprende']
+        };
+    }
+
+    // Jurados de Crea y Emprende: credencial cyecat{a|b|c}.g{1|2}.j{1..3}@ugel03.gob.pe o modulo creayemprende
     const credencialCYE = descomponerCredencialCYE(baseUser.email);
     if (credencialCYE || baseUser.modulo === 'creayemprende') {
         const padron = getJuradoCYEPorCorreo(baseUser.email);
-        const grupo = Number(baseUser.grupo || credencialCYE?.grupo || padron?.grupo) || null;
+        const cat = credencialCYE?.categoria || padron?.categoria || baseUser.categoriaCYE || 'A';
+        const grupo = Number(baseUser.grupo || credencialCYE?.grupo || padron?.grupo) || 1;
         const nombre = padron?.nombreCompleto || baseUser.nombreCompleto || baseUser.nombre || '';
         return {
             ...baseUser,
             rol: 'jurado',
             modulo: 'creayemprende',
+            categoriaCYE: cat,
+            categoriasCYE: baseUser.categoriasCYE || padron?.categorias || [cat],
             grupo,
             numeroCredencial: Number(baseUser.numeroCredencial || credencialCYE?.numeroCredencial || padron?.numeroCredencial) || null,
-            categoriasCYE: baseUser.categoriasCYE || padron?.categorias || categoriasDeGrupo(grupo),
             nombre,
             nombreCompleto: nombre,
             dni: padron?.dni || baseUser.dni || '',
-            cargo: baseUser.cargo || `Jurado calificador — Crea y Emprende (Grupo ${grupo || '—'})`
+            cargo: baseUser.cargo || `Jurado calificador — Crea y Emprende (Cat. ${cat} - Grupo ${grupo})`,
+            permisos: ['creayemprende']
         };
     }
 
@@ -158,11 +192,37 @@ export function AuthProvider({ children }) {
 
     const login = async (email, password) => {
         try {
-            const userCredential = await signInWithEmailAndPassword(
-                auth,
-                email.trim().toLowerCase(),
-                password.trim()
-            );
+            let normalizedEmail = email.trim().toLowerCase();
+            if (!normalizedEmail.includes('@')) {
+                normalizedEmail = `${normalizedEmail}@ugel03.gob.pe`;
+            }
+            const cleanPassword = password.trim();
+
+            let userCredential;
+            try {
+                userCredential = await signInWithEmailAndPassword(
+                    auth,
+                    normalizedEmail,
+                    cleanPassword
+                );
+            } catch (firstError) {
+                // Si falla, probar con la variante de contraseña (con o sin @ugel03.gob.pe)
+                let altPw = null;
+                if (cleanPassword.includes('@ugel03.gob.pe')) {
+                    altPw = cleanPassword.replace('@ugel03.gob.pe', '').trim();
+                } else {
+                    altPw = `${cleanPassword}@ugel03.gob.pe`;
+                }
+                try {
+                    userCredential = await signInWithEmailAndPassword(
+                        auth,
+                        normalizedEmail,
+                        altPw
+                    );
+                } catch {
+                    throw firstError;
+                }
+            }
             const firebaseUser = userCredential.user;
 
             // Consultar datos del usuario
@@ -277,11 +337,17 @@ export function AuthProvider({ children }) {
 
     const can = (permiso) => {
         if (!user) return false;
+        if (user.rol === 'admin_cye') return permiso === 'creayemprende';
+        if (user.rol === 'admin') {
+            if (user.soloModulo) return permiso === user.soloModulo;
+            return true;
+        }
         return user.permisos?.includes(permiso) || false;
     };
 
     const isRole = (rol) => {
         if (!user) return false;
+        if (rol === 'admin' && (user.rol === 'admin' || user.rol === 'admin_cye')) return true;
         return user.rol === rol;
     };
 

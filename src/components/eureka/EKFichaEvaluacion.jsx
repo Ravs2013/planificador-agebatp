@@ -30,7 +30,7 @@ function limpiarPuntajes(obj = {}) {
 
 /**
  * Ficha de evaluación de un proyecto para un casillero de jurado (Anexos E11 a E18).
- * El anexo lo decide el proyecto (padrón o comisión) y es el mismo para los tres jurados.
+ * El anexo lo decide el proyecto (padrón o comisión) y es el mismo para los cuatro jurados.
  */
 export default function EKFichaEvaluacion({
   participante,

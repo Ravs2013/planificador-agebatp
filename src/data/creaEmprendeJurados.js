@@ -17,53 +17,94 @@
 
 import { CYE_CONFIG, categoriasDeGrupo } from './creaEmprendeConfig';
 
-export function credencialCYE(grupo, numero) {
-  return `grupo${Number(grupo)}jurado${Number(numero)}${CYE_CONFIG.dominioCredenciales}`;
+export function credencialCYE(categoria, grupo, numero) {
+  return `cyecat${String(categoria).toLowerCase()}.g${Number(grupo)}.j${Number(numero)}${CYE_CONFIG.dominioCredenciales}`;
 }
 
-const jurado = (grupo, numero, apellidos, nombres, dni, cargo, institucion, perfil) => ({
+const jurado = (categoria, grupo, numero, apellidos, nombres, dni, cargo, institucion, opts = {}) => ({
+  categoria,
+  categorias: [categoria],
   grupo,
   numeroCredencial: numero,
-  correo: credencialCYE(grupo, numero),
+  correo: opts.correo || credencialCYE(categoria, grupo, numero),
   apellidos,
   nombres,
   nombreCompleto: `${apellidos}, ${nombres}`.toUpperCase(),
-  dni,
+  dni: dni || '00000000',
   cargo,
   institucion,
-  perfil,
-  categorias: categoriasDeGrupo(grupo),
-  origen: 'padron'
+  perfil: cargo,
+  origen: 'padron',
+  ...opts
 });
 
 export const JURADOS_CYE = [
-  jurado(1, 1, 'Alejos Flores', 'Alex Gerardo', '40443422', 'Director', 'CETPRO Magdalena', 'Educación técnico-productiva'),
-  jurado(1, 2, 'Quenaya Mayo', 'Celia', '10089476', 'Especialista del sector educación', 'Oficina de la UNESCO en el Perú', 'Política educativa'),
-  jurado(1, 3, 'Sifuentes León', 'Melka', '40298666', 'Directora', 'Colegio San Roque (Los Olivos)', 'Directivo de educación básica'),
+  // ── CATEGORÍA A ──
+  // Grupo 1
+  jurado('A', 1, 1, 'Sifuentes León', 'Melka', '40298666', 'Directora', 'Colegio San Roque (Los Olivos)'),
+  jurado('A', 1, 2, 'Díaz Díaz', 'Frida Yovanna', '09709123', 'Directora', 'Colegio Miss Frida'),
+  jurado('A', 1, 3, 'Arana Carhuancota', 'Mirtha Karina', '10000001', 'Especialista en Educación', 'UGEL 03'),
 
-  jurado(2, 1, 'Calle Alcahuaman de Navarro', 'Eliana Elizabeth', '10294372', 'Docente', 'CETPRO Nuestra Señora de Montserrat', 'Educación técnico-productiva'),
-  jurado(2, 2, 'Díaz Díaz', 'Frida Yovanna', '09709123', 'Directora', 'Colegio Miss Frida', 'Directivo de educación básica'),
-  jurado(2, 3, 'Mendoza Retamozo', 'Noemí', '23271871', 'Catedrática', 'Universidad César Vallejo', 'Académico'),
+  // Grupo 2
+  jurado('A', 2, 1, 'Alvarez Salazar', 'Edery Leon', '45409675', 'Catedrático', 'Universidad Nacional Federico Villarreal'),
+  jurado('A', 2, 2, 'Calderón Torres', 'Jossy Delina', '10747499', 'Directora', 'IEP Guadalupe Nueva Generación (Ventanilla)'),
+  jurado('A', 2, 3, 'Gonzales Oliver', 'Pedro', '10000002', 'Coordinador de Gestión Educativa Dirección de Proyectos', 'Universidad San Ignacio de Loyola (USIL)', { esTitular: true }),
+  // Extra para panel de firmas: Martin Guzman Britto (no evalúa, pero se incluye en panel de firmas a solicitud)
+  jurado('A', 2, 4, 'Guzman Britto', 'Martin', '10000003', 'Especialista en Educación', 'UGEL 03', { soloFirmas: true, correo: 'cye.martin.guzman@ugel03.gob.pe' }),
 
-  jurado(3, 1, 'Brañez Medrano', 'Nick Josias', '42965455', 'Director de la EP de Ciencias de la Comunicación', 'Universidad Peruana Unión', 'Académico'),
-  jurado(3, 2, 'Calderón Torres', 'Jossy Delina', '10747499', 'Directora', 'IEP Guadalupe Nueva Generación (Ventanilla)', 'Directivo de educación básica'),
-  jurado(3, 3, 'Reyes Salazar', 'Saida', '47463619', 'Docente', 'CETPRO Nuestra Señora de Montserrat', 'Educación técnico-productiva'),
-  jurado(3, 4, 'Ugarte Rojas', 'Liz Estrella', '07627730', 'Directora', 'CETPRO PROMAE Breña', 'Educación técnico-productiva'),
+  // ── CATEGORÍA B ──
+  // Grupo 1
+  jurado('B', 1, 1, 'Moscoso Pacheco de Perez', 'Silvia Yolanda', '07019505', 'Directora', "Colegio Le D' Alembert"),
+  jurado('B', 1, 2, 'Zúñiga Pablo', 'Grace', '10000004', 'Subgerente de Educación, Cultura, Deporte y juventud', 'Municipalidad Distrital de Carmen de la Legua Reynoso'),
+  jurado('B', 1, 3, 'Quenaya Mayo', 'Celia', '10089476', 'Especialista del sector educación', 'Oficina de la UNESCO en el Perú'),
 
-  jurado(4, 1, 'Alvarez Salazar', 'Edery Leon', '45409675', 'Catedrático', 'Universidad Nacional Federico Villarreal', 'Académico'),
-  jurado(4, 2, 'Ibarra Segura', 'Paula', '42888716', 'Docente', 'CETPRO Nuestra Señora de Montserrat', 'Educación técnico-productiva'),
-  jurado(4, 3, 'Moscoso Pacheco de Perez', 'Silvia Yolanda', '07019505', 'Directora', "Colegio Le D'Alembert", 'Directivo de educación básica')
+  // Grupo 2
+  jurado('B', 2, 1, 'Brañez Medrano', 'Nick Josias', '42965455', 'Director de EP de Ciencias de la Comunicación', 'Universidad Peruana Unión (UPeU)'),
+  jurado('B', 2, 2, 'Zavala Querevalu', 'Maria Angelica', '10000005', 'Especialista en Educación', 'UGEL 03'),
+  jurado('B', 2, 3, 'Ugarte Rojas', 'Liz Estrella', '07627730', 'Directora', 'CETPRO PROMAE Breña'),
+
+  // ── CATEGORÍA C ──
+  // Grupo 1
+  jurado('C', 1, 1, 'Mendoza Retamozo', 'Noemí', '23271871', 'Catedrática', 'Universidad César Vallejo (UCV)'),
+  jurado('C', 1, 2, 'Castillo Urday', 'Haldanth Lester', '10000006', 'Especialista en Educación', 'UGEL 03'),
+  jurado('C', 1, 3, 'Sifuentes León', 'Melka', '40298666', 'Directora', 'Colegio San Roque (Los Olivos)')
 ];
 
-export const PATRON_CREDENCIAL_CYE = /^grupo(\d+)jurado(\d+)@ugel03\.gob\.pe$/i;
+export const PATRON_CREDENCIAL_CYE = /^(?:cye\.?)?cat([abc])\.?g(\d+)\.?j(\d+)@ugel03\.gob\.pe$/i;
+export const PATRON_CREDENCIAL_CYE_LEGACY = /^grupo(\d+)jurado(\d+)@ugel03\.gob\.pe$/i;
 
 export function esCorreoJuradoCYE(correo) {
-  return PATRON_CREDENCIAL_CYE.test(String(correo || '').trim());
+  const c = String(correo || '').trim().toLowerCase();
+  if (PATRON_CREDENCIAL_CYE.test(c) || PATRON_CREDENCIAL_CYE_LEGACY.test(c)) return true;
+  return JURADOS_CYE.some(j => j.correo.toLowerCase() === c);
 }
 
 export function descomponerCredencialCYE(correo) {
-  const m = PATRON_CREDENCIAL_CYE.exec(String(correo || '').trim());
-  return m ? { grupo: Number(m[1]), numeroCredencial: Number(m[2]) } : null;
+  const c = String(correo || '').trim().toLowerCase();
+  const m = PATRON_CREDENCIAL_CYE.exec(c);
+  if (m) {
+    return {
+      categoria: m[1].toUpperCase(),
+      grupo: Number(m[2]),
+      numeroCredencial: Number(m[3])
+    };
+  }
+  const mLeg = PATRON_CREDENCIAL_CYE_LEGACY.exec(c);
+  if (mLeg) {
+    return {
+      grupo: Number(mLeg[1]),
+      numeroCredencial: Number(mLeg[2])
+    };
+  }
+  const j = JURADOS_CYE.find(x => x.correo.toLowerCase() === c);
+  if (j) {
+    return {
+      categoria: j.categoria,
+      grupo: j.grupo,
+      numeroCredencial: j.numeroCredencial
+    };
+  }
+  return null;
 }
 
 /** Padrón completo: base del Excel + altas registradas en Firestore (estas prevalecen). */

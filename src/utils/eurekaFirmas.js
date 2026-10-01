@@ -24,13 +24,13 @@ export const ALCANCES = {
 /* ───── 1. Identificadores de alcance ───── */
 
 /** scopeId determinista de un panel. */
-export function scopeIdDe({ alcance, categoria, areaId }) {
+export function scopeIdDe({ alcance = ALCANCES.CATEGORIA_AREA, categoria, areaId }) {
   if (alcance === ALCANCES.GLOBAL) return 'GLOBAL';
   if (alcance === ALCANCES.CATEGORIA) {
     if (!categoria) throw new Error('El alcance CATEGORIA exige una categoría.');
     return `CAT_${categoria}`;
   }
-  if (alcance === ALCANCES.CATEGORIA_AREA) {
+  if (alcance === ALCANCES.CATEGORIA_AREA || (categoria && areaId)) {
     if (!categoria || !areaId) throw new Error('El alcance CATEGORIA_AREA exige categoría y área.');
     return `CAT_${categoria}__AREA_${areaId}`;
   }

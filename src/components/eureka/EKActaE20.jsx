@@ -13,7 +13,7 @@ import { obtenerMembreteEureka } from '../../pdf/membreteEureka';
 
 /**
  * Anexo E20 — Acta de resultados.
- * Los tres jurados y el podio se resuelven automáticamente desde el Panel de Firmas y el
+ * Los cuatro jurados y el podio se resuelven automáticamente desde el Panel de Firmas y el
  * consolidado; se muestran en solo lectura. El párrafo de cierre es condicional: para las
  * categorías A, B y C la participación finaliza en la etapa UGEL; para D y E, el 1.er
  * puesto clasifica a la etapa DRE.

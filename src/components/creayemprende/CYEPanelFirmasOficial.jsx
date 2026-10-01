@@ -32,7 +32,7 @@ export default function CYEPanelFirmasOficial({
   esAdministrador = false,
   onToast
 }) {
-  const [alcance, setAlcance] = useState(ALCANCES_CYE.GLOBAL);
+  const [alcance, setAlcance] = useState(ALCANCES_CYE.CATEGORIA);
   const [panel, setPanel] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [confirmar, setConfirmar] = useState(false);
@@ -46,7 +46,11 @@ export default function CYEPanelFirmasOficial({
   const padron = useMemo(() => combinarJuradosCYE(juradosFirestore), [juradosFirestore]);
 
   useEffect(() => {
-    const remoto = panelesMap[scopeId];
+    let remoto = panelesMap[scopeId];
+    if (!remoto && alcance === ALCANCES_CYE.CATEGORIA) {
+      if (categoria === 'A') remoto = panelesMap['CAT_A'] || panelesMap['A'] || panelesMap['GLOBAL'];
+      else remoto = panelesMap[`CAT_${categoria}`] || panelesMap[categoria];
+    }
     const cambioScope = scopeCargadoRef.current !== scopeId;
     const cambioEstado = panel && remoto && panel.estado !== remoto.estado;
     if (cambioScope || cambioEstado || !panel) {
@@ -57,13 +61,13 @@ export default function CYEPanelFirmasOficial({
           ...remoto,
           alcance,
           categoria: alcance === ALCANCES_CYE.GLOBAL ? null : categoria,
-          firmantes: SLOTS_JURADO.map(slot => (remoto.firmantes || []).find(f => Number(f.numeroJurado) === slot) || vacio.firmantes[slot - 1])
+          firmantes: SLOTS_JURADO.map(slot => (remoto.firmantes || []).find(f => Number(f.numeroJurado || f.slot) === slot) || vacio.firmantes[slot - 1])
         }
         : vacio);
       scopeCargadoRef.current = scopeId;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopeId, panelesMap]);
+  }, [scopeId, panelesMap, categoria, alcance]);
 
   const alcanceEvaluaciones = useMemo(
     () => (alcance === ALCANCES_CYE.GLOBAL ? evaluaciones : evaluaciones.filter(e => e.categoria === categoria)),

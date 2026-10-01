@@ -38,8 +38,8 @@ export default function LoginForm({ onSwitchToRegister, onClose }) {
 
                 <form onSubmit={handleSubmit}>
                     <div style={{ marginBottom: 16 }}>
-                        <label style={{ fontSize: 11, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.6 }}>Correo Electronico</label>
-                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="usuario@ugel03.gob.pe"
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.6 }}>Usuario o Correo</label>
+                        <input type="text" value={email} onChange={e => setEmail(e.target.value)} placeholder="correo@ugel03.gob.pe o usuario"
                             style={{ width: '100%', padding: '11px 14px', borderRadius: 6, border: '1px solid #D6DCE8', fontSize: 13, fontFamily: "'DM Sans'" }} />
                     </div>
                     <div style={{ marginBottom: 20 }}>

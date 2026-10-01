@@ -310,7 +310,7 @@ export function construirParticipantesCYE({ semilla = [], importados = [], estad
       alertas: calculada.alertas,
       grupo: est.grupo != null ? Number(est.grupo) : (distribucion[p.id] ?? null),
       noSePresento: Boolean(est.noSePresento),
-      numero: null
+      numero: est.numero != null ? Number(est.numero) : (p.numero != null ? Number(p.numero) : null)
     };
   });
 
@@ -327,9 +327,12 @@ export function construirParticipantesCYE({ semilla = [], importados = [], estad
         conteo[elegido.grupo] += 1;
       });
     }
-    evaluablesCat
-      .sort((x, y) => String(x.institucion?.nombre).localeCompare(String(y.institucion?.nombre)) || (x.puestoIE - y.puestoIE))
-      .forEach((p, i) => { p.numero = i + 1; });
+    const sinNumero = evaluablesCat.filter(p => p.numero == null);
+    if (sinNumero.length > 0) {
+      sinNumero
+        .sort((x, y) => String(x.institucion?.nombre).localeCompare(String(y.institucion?.nombre)) || (x.puestoIE - y.puestoIE))
+        .forEach((p, i) => { p.numero = i + 1; });
+    }
   });
 
   return lista.sort((x, y) =>
@@ -356,6 +359,19 @@ export function resumenAdmision(participantes = [], categoria = null) {
 
 export function calcularAnexo(rubrica, puntajesAnexo = {}) {
   const criterios = rubrica?.criterios || [];
+  const esNsp = Boolean(puntajesAnexo?.nsp);
+  if (esNsp) {
+    return {
+      anexo: rubrica?.anexo,
+      subtotal: 0,
+      calificados: criterios.length,
+      total: criterios.length,
+      maximo: rubrica?.maximo || 0,
+      completo: true,
+      pendientes: [],
+      nsp: true
+    };
+  }
   let subtotal = 0;
   let calificados = 0;
   const pendientes = [];
@@ -375,7 +391,8 @@ export function calcularAnexo(rubrica, puntajesAnexo = {}) {
     total: criterios.length,
     maximo: rubrica?.maximo || 0,
     completo: criterios.length > 0 && calificados === criterios.length,
-    pendientes
+    pendientes,
+    nsp: false
   };
 }
 
@@ -444,7 +461,7 @@ export function construirD13(participantes = [], evaluaciones = [], numeroJurado
     .map(p => {
       const ev = idx.get(evaluacionIdCYE(p.id, numeroJurado));
       const registrada = ev?.estado === 'registrada';
-      const calc = registrada ? calcularFicha(p.categoria, ev.puntajes) : null;
+      const calc = ev ? calcularFicha(p.categoria, ev.puntajes) : null;
       return {
         numero: p.numero,
         participanteId: p.id,
@@ -455,7 +472,8 @@ export function construirD13(participantes = [], evaluaciones = [], numeroJurado
         dre: p.institucion?.dre || CYE_CONFIG.dre,
         d10: calc ? calc.anexos.D10.subtotal : null,
         d11: calc ? calc.anexos.D11.subtotal : null,
-        d12: calc ? calc.anexos.D12.subtotal : null,
+        d12: calc?.anexos.D12.completo ? calc.anexos.D12.subtotal : null,
+        d12Nsp: Boolean(calc?.anexos.D12?.nsp),
         total: calc ? calc.puntajeTotal : null,
         registrada,
         noSePresento: p.noSePresento
@@ -518,9 +536,9 @@ export function construirD14(participantes = [], evaluaciones = [], { dirimencia
     let registradas = 0;
     SLOTS_JURADO.forEach(slot => {
       const ev = idx.get(evaluacionIdCYE(p.id, slot));
-      const calc = ev?.estado === 'registrada' ? calcularFicha(p.categoria, ev.puntajes) : null;
+      const calc = ev ? calcularFicha(p.categoria, ev.puntajes) : null;
       notas[`jurado${slot}`] = calc ? calc.puntajeTotal : null;
-      if (calc) {
+      if (ev?.estado === 'registrada') {
         registradas += 1;
         sumas.D10 += calc.anexos.D10?.subtotal || 0;
         sumas.D11 += calc.anexos.D11?.subtotal || 0;

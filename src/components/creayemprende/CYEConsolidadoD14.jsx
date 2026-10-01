@@ -7,6 +7,7 @@ import { CYE_CONFIG, SLOTS_JURADO, getCategoriaCYE } from '../../data/creaEmpren
 import { maximoCategoria } from '../../data/creaEmprendeRubricas';
 import { construirD14, detectarEmpatesPodioCYE, sugerirDirimenciaCYE, etiquetaPuesto } from '../../utils/creaEmprendeHelpers';
 import { guardarDirimenciaCYE, cerrarCYEConsolidado, reabrirCYEConsolidado } from '../../firebase/dbCreaEmprende';
+import { firmantesOrdenadosCYE } from '../../utils/creaEmprendeFirmas';
 import { obtenerMembreteCYE } from '../../pdf/membreteCreaEmprende';
 import { generarD14PDF } from '../../pdf/generarDocumentosCYEPDF';
 
@@ -21,6 +22,7 @@ export default function CYEConsolidadoD14({ categoria, participantes = [], evalu
   );
   const filas = cerrado && Array.isArray(consolidado?.filas) ? consolidado.filas : filasVivas;
   const empates = useMemo(() => detectarEmpatesPodioCYE(filas), [filas]);
+  const firmantes = useMemo(() => firmantesOrdenadosCYE(panel), [panel]);
   const sugerencia = useMemo(() => sugerirDirimenciaCYE(construirD14(participantes, evaluaciones)), [participantes, evaluaciones]);
   const claveSugerencia = JSON.stringify(sugerencia?.orden || {});
 
@@ -204,6 +206,39 @@ export default function CYEConsolidadoD14({ categoria, participantes = [], evalu
             {observados.length > 0 && `${observados.length} proyecto(s) observados pendientes de decisión en Padrón y admisión.`}
           </div>
         )}
+
+        {/* ── Bloque Oficial de Firmas del Jurado Calificador (3 Casilleros) ── */}
+        <div style={{ padding: '18px 20px', borderTop: `2px solid ${C.border}`, background: C.g50 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: C.navy2, letterSpacing: 0.6, textTransform: 'uppercase' }}>
+              Firmas Oficiales del Jurado Calificador — Categoría {categoria}
+            </div>
+            <div style={{ fontSize: 11.5, color: C.g500 }}>
+              {firmantes.filter(f => f?.firmaDataUrl).length} de {SLOTS_JURADO.length} firmas registradas
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16 }}>
+            {SLOTS_JURADO.map((s, i) => {
+              const f = firmantes[i];
+              return (
+                <div key={s} style={{ textAlign: 'center', background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                  <div style={{ height: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', marginBottom: 6 }}>
+                    {f?.firmaDataUrl ? (
+                      <img src={f.firmaDataUrl} alt={`Firma del Jurado N.° ${s}`} style={{ maxHeight: 54, maxWidth: '90%', objectFit: 'contain' }} />
+                    ) : (
+                      <span style={{ fontSize: 11, color: C.g400, fontStyle: 'italic' }}>Sin firma registrada</span>
+                    )}
+                  </div>
+                  <div style={{ borderTop: `1px solid ${C.g400}`, paddingTop: 6, fontSize: 11.5, color: C.g800, lineHeight: 1.45 }}>
+                    <div style={{ fontWeight: 800, color: C.navy2 }}>{f?.nombreCompleto || 'Jurado sin asignar'}</div>
+                    <div style={{ color: C.g600, fontSize: 11 }}>DNI: {f?.dni || '—'}{f?.presidente ? ' · Preside' : ''}</div>
+                    <div style={{ fontWeight: 800, color: C.gold, fontSize: 11, marginTop: 2 }}>JURADO CALIFICADOR N.° {s}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>

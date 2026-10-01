@@ -97,20 +97,27 @@ function tablaRubrica(doc, rubrica, puntajes = {}, y, chromeOpts, margenSuperior
 function tablaEscala(doc, rubrica, puntajes = {}, y, chromeOpts, margenSuperior) {
   y = nuevaPaginaSiFalta(doc, y, 50, chromeOpts);
   y = barraSeccion(doc, `ANEXO D12 — ${rubrica.titulo.toUpperCase()}`, y);
+  const esNsp = Boolean(puntajes?.nsp);
   let subtotal = 0;
   const marca = { halign: 'center', valign: 'middle', fontStyle: 'bold', fontSize: 9, textColor: RGB_CYE.navy2 };
-  const body = rubrica.criterios.map(c => {
+  const body = [];
+  if (esNsp) {
+    body.push([
+      { content: 'NO SE PRESENTÓ A LA EXPOFERIA PRESENCIAL (INCOMPARECENCIA - NSP) — VALORACIÓN: 0 PUNTOS', colSpan: 8, styles: { halign: 'center', fontStyle: 'bold', fillColor: RGB_CYE.gris100, textColor: [180, 83, 9] } }
+    ]);
+  }
+  rubrica.criterios.forEach(c => {
     const v = Number(puntajes[c.id]);
-    if (v >= 1 && v <= 4) subtotal += v;
-    return [
+    if (v >= 1 && v <= 4 && !esNsp) subtotal += v;
+    body.push([
       { content: `${c.numero}. ${c.nombre}`, styles: { fontStyle: 'bold', fillColor: RGB_CYE.gris50 } },
       c.pregunta, `- ${c.evidencia}`, c.tiempo,
-      ...[4, 3, 2, 1].map(n => ({ content: v === n ? String(n) : '', styles: marca }))
-    ];
+      ...[4, 3, 2, 1].map(n => ({ content: (!esNsp && v === n) ? String(n) : '', styles: marca }))
+    ]);
   });
   body.push([
     { content: 'TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: RGB_CYE.gris100 } },
-    { content: `${subtotal} / ${rubrica.maximo}`, colSpan: 4, styles: { halign: 'center', fontStyle: 'bold', fillColor: RGB_CYE.gris100 } }
+    { content: esNsp ? `0 / ${rubrica.maximo} (NSP)` : `${subtotal} / ${rubrica.maximo}`, colSpan: 4, styles: { halign: 'center', fontStyle: 'bold', fillColor: RGB_CYE.gris100 } }
   ]);
   autoTable(doc, {
     startY: y,
@@ -141,7 +148,10 @@ function tablaEscala(doc, rubrica, puntajes = {}, y, chromeOpts, margenSuperior)
 }
 
 function resumen(doc, calc, y) {
-  const celda = (etiqueta, a) => ({ content: `${etiqueta}\n${a.subtotal} / ${a.maximo}`, styles: { fillColor: RGB_CYE.gris100 } });
+  const celda = (etiqueta, a) => {
+    const sufijo = a?.nsp ? ' (NSP)' : '';
+    return { content: `${etiqueta}${sufijo}\n${a.subtotal} / ${a.maximo}`, styles: { fillColor: RGB_CYE.gris100 } };
+  };
   autoTable(doc, {
     startY: y,
     margin: { left: M.left, right: M.right },
@@ -221,6 +231,54 @@ export function generarFichaCYEPDF(evaluacion, { participante = null, panel = nu
   aplicarPiePaginasCYE(doc, { preliminar: esPreliminarCYE(panel) });
   const slot = evaluacion.jurado?.numeroJurado || 1;
   const nombre = `Ficha_CYE2026_Cat${evaluacion.categoria}_N${participante?.numero || ''}_${sanitizarNombreArchivo(participante?.institucion?.nombre || '')}_J${slot}.pdf`;
+  if (guardar) doc.save(nombre);
+  return doc;
+}
+
+/** Dibuja un anexo individual (D10, D11 o D12) con su rúbrica/escala y la firma oficial del jurado. */
+export function dibujarAnexoIndividualCYE(doc, { evaluacion, anexoId = 'D10', participante, panel = null, banner = null, nuevaPagina = false }) {
+  const slot = Number(evaluacion.jurado?.numeroJurado) || 1;
+  const cat = getCategoriaCYE(evaluacion.categoria);
+  const instrumentos = getInstrumentosCategoria(evaluacion.categoria);
+  const rubrica = instrumentos.find(r => r.anexo === anexoId) || instrumentos[0];
+  const chromeOpts = {
+    orientacion: 'portrait',
+    titulo: `ANEXO ${rubrica.anexo} — ${rubrica.titulo.toUpperCase()}`,
+    subtitulo: `Concurso Nacional Crea y Emprende 2026 · Etapa UGEL · ${cat ? cat.nombre : ''} · Jurado N.° ${slot}`,
+    banner
+  };
+  if (nuevaPagina) doc.addPage([A4.ancho, A4.alto], 'portrait');
+  let y = drawChromeCYE(doc, chromeOpts);
+  const margenSuperior = medirChromeCYE(doc, chromeOpts);
+  y = identificacion(doc, evaluacion, participante, y);
+
+  const puntajes = evaluacion.puntajes || {};
+  y = rubrica.tipo === 'escala'
+    ? tablaEscala(doc, rubrica, puntajes[rubrica.anexo], y, chromeOpts, margenSuperior)
+    : tablaRubrica(doc, rubrica, puntajes[rubrica.anexo], y, chromeOpts, margenSuperior);
+
+  doc.setFont('Arial', 'normal');
+  doc.setFontSize(6.9);
+  const lineasObs = doc.splitTextToSize(evaluacion.observacionesJurado || 'Sin observaciones.', W - 4).length;
+  const altoCierre = 12 + Math.min(24, Math.max(9, lineasObs * 3 + 3)) + 5 + 40;
+  y = nuevaPaginaSiFalta(doc, y, altoCierre, chromeOpts);
+  y = observaciones(doc, evaluacion, y);
+
+  drawBloqueFirmaCYE(doc, {
+    x: A4.ancho / 2 - 42, y: y + 2, ancho: 84,
+    firmante: bloqueFirmaCYE(firmanteDelCasillero(panel, slot), slot),
+    numeroJurado: slot, conInstitucion: true, conFecha: true,
+    fecha: formatearFechaCorta(evaluacion.fecha || CYE_CONFIG.fechaEvaluacion)
+  });
+}
+
+export function generarAnexoIndividualCYEPDF(evaluacion, anexoId, { participante = null, panel = null, banner = null, guardar = true } = {}) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  aplicarFuentesArial(doc);
+  dibujarAnexoIndividualCYE(doc, { evaluacion, anexoId, participante, panel, banner });
+  aplicarPiePaginasCYE(doc, { preliminar: esPreliminarCYE(panel) });
+  const slot = evaluacion.jurado?.numeroJurado || 1;
+  const nombre = `Anexo${anexoId}_CYE2026_Cat${evaluacion.categoria}_N${participante?.numero || ''}_${sanitizarNombreArchivo(participante?.institucion?.nombre || '')}_J${slot}.pdf`;
   if (guardar) doc.save(nombre);
   return doc;
 }

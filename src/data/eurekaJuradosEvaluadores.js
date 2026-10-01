@@ -29,21 +29,21 @@ export const EQUIPOS_JURADO_PRIMARIA = [
 export const JURADOS_EVALUADORES_EUREKA = [
   {
     "dni": "07943895",
-    "nombreOriginal": "Valderrama barrientos Ana Rosario",
-    "apellidos": "Valderrama Barrientos",
+    "nombreOriginal": "Barrientos Valderrama Ana Rosario",
+    "apellidos": "Barrientos Valderrama",
     "nombres": "Ana Rosario",
-    "nombreCompleto": "Valderrama Barrientos, Ana Rosario",
+    "nombreCompleto": "Barrientos Valderrama, Ana Rosario",
     "correo": "avalderrama@ugel03.gob.pe",
     "correoOriginal": "avalderrama@ugel03.gob.pe",
     "celular": "962382336",
     "grupoAsignado": "A",
     "categoriasAsignadas": [
-      "A"
+      "A", "D"
     ],
     "tipoMiembro": "por_definir",
     "institucion": "UGEL 03",
     "correoInstitucional": true,
-    "requiereValidacionNombre": true,
+    "requiereValidacionNombre": false,
     "tildesInferidas": false,
     "activo": true
   },
@@ -58,12 +58,12 @@ export const JURADOS_EVALUADORES_EUREKA = [
     "celular": "966506413",
     "grupoAsignado": "A",
     "categoriasAsignadas": [
-      "A"
+      "A", "D"
     ],
     "tipoMiembro": "por_definir",
     "institucion": "",
     "correoInstitucional": false,
-    "requiereValidacionNombre": true,
+    "requiereValidacionNombre": false,
     "tildesInferidas": false,
     "activo": true
   },
@@ -78,7 +78,7 @@ export const JURADOS_EVALUADORES_EUREKA = [
     "celular": "959354883",
     "grupoAsignado": "A",
     "categoriasAsignadas": [
-      "A"
+      "A", "D"
     ],
     "tipoMiembro": "por_definir",
     "institucion": "",
@@ -103,7 +103,7 @@ export const JURADOS_EVALUADORES_EUREKA = [
     "tipoMiembro": "por_definir",
     "institucion": "",
     "correoInstitucional": false,
-    "requiereValidacionNombre": true,
+    "requiereValidacionNombre": false,
     "tildesInferidas": false,
     "activo": true
   },
@@ -118,27 +118,27 @@ export const JURADOS_EVALUADORES_EUREKA = [
     "celular": "998068063",
     "grupoAsignado": "B",
     "categoriasAsignadas": [
-      "B"
+      "B", "E"
     ],
     "tipoMiembro": "por_definir",
     "institucion": "UGEL 03",
     "correoInstitucional": true,
-    "requiereValidacionNombre": true,
+    "requiereValidacionNombre": false,
     "tildesInferidas": true,
     "activo": true
   },
   {
     "dni": "08048697",
-    "nombreOriginal": "ARANGUREN CARBAJAL, Ada María Lilly",
+    "nombreOriginal": "ARANGUREN CARBAJAL ADA MARIA",
     "apellidos": "Aranguren Carbajal",
-    "nombres": "Ada María Lilly",
-    "nombreCompleto": "Aranguren Carbajal, Ada María Lilly",
+    "nombres": "Ada María",
+    "nombreCompleto": "Aranguren Carbajal, Ada María",
     "correo": "amalic2640@gmail.com",
     "correoOriginal": "amalic2640@gmail.com",
     "celular": "940208993",
     "grupoAsignado": "B",
     "categoriasAsignadas": [
-      "B"
+      "B", "D"
     ],
     "tipoMiembro": "por_definir",
     "institucion": "",
@@ -158,12 +158,12 @@ export const JURADOS_EVALUADORES_EUREKA = [
     "celular": "945231618",
     "grupoAsignado": "B",
     "categoriasAsignadas": [
-      "B"
+      "B", "E"
     ],
     "tipoMiembro": "por_definir",
     "institucion": "UGEL 03",
     "correoInstitucional": true,
-    "requiereValidacionNombre": true,
+    "requiereValidacionNombre": false,
     "tildesInferidas": false,
     "activo": true
   },
@@ -183,27 +183,27 @@ export const JURADOS_EVALUADORES_EUREKA = [
     "tipoMiembro": "por_definir",
     "institucion": "",
     "correoInstitucional": false,
-    "requiereValidacionNombre": true,
+    "requiereValidacionNombre": false,
     "tildesInferidas": true,
     "activo": true
   },
   {
     "dni": "09941664",
-    "nombreOriginal": "Castillo Urday Haldanth Lester",
-    "apellidos": "Castillo Urday",
+    "nombreOriginal": "Castillo Haldanth Lester",
+    "apellidos": "Castillo",
     "nombres": "Haldanth Lester",
-    "nombreCompleto": "Castillo Urday, Haldanth Lester",
+    "nombreCompleto": "Castillo, Haldanth Lester",
     "correo": "lcastillou@ugel03.gob.pe",
     "correoOriginal": "lcastillou@ugel03.gob.pe ",
     "celular": "993785173",
     "grupoAsignado": "C",
     "categoriasAsignadas": [
-      "C"
+      "C", "D"
     ],
     "tipoMiembro": "por_definir",
     "institucion": "UGEL 03",
     "correoInstitucional": true,
-    "requiereValidacionNombre": true,
+    "requiereValidacionNombre": false,
     "tildesInferidas": false,
     "activo": true
   },
@@ -218,53 +218,193 @@ export const JURADOS_EVALUADORES_EUREKA = [
     "celular": "989686505",
     "grupoAsignado": "C",
     "categoriasAsignadas": [
-      "C"
+      "C", "E"
     ],
     "tipoMiembro": "por_definir",
     "institucion": "UGEL 03",
     "correoInstitucional": true,
-    "requiereValidacionNombre": true,
+    "requiereValidacionNombre": false,
     "tildesInferidas": true,
     "activo": true
   },
   {
     "dni": "09616898",
-    "nombreOriginal": "arana carhuancota mirtha karina",
-    "apellidos": "Arana Carhuancota",
+    "nombreOriginal": "Carhuancota Arana Mirtha Karina",
+    "apellidos": "Carhuancota Arana",
     "nombres": "Mirtha Karina",
-    "nombreCompleto": "Arana Carhuancota, Mirtha Karina",
+    "nombreCompleto": "Carhuancota Arana, Mirtha Karina",
     "correo": "maranac@ugel03.gob.pe",
     "correoOriginal": "maranac@ugel 03.gob.pe",
     "celular": "922585542",
     "grupoAsignado": "C",
     "categoriasAsignadas": [
-      "C"
+      "C", "D"
     ],
     "tipoMiembro": "por_definir",
     "institucion": "UGEL 03",
     "correoInstitucional": true,
-    "requiereValidacionNombre": true,
+    "requiereValidacionNombre": false,
     "tildesInferidas": false,
     "activo": true
   },
   {
     "dni": "07903991",
-    "nombreOriginal": "GUZMAN BRITTO MARTIN",
-    "apellidos": "Guzmán Britto",
+    "nombreOriginal": "GUZMAN BRITO MARTIN",
+    "apellidos": "Guzmán Brito",
     "nombres": "Martín",
-    "nombreCompleto": "Guzmán Britto, Martín",
+    "nombreCompleto": "Guzmán Brito, Martín",
     "correo": "mguzman@ugel03.gob.pe",
     "correoOriginal": "mguzman@ugel03.gob.pe",
     "celular": "959949630",
     "grupoAsignado": "C",
     "categoriasAsignadas": [
-      "C"
+      "C", "E"
     ],
     "tipoMiembro": "por_definir",
     "institucion": "UGEL 03",
     "correoInstitucional": true,
-    "requiereValidacionNombre": true,
+    "requiereValidacionNombre": false,
     "tildesInferidas": true,
+    "activo": true
+  },
+  {
+    "dni": "43316345",
+    "nombreOriginal": "Villa Longa Roxana Vanessa",
+    "apellidos": "Villa Longa",
+    "nombres": "Roxana Vanessa",
+    "nombreCompleto": "Villa Longa, Roxana Vanessa",
+    "correo": "",
+    "correoOriginal": "",
+    "celular": "",
+    "grupoAsignado": "E",
+    "categoriasAsignadas": [
+      "E"
+    ],
+    "tipoMiembro": "docente_eb",
+    "institucion": "UGEL 03",
+    "correoInstitucional": false,
+    "requiereValidacionNombre": false,
+    "tildesInferidas": false,
+    "activo": true
+  },
+  {
+    "dni": "09629015",
+    "nombreOriginal": "Terbullino Fernández Roxana Justina",
+    "apellidos": "Terbullino Fernández",
+    "nombres": "Roxana Justina",
+    "nombreCompleto": "Terbullino Fernández, Roxana Justina",
+    "correo": "",
+    "correoOriginal": "",
+    "celular": "",
+    "grupoAsignado": "E",
+    "categoriasAsignadas": [
+      "E"
+    ],
+    "tipoMiembro": "docente_eb",
+    "institucion": "UGEL 03",
+    "correoInstitucional": false,
+    "requiereValidacionNombre": false,
+    "tildesInferidas": false,
+    "activo": true
+  },
+  {
+    "dni": "09594076",
+    "nombreOriginal": "Toro Chochabot Rosa",
+    "apellidos": "Toro Chochabot",
+    "nombres": "Rosa",
+    "nombreCompleto": "Toro Chochabot, Rosa",
+    "correo": "",
+    "correoOriginal": "",
+    "celular": "",
+    "grupoAsignado": "D",
+    "categoriasAsignadas": [
+      "D"
+    ],
+    "tipoMiembro": "docente_eb",
+    "institucion": "UGEL 03",
+    "correoInstitucional": false,
+    "requiereValidacionNombre": false,
+    "tildesInferidas": false,
+    "activo": true
+  },
+  {
+    "dni": "24001606",
+    "nombreOriginal": "Valencia Hancco Virginia",
+    "apellidos": "Valencia Hancco",
+    "nombres": "Virginia",
+    "nombreCompleto": "Valencia Hancco, Virginia",
+    "correo": "",
+    "correoOriginal": "",
+    "celular": "",
+    "grupoAsignado": "D",
+    "categoriasAsignadas": [
+      "D"
+    ],
+    "tipoMiembro": "docente_eb",
+    "institucion": "UGEL 03",
+    "correoInstitucional": false,
+    "requiereValidacionNombre": false,
+    "tildesInferidas": false,
+    "activo": true
+  },
+  {
+    "dni": "42965455",
+    "nombreOriginal": "Brañez Medrano Nick Josias",
+    "apellidos": "Brañez Medrano",
+    "nombres": "Nick Josias",
+    "nombreCompleto": "Brañez Medrano, Nick Josias",
+    "correo": "",
+    "correoOriginal": "",
+    "celular": "",
+    "grupoAsignado": "D",
+    "categoriasAsignadas": [
+      "D"
+    ],
+    "tipoMiembro": "docente_eb",
+    "institucion": "UGEL 03",
+    "correoInstitucional": false,
+    "requiereValidacionNombre": false,
+    "tildesInferidas": false,
+    "activo": true
+  },
+  {
+    "dni": "09072271",
+    "nombreOriginal": "Suyo Villar Ysabel",
+    "apellidos": "Suyo Villar",
+    "nombres": "Ysabel",
+    "nombreCompleto": "Suyo Villar, Ysabel",
+    "correo": "",
+    "correoOriginal": "",
+    "celular": "",
+    "grupoAsignado": "E",
+    "categoriasAsignadas": [
+      "E"
+    ],
+    "tipoMiembro": "docente_eb",
+    "institucion": "UGEL 03",
+    "correoInstitucional": false,
+    "requiereValidacionNombre": false,
+    "tildesInferidas": false,
+    "activo": true
+  },
+  {
+    "dni": "07465482",
+    "nombreOriginal": "Zavala Querevalú María Angélica",
+    "apellidos": "Zavala Querevalú",
+    "nombres": "María Angélica",
+    "nombreCompleto": "Zavala Querevalú, María Angélica",
+    "correo": "",
+    "correoOriginal": "",
+    "celular": "",
+    "grupoAsignado": "D",
+    "categoriasAsignadas": [
+      "D"
+    ],
+    "tipoMiembro": "docente_eb",
+    "institucion": "UGEL 03",
+    "correoInstitucional": false,
+    "requiereValidacionNombre": false,
+    "tildesInferidas": false,
     "activo": true
   }
 ];

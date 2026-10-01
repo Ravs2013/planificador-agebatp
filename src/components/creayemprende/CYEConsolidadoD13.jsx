@@ -69,7 +69,9 @@ export default function CYEConsolidadoD13({ categoria, participantes = [], evalu
                   </td>
                   <td style={{ ...S.td, fontSize: 11.5 }}>{[f.gradoSeccion, f.institucion, f.ugel, f.dre].filter(Boolean).join(' / ')}</td>
                   {['d10', 'd11', 'd12'].map(k => (
-                    <td key={k} style={{ ...S.td, textAlign: 'center', fontFamily: FUENTES.mono }}>{f[k] ?? '—'}</td>
+                    <td key={k} style={{ ...S.td, textAlign: 'center', fontFamily: FUENTES.mono }}>
+                      {k === 'd12' && f.d12Nsp ? <span style={{ color: '#B45309', fontWeight: 700 }}>0 (NSP)</span> : (f[k] ?? '—')}
+                    </td>
                   ))}
                   <td style={{ ...S.td, textAlign: 'center', fontFamily: FUENTES.mono, fontWeight: 800, color: C.navy2 }}>{f.total ?? '—'}</td>
                 </tr>
@@ -85,19 +87,39 @@ export default function CYEConsolidadoD13({ categoria, participantes = [], evalu
         </div>
       </div>
 
-      <div style={{ ...S.seccion, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 12.5, color: C.g700 }}>
-          {firmante
-            ? <>Suscribe el formato del Jurado N.° {slot}: <strong style={{ color: C.navy2 }}>{firmante.nombreCompleto}</strong>, DNI {firmante.dni}.</>
-            : `La firma del Jurado N.° ${slot} se incorpora al sellar el Panel de Firmas.`}
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" disabled={descargando} onClick={() => descargar([slot])} style={descargando ? btnDeshabilitado(btn('real')) : btn('real')}>
-            <Icon name="download" size={13} color={C.white} /> D13 del Jurado N.° {slot} (PDF)
-          </button>
-          <button type="button" disabled={descargando} onClick={() => descargar([1, 2, 3])} style={descargando ? btnDeshabilitado(btn('indigo')) : btn('indigo')}>
-            <Icon name="download" size={13} color={C.white} /> D13 de los tres jurados (PDF)
-          </button>
+      <div style={{ ...S.tarjeta, padding: '16px 20px', borderLeft: `5px solid ${firmante?.firmaDataUrl ? C.green : C.gold}` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <div style={{
+              width: 140, height: 60, border: `1px solid ${C.g300}`, borderRadius: 6,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.white
+            }}>
+              {firmante?.firmaDataUrl ? (
+                <img src={firmante.firmaDataUrl} alt={`Firma J${slot}`} style={{ maxHeight: 52, maxWidth: '90%', objectFit: 'contain' }} />
+              ) : (
+                <span style={{ fontSize: 11, color: C.g400, fontStyle: 'italic' }}>Sin firma registrada</span>
+              )}
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: C.gold, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                Firma Oficial — Anexo D13
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.navy2 }}>
+                {firmante?.nombreCompleto || `Jurado Calificador N.° ${slot}`}
+              </div>
+              <div style={{ fontSize: 12, color: C.g600 }}>
+                DNI: <strong>{firmante?.dni || '—'}</strong> · Jurado N.° {slot} de la Categoría {categoria}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button type="button" disabled={descargando} onClick={() => descargar([slot])} style={descargando ? btnDeshabilitado(btn('real')) : btn('real')}>
+              <Icon name="download" size={13} color={C.white} /> D13 del Jurado N.° {slot} (PDF)
+            </button>
+            <button type="button" disabled={descargando} onClick={() => descargar([1, 2, 3])} style={descargando ? btnDeshabilitado(btn('indigo')) : btn('indigo')}>
+              <Icon name="download" size={13} color={C.white} /> D13 de los tres jurados (PDF)
+            </button>
+          </div>
         </div>
       </div>
     </div>
