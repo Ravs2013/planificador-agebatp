@@ -886,6 +886,7 @@ export default function DirectorioCEBA() {
                         {filtered.map((ceba, idx) => {
                             const gMeta = gestionMeta(ceba.tipoGestion);
                             const dirNom = nombreDirector(ceba);
+                            const isPronoepsa = (ceba.nombre || "").toUpperCase().includes("PRONOEPSA");
 
                             // Baldosas filtradas por metricaVisible (R-3c)
                             const baldosas = [
@@ -904,16 +905,36 @@ export default function DirectorioCEBA() {
                                         cursor: "pointer",
                                         transition: "all 0.2s",
                                         position: "relative",
+                                        ...(isPronoepsa ? {
+                                            background: "linear-gradient(135deg, #FFFDF5 0%, #FEF9C3 40%, #FEF08A 100%)",
+                                            border: "1.5px solid #F59E0B",
+                                            boxShadow: "0 4px 20px rgba(217, 119, 6, 0.18), 0 1px 3px rgba(15,23,42,0.06)",
+                                        } : {})
                                     }}
-                                    onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(15,23,42,0.12)"; }}
-                                    onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(15,23,42,0.06)"; }}
+                                    onMouseEnter={e => {
+                                        e.currentTarget.style.transform = "translateY(-2px)";
+                                        e.currentTarget.style.boxShadow = isPronoepsa
+                                            ? "0 10px 28px rgba(217, 119, 6, 0.30)"
+                                            : "0 8px 24px rgba(15,23,42,0.12)";
+                                    }}
+                                    onMouseLeave={e => {
+                                        e.currentTarget.style.transform = "translateY(0)";
+                                        e.currentTarget.style.boxShadow = isPronoepsa
+                                            ? "0 4px 20px rgba(217, 119, 6, 0.18), 0 1px 3px rgba(15,23,42,0.06)"
+                                            : "0 1px 3px rgba(15,23,42,0.06)";
+                                    }}
                                 >
                                     {/* Header */}
                                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 12 }}>
-                                        <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: C.navy1, fontFamily: "'DM Sans', sans-serif", lineHeight: 1.3, flex: 1 }}>
+                                        <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: isPronoepsa ? "#78350F" : C.navy1, fontFamily: "'DM Sans', sans-serif", lineHeight: 1.3, flex: 1 }}>
                                             {ceba.nombre}
                                         </h4>
                                         <div style={{ display: "flex", gap: 4, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                                            {isPronoepsa && (
+                                                <span style={S.badge("#FEF3C7", "#92400E", "#F59E0B")}>
+                                                    PRONOEPSA
+                                                </span>
+                                            )}
                                             <span style={S.badge(gMeta.bg, gMeta.color, gMeta.borde)}>
                                                 {gMeta.etiqueta}
                                             </span>
@@ -934,11 +955,12 @@ export default function DirectorioCEBA() {
                                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                                         <div style={{
                                             width: 30, height: 30, borderRadius: 6,
-                                            background: dirNom ? C.navy3 : C.g100,
-                                            color: dirNom ? C.white : C.g400,
+                                            background: isPronoepsa ? "linear-gradient(135deg, #F59E0B 0%, #B45309 100%)" : (dirNom ? C.navy3 : C.g100),
+                                            color: dirNom || isPronoepsa ? C.white : C.g400,
                                             display: "flex", alignItems: "center", justifyContent: "center",
                                             fontWeight: 700, fontSize: 10, flexShrink: 0,
-                                            fontFamily: "'JetBrains Mono', monospace"
+                                            fontFamily: "'JetBrains Mono', monospace",
+                                            boxShadow: isPronoepsa ? "0 2px 6px rgba(180, 83, 9, 0.35)" : "none"
                                         }}>
                                             {dirNom ? `${(ceba.nombres || "D")[0]}${(ceba.apellidoPaterno || "R")[0]}` : "-"}
                                         </div>
@@ -946,13 +968,13 @@ export default function DirectorioCEBA() {
                                             <div style={{
                                                 fontSize: "0.78rem",
                                                 fontWeight: dirNom ? 600 : 400,
-                                                color: dirNom ? C.navy1 : C.g400,
+                                                color: isPronoepsa ? "#78350F" : (dirNom ? C.navy1 : C.g400),
                                                 fontFamily: "'DM Sans', sans-serif",
                                                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
                                             }}>
                                                 {dirNom || "Director por registrar"}
                                             </div>
-                                            {ceba.cargo && <div style={{ fontSize: "0.68rem", color: C.g500, fontFamily: "'DM Sans', sans-serif" }}>{ceba.cargo}</div>}
+                                            {ceba.cargo && <div style={{ fontSize: "0.68rem", color: isPronoepsa ? "#92400E" : C.g500, fontFamily: "'DM Sans', sans-serif" }}>{ceba.cargo}</div>}
                                         </div>
                                     </div>
 
@@ -1030,39 +1052,57 @@ export default function DirectorioCEBA() {
                         onClick={e => e.stopPropagation()}
                     >
                         {/* Modal Header */}
-                        <div style={{ padding: "20px 24px 14px", borderBottom: `1px solid ${C.g100}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, position: "sticky", top: 0, background: C.white, zIndex: 11, borderRadius: "10px 10px 0 0" }}>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
-                                    <span style={S.badge(gestionMeta(selectedCEBA.tipoGestion).bg, gestionMeta(selectedCEBA.tipoGestion).color, gestionMeta(selectedCEBA.tipoGestion).borde)}>
-                                        {gestionMeta(selectedCEBA.tipoGestion).etiqueta}
-                                    </span>
-                                    {selectedCEBA.distrito && (
-                                        <span style={S.badge(`${C.navy5}15`, C.navy5, `${C.navy5}30`)}>{selectedCEBA.distrito}</span>
-                                    )}
-                                    {selectedCEBA.fichaPendiente && (
-                                        <span style={S.badge(C.gold3, C.gold1, "#FDE68A")}>FICHA PENDIENTE</span>
-                                    )}
+                        {(() => {
+                            const isSelectedPronoepsa = (selectedCEBA.nombre || "").toUpperCase().includes("PRONOEPSA");
+                            return (
+                                <div style={{
+                                    padding: "20px 24px 14px",
+                                    borderBottom: isSelectedPronoepsa ? "1.5px solid #F59E0B" : `1px solid ${C.g100}`,
+                                    display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12,
+                                    position: "sticky", top: 0,
+                                    background: isSelectedPronoepsa ? "linear-gradient(135deg, #FFFDF5 0%, #FEF9C3 60%, #FEF08A 100%)" : C.white,
+                                    zIndex: 11,
+                                    borderRadius: "10px 10px 0 0"
+                                }}>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+                                            {isSelectedPronoepsa && (
+                                                <span style={S.badge("#FEF3C7", "#92400E", "#F59E0B")}>
+                                                    PRONOEPSA
+                                                </span>
+                                            )}
+                                            <span style={S.badge(gestionMeta(selectedCEBA.tipoGestion).bg, gestionMeta(selectedCEBA.tipoGestion).color, gestionMeta(selectedCEBA.tipoGestion).borde)}>
+                                                {gestionMeta(selectedCEBA.tipoGestion).etiqueta}
+                                            </span>
+                                            {selectedCEBA.distrito && (
+                                                <span style={S.badge(`${C.navy5}15`, C.navy5, `${C.navy5}30`)}>{selectedCEBA.distrito}</span>
+                                            )}
+                                            {selectedCEBA.fichaPendiente && (
+                                                <span style={S.badge(C.gold3, C.gold1, "#FDE68A")}>FICHA PENDIENTE</span>
+                                            )}
+                                        </div>
+                                        <h2 style={{ fontSize: "1.25rem", fontFamily: "'DM Serif Display', serif", color: isSelectedPronoepsa ? "#78350F" : C.navy1, margin: 0 }}>
+                                            {selectedCEBA.nombre}
+                                        </h2>
+                                    </div>
+                                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                        {(isRole('admin') || isRole('jefatura') || (isRole('director') && user?.institucionId === selectedCEBA.id)) && (
+                                            <button onClick={() => openEditCEBA(selectedCEBA)} style={{ ...S.btn(C.navy4, C.white, C.navy5), padding: "6px 12px", fontSize: 11 }}>
+                                                Editar
+                                            </button>
+                                        )}
+                                        {(isRole('admin') || isRole('jefatura')) && (
+                                            <button onClick={() => handleDeleteCEBA(selectedCEBA.id)} style={{ ...S.btn(C.red, C.white, C.red), padding: "6px 12px", fontSize: 11 }}>
+                                                Eliminar
+                                            </button>
+                                        )}
+                                        <button onClick={() => setSelectedCEBA(null)} style={{ background: "none", border: "none", cursor: "pointer", color: C.g400, padding: 4 }}>
+                                            {Icons.x(22, C.g400)}
+                                        </button>
+                                    </div>
                                 </div>
-                                <h2 style={{ fontSize: "1.25rem", fontFamily: "'DM Serif Display', serif", color: C.navy1, margin: 0 }}>
-                                    {selectedCEBA.nombre}
-                                </h2>
-                            </div>
-                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                                {(isRole('admin') || isRole('jefatura') || (isRole('director') && user?.institucionId === selectedCEBA.id)) && (
-                                    <button onClick={() => openEditCEBA(selectedCEBA)} style={{ ...S.btn(C.navy4, C.white, C.navy5), padding: "6px 12px", fontSize: 11 }}>
-                                        Editar
-                                    </button>
-                                )}
-                                {(isRole('admin') || isRole('jefatura')) && (
-                                    <button onClick={() => handleDeleteCEBA(selectedCEBA.id)} style={{ ...S.btn(C.red, C.white, C.red), padding: "6px 12px", fontSize: 11 }}>
-                                        Eliminar
-                                    </button>
-                                )}
-                                <button onClick={() => setSelectedCEBA(null)} style={{ background: "none", border: "none", cursor: "pointer", color: C.g400, padding: 4 }}>
-                                    {Icons.x(22, C.g400)}
-                                </button>
-                            </div>
-                        </div>
+                            );
+                        })()}
 
                         {/* Modal Body with internal tabs */}
                         <div style={{ padding: "16px 24px 28px", flex: 1 }}>
